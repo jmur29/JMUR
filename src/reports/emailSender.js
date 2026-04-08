@@ -1,41 +1,41 @@
 'use strict';
 
+const nodemailer = require('nodemailer');
 const logger = require('../utils/logger');
 
 /**
- * Encode a string as base64url (URL-safe base64, no padding).
+ * Create a Nodemailer transporter using Gmail SMTP with an app password.
+ * Requires SMTP_USER and SMTP_PASS environment variables.
  */
-function toBase64Url(str) {
-  return Buffer.from(str)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+function createTransporter() {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    throw new Error('SMTP_USER and SMTP_PASS environment variables are required for email sending.');
+  }
+
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
 }
 
 /**
- * Send an HTML email via the Gmail API.
+ * Send an HTML email via Gmail SMTP.
  *
- * @param {object} gmail    - Authenticated Gmail API client
  * @param {string} to       - Recipient email address
  * @param {string} subject  - Email subject
  * @param {string} htmlBody - HTML email body
  */
-async function sendEmail(gmail, to, subject, htmlBody) {
-  const messageParts = [
-    `To: ${to}`,
-    `Subject: ${subject}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=utf-8',
-    '',
-    htmlBody,
-  ];
+async function sendEmail(to, subject, htmlBody) {
+  const transporter = createTransporter();
 
-  const raw = toBase64Url(messageParts.join('\r\n'));
-
-  await gmail.users.messages.send({
-    userId: 'me',
-    requestBody: { raw },
+  await transporter.sendMail({
+    from: `"Jake Murray Mortgages" <${process.env.SMTP_USER}>`,
+    to,
+    subject,
+    html: htmlBody,
   });
 
   logger.info(`Email sent to ${to} | Subject: "${subject}"`);

@@ -11,10 +11,9 @@ const REPORT_TO      = process.env.REPORT_EMAIL || 'jaker.murray96@gmail.com';
 const REPORT_SUBJECT = 'Daily Pipeline Report — Jake Murray Mortgages';
 
 /**
- * Build and send the daily pipeline report.
- * @param {object} gmail - Authenticated Gmail API client
+ * Build and send the daily pipeline report via Gmail SMTP (Nodemailer).
  */
-async function sendDailyReport(gmail) {
+async function sendDailyReport() {
   logger.info('Building daily pipeline report...');
 
   try {
@@ -30,7 +29,7 @@ async function sendDailyReport(gmail) {
     });
 
     const html = formatReport(data, dateStr);
-    await sendEmail(gmail, REPORT_TO, REPORT_SUBJECT, html);
+    await sendEmail(REPORT_TO, REPORT_SUBJECT, html);
 
     logger.info(
       `Daily report sent to ${REPORT_TO} — ` +
@@ -44,9 +43,8 @@ async function sendDailyReport(gmail) {
 /**
  * Schedule the daily report at 8:00am Toronto time.
  * Also optionally fires immediately on startup if REPORT_ON_STARTUP=true.
- * @param {object} gmail - Authenticated Gmail API client
  */
-function scheduleDailyReport(gmail) {
+function scheduleDailyReport() {
   if (!process.env.GOOGLE_SHEET_ID) {
     logger.warn('GOOGLE_SHEET_ID not set — daily report scheduler disabled.');
     return;
@@ -54,7 +52,7 @@ function scheduleDailyReport(gmail) {
 
   // 0 8 * * * = 8:00am every day, Toronto timezone
   cron.schedule('0 8 * * *', () => {
-    sendDailyReport(gmail).catch((err) =>
+    sendDailyReport().catch((err) =>
       logger.error(`Unhandled error in daily report: ${err.message}`)
     );
   }, { timezone: 'America/Toronto' });
@@ -64,7 +62,7 @@ function scheduleDailyReport(gmail) {
   // Allow instant test run via env var
   if (process.env.REPORT_ON_STARTUP === 'true') {
     logger.info('REPORT_ON_STARTUP=true — sending report now...');
-    sendDailyReport(gmail).catch((err) =>
+    sendDailyReport().catch((err) =>
       logger.error(`Startup report error: ${err.message}`)
     );
   }

@@ -120,7 +120,7 @@ async function main() {
   startMatcher();
   startStatusLogger();
   startWatcher(gmail, handleEmail);
-  scheduleDailyReport(gmail);
+  scheduleDailyReport();
 
   logger.info('=== All systems running. Watching for HubSpot emails... ===');
 }
