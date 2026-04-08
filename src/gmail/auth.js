@@ -17,7 +17,10 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 
-const SCOPES = ['https://www.googleapis.com/auth/gmail.modify'];
+const SCOPES = [
+  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/spreadsheets',
+];
 const TOKEN_PATH = path.join(process.cwd(), 'token.json');
 const CRED_PATH = path.join(process.cwd(), 'credentials.json');
 

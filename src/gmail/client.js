@@ -5,11 +5,13 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
 
-const SCOPES = ['https://www.googleapis.com/auth/gmail.modify'];
+const SCOPES = [
+  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/spreadsheets',
+];
 
 /**
  * Load OAuth2 credentials from env var or local file.
- * GOOGLE_CREDENTIALS env var should contain the full credentials.json JSON string.
  */
 function loadCredentials() {
   if (process.env.GOOGLE_CREDENTIALS) {
@@ -26,7 +28,6 @@ function loadCredentials() {
 
 /**
  * Load stored OAuth token from env var or local file.
- * GOOGLE_TOKEN env var should contain the full token.json JSON string.
  */
 function loadToken() {
   if (process.env.GOOGLE_TOKEN) {
@@ -42,9 +43,10 @@ function loadToken() {
 }
 
 /**
- * Build and return an authenticated Gmail API client.
+ * Build and return an authenticated OAuth2 client.
+ * Shared by Gmail and Sheets API clients.
  */
-function createGmailClient() {
+function createAuthClient() {
   const credentials = loadCredentials();
   const { client_secret, client_id, redirect_uris } =
     credentials.installed || credentials.web;
@@ -56,11 +58,10 @@ function createGmailClient() {
   // Auto-refresh: persist new token if refreshed
   auth.on('tokens', (newTokens) => {
     if (newTokens.refresh_token) {
-      logger.info('Gmail OAuth token refreshed (new refresh_token received).');
+      logger.info('Google OAuth token refreshed (new refresh_token received).');
     } else {
-      logger.info('Gmail OAuth access token refreshed.');
+      logger.info('Google OAuth access token refreshed.');
     }
-    // Optionally persist to file in local dev
     if (!process.env.GOOGLE_TOKEN) {
       const tokenPath = path.join(process.cwd(), 'token.json');
       const merged = { ...token, ...newTokens };
@@ -68,7 +69,14 @@ function createGmailClient() {
     }
   });
 
-  return google.gmail({ version: 'v1', auth });
+  return auth;
 }
 
-module.exports = { createGmailClient, SCOPES };
+/**
+ * Build and return an authenticated Gmail API client.
+ */
+function createGmailClient() {
+  return google.gmail({ version: 'v1', auth: createAuthClient() });
+}
+
+module.exports = { createGmailClient, createAuthClient, SCOPES };

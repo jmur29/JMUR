@@ -9,6 +9,9 @@ const { createGhlClient } = require('./ghl/client');
 const { createContact, addTag } = require('./ghl/contacts');
 const { enrollInWorkflow } = require('./ghl/workflows');
 const { addContact, addDeal, startMatcher, getPendingSnapshot } = require('./matching/matcher');
+const { createSheetsClient } = require('./sheets/client');
+const { appendLeadRow } = require('./sheets/tracker');
+const { scheduleDailyReport } = require('./reports/scheduler');
 
 // ─── Validate required environment variables ─────────────────────────────────
 
@@ -26,19 +29,23 @@ function validateEnv() {
     logger.error(`Missing required environment variables: ${missing.join(', ')}`);
     process.exit(1);
   }
+
+  if (!process.env.GOOGLE_SHEET_ID) {
+    logger.warn('GOOGLE_SHEET_ID not set — Sheets tracker and daily report will be disabled.');
+  }
 }
 
 // ─── Match handler ────────────────────────────────────────────────────────────
 
 /**
  * Called when a contact + deal pair are matched by name.
- * Performs the full GHL integration: create contact, tag, enroll.
+ * 1. Creates the contact in GHL + tags + enrolls in workflow.
+ * 2. Appends a row to the Google Sheets pipeline tracker.
  */
 async function handleMatch(contactData, dealData) {
   const ghl = createGhlClient();
-  const { firstName, lastName, email, phone } = contactData;
+  const { firstName, lastName, email, phone, fullName } = contactData;
   const { dealType } = dealData;
-  const fullName = `${firstName} ${lastName}`;
 
   logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   logger.info(`Processing matched lead: ${fullName}`);
@@ -51,14 +58,20 @@ async function handleMatch(contactData, dealData) {
     // Step 1: Create contact in GHL
     const contactId = await createContact(ghl, { firstName, lastName, email, phone });
 
-    // Step 2: Tag the contact with the deal type
+    // Step 2: Tag with deal type
     const tagLabel = dealType.charAt(0).toUpperCase() + dealType.slice(1);
     await addTag(ghl, contactId, tagLabel);
 
     // Step 3: Enroll in the correct workflow
     await enrollInWorkflow(ghl, contactId, dealType);
 
-    logger.info(`Lead processing complete for ${fullName} (GHL ID: ${contactId}).`);
+    logger.info(`GHL processing complete for ${fullName} (ID: ${contactId}).`);
+
+    // Step 4: Append row to Google Sheets pipeline tracker
+    if (process.env.GOOGLE_SHEET_ID) {
+      const sheets = createSheetsClient();
+      await appendLeadRow(sheets, contactData, dealType);
+    }
   } catch (err) {
     logger.error(`Failed to process lead for ${fullName}: ${err.message}`);
     if (err.data) {
@@ -93,7 +106,7 @@ function startStatusLogger() {
         );
       }
     }
-  }, 2 * 60 * 1000); // every 2 minutes
+  }, 2 * 60 * 1000);
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -103,9 +116,11 @@ async function main() {
   validateEnv();
 
   const gmail = createGmailClient();
+
   startMatcher();
   startStatusLogger();
   startWatcher(gmail, handleEmail);
+  scheduleDailyReport(gmail);
 
   logger.info('=== All systems running. Watching for HubSpot emails... ===');
 }
