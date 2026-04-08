@@ -6,6 +6,9 @@ const { parseContactEmail, parseDealEmail } = require('./parser');
 const SENDER_FILTER = 'from:noreply@hubspot.com';
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
+// Set DEBUG_ALL_EMAILS=true to log every unread email seen, regardless of sender
+const DEBUG_ALL_EMAILS = process.env.DEBUG_ALL_EMAILS === 'true';
+
 // Track processed message IDs to prevent double-processing
 const processedIds = new Set();
 
@@ -46,7 +49,7 @@ function extractBody(payload, preferredType = 'text/html') {
 }
 
 /**
- * Fetch full message details and extract subject + body.
+ * Fetch full message details and extract subject, sender, and body.
  */
 async function fetchMessage(gmail, messageId) {
   const res = await gmail.users.messages.get({
@@ -56,10 +59,11 @@ async function fetchMessage(gmail, messageId) {
   });
 
   const headers = res.data.payload?.headers || [];
-  const subject = headers.find((h) => h.name.toLowerCase() === 'subject')?.value || '';
+  const subject = headers.find((h) => h.name.toLowerCase() === 'subject')?.value || '(no subject)';
+  const from    = headers.find((h) => h.name.toLowerCase() === 'from')?.value    || '(unknown sender)';
   const body = extractBody(res.data.payload);
 
-  return { id: messageId, subject, body };
+  return { id: messageId, subject, from, body };
 }
 
 /**
@@ -78,7 +82,9 @@ function classifySubject(subject) {
  * @param {function} onEmail - Callback: (type, data) => void
  */
 async function pollEmails(gmail, onEmail) {
-  logger.debug('Polling Gmail for new HubSpot emails...');
+  // When DEBUG_ALL_EMAILS=true, scan all unread mail so we can see what's arriving
+  const query = DEBUG_ALL_EMAILS ? 'is:unread' : `${SENDER_FILTER} is:unread`;
+  logger.debug(`Polling Gmail (query: "${query}")...`);
 
   let nextPageToken = null;
   let fetchedCount = 0;
@@ -86,7 +92,7 @@ async function pollEmails(gmail, onEmail) {
   do {
     const listRes = await gmail.users.messages.list({
       userId: 'me',
-      q: `${SENDER_FILTER} is:unread`,
+      q: query,
       maxResults: 50,
       ...(nextPageToken && { pageToken: nextPageToken }),
     });
@@ -94,20 +100,40 @@ async function pollEmails(gmail, onEmail) {
     const messages = listRes.data.messages || [];
     nextPageToken = listRes.data.nextPageToken || null;
 
+    if (DEBUG_ALL_EMAILS && messages.length > 0) {
+      logger.info(`[DEBUG] Poll found ${messages.length} unread message(s) this page.`);
+    }
+
     for (const msg of messages) {
       if (processedIds.has(msg.id)) continue;
 
       try {
-        const { id, subject, body } = await fetchMessage(gmail, msg.id);
-        const type = classifySubject(subject);
+        const { id, subject, from, body } = await fetchMessage(gmail, msg.id);
 
-        if (!type) {
-          // Not a relevant email type — still mark as seen so we skip it next poll
+        // Always log every email when debug mode is on
+        if (DEBUG_ALL_EMAILS) {
+          const isHubspot = from.toLowerCase().includes('noreply@hubspot.com');
+          logger.info(
+            `[DEBUG] Email id=${id} | from="${from}" | subject="${subject}" | hubspot=${isHubspot ? 'YES' : 'NO'}`
+          );
+        }
+
+        // Skip non-HubSpot emails when running in debug-all mode
+        if (DEBUG_ALL_EMAILS && !from.toLowerCase().includes('noreply@hubspot.com')) {
           processedIds.add(id);
           continue;
         }
 
-        logger.info(`New ${type.toUpperCase()} email detected | Subject: "${subject}"`);
+        const type = classifySubject(subject);
+
+        if (!type) {
+          // HubSpot email but not a recognised type
+          logger.debug(`Skipping HubSpot email — subject not recognised: "${subject}"`);
+          processedIds.add(id);
+          continue;
+        }
+
+        logger.info(`New ${type.toUpperCase()} email detected | From: "${from}" | Subject: "${subject}"`);
 
         let parsed = null;
         if (type === 'contact') {
