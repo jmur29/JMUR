@@ -4,6 +4,7 @@ const logger = require('../utils/logger');
 const { parseContactEmail, parseDealEmail } = require('./parser');
 
 const SENDER_FILTER = 'from:noreply@hubspot.com';
+const DATE_FILTER    = 'newer_than:7d';
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
 // Set DEBUG_ALL_EMAILS=true to log every unread email seen, regardless of sender
@@ -83,7 +84,9 @@ function classifySubject(subject) {
  */
 async function pollEmails(gmail, onEmail) {
   // When DEBUG_ALL_EMAILS=true, scan all unread mail so we can see what's arriving
-  const query = DEBUG_ALL_EMAILS ? 'is:unread' : `${SENDER_FILTER} is:unread`;
+  const query = DEBUG_ALL_EMAILS
+    ? `is:unread ${DATE_FILTER}`
+    : `${SENDER_FILTER} is:unread ${DATE_FILTER}`;
   logger.debug(`Polling Gmail (query: "${query}")...`);
 
   let nextPageToken = null;
