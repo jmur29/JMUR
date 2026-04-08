@@ -2,11 +2,11 @@
 
 const axios = require('axios');
 
-const GHL_BASE_URL = 'https://rest.gohighlevel.com/v1';
+const GHL_BASE_URL = 'https://services.leadconnectorhq.com';
 
 /**
- * Create a pre-configured axios instance for the GoHighLevel REST API v1.
- * Reads GHL_API_KEY from environment variables.
+ * Create a pre-configured axios instance for the GoHighLevel REST API v2.
+ * Reads GHL_API_KEY from environment variables (expects a pit-... token).
  */
 function createGhlClient() {
   if (!process.env.GHL_API_KEY) {
@@ -18,6 +18,7 @@ function createGhlClient() {
     headers: {
       Authorization: `Bearer ${process.env.GHL_API_KEY}`,
       'Content-Type': 'application/json',
+      Version: '2021-07-28',
     },
     timeout: 15_000,
   });

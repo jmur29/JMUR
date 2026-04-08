@@ -26,6 +26,7 @@ async function createContact(ghl, contactData) {
   logger.info(`Creating GHL contact: ${firstName} ${lastName} <${email}>`);
 
   const res = await ghl.post('/contacts/', payload);
+  // v2 response: { contact: { id, ... } }
   const contactId = res.data?.contact?.id;
 
   if (!contactId) {
@@ -49,7 +50,7 @@ async function createContact(ghl, contactData) {
 async function addTag(ghl, contactId, tag) {
   logger.info(`Tagging contact ${contactId} with "${tag}"`);
 
-  await ghl.post(`/contacts/${contactId}/tags/`, {
+  await ghl.post(`/contacts/${contactId}/tags`, {
     tags: [tag],
   });
 
