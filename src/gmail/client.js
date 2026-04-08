@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
 
-const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
+const SCOPES = ['https://www.googleapis.com/auth/gmail.modify'];
 
 /**
  * Load OAuth2 credentials from env var or local file.
