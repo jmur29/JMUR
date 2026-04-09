@@ -31,14 +31,20 @@ function createTransporter() {
 async function sendEmail(to, subject, htmlBody) {
   const transporter = createTransporter();
 
-  await transporter.sendMail({
-    from: `"Jake Murray Mortgages" <${process.env.SMTP_USER}>`,
-    to,
-    subject,
-    html: htmlBody,
-  });
+  try {
+    const info = await transporter.sendMail({
+      from: `"Jake Murray Mortgages" <${process.env.SMTP_USER}>`,
+      to,
+      subject,
+      html: htmlBody,
+    });
 
-  logger.info(`Email sent to ${to} | Subject: "${subject}"`);
+    logger.info(`Daily report sent successfully to ${to} | Subject: "${subject}" | MessageId: ${info.messageId}`);
+  } catch (err) {
+    logger.error(`Failed to send email to ${to} | ${err.message}`);
+    logger.error(err.stack);
+    throw err;
+  }
 }
 
 module.exports = { sendEmail };
