@@ -1,28 +1,21 @@
-# HyperClaw Configuration
-version: "0.1.0-alpha"
-
 database:
-  url: "postgresql://localhost/hyperclaw"
-
-models:
-  default: "claude-sonnet-4-6"
-  chatjimmy_url: "https://chatjimmy.ai/api"
-  claude_max_tokens: 4096
-
-router:
-  fast_loop_enabled: true
-  slow_loop_interval_seconds: 300
-  cost_budget_usd: null
-  latency_budget_ms: null
-
-swarm:
-  max_agents: 50
-  default_domain: "business"
-
-security:
-  policy: "default"
-  audit_log: true
-
+  url: "${DATABASE_URL}"
 logging:
-  level: "INFO"
-  file: "hyperclaw.log"
+  file: hyperclaw.log
+  level: INFO
+models:
+  chatjimmy_url: https://chatjimmy.ai/api
+  claude_max_tokens: 4096
+  default: claude-sonnet-4-6
+router:
+  cost_budget_usd: null
+  fast_loop_enabled: true
+  latency_budget_ms: null
+  slow_loop_interval_seconds: 300
+security:
+  audit_log: true
+  policy: default
+swarm:
+  default_domain: business
+  max_agents: 50
+version: 0.1.0-alpha
