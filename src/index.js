@@ -12,6 +12,7 @@ const { addContact, addDeal, startMatcher, getPendingSnapshot } = require('./mat
 const { createSheetsClient } = require('./sheets/client');
 const { appendLeadRow } = require('./sheets/tracker');
 const { scheduleDailyReport } = require('./reports/scheduler');
+const { startServer } = require('./server');
 
 // ─── Validate required environment variables ─────────────────────────────────
 
@@ -117,7 +118,8 @@ async function main() {
 
   const gmail = createGmailClient();
 
-  startMatcher();startServer();
+  startMatcher();
+  startServer();
   startStatusLogger();
   startWatcher(gmail, handleEmail);
   scheduleDailyReport();
@@ -129,4 +131,4 @@ main().catch((err) => {
   logger.error(`Fatal startup error: ${err.message}`);
   if (err.stack) logger.error(err.stack);
   process.exit(1);
-});const { startServer } = require('./server');
+});
