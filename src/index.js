@@ -129,4 +129,4 @@ main().catch((err) => {
   logger.error(`Fatal startup error: ${err.message}`);
   if (err.stack) logger.error(err.stack);
   process.exit(1);
-});
+});const { startServer } = require('./server');
