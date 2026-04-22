@@ -117,7 +117,7 @@ async function main() {
 
   const gmail = createGmailClient();
 
-  startMatcher();
+  startMatcher();startServer();
   startStatusLogger();
   startWatcher(gmail, handleEmail);
   scheduleDailyReport();
