@@ -12,6 +12,7 @@ const { addContact, addDeal, startMatcher, getPendingSnapshot } = require('./mat
 const { createSheetsClient } = require('./sheets/client');
 const { appendLeadRow } = require('./sheets/tracker');
 const { scheduleDailyReport } = require('./reports/scheduler');
+const { startDashboard, recordLead } = require('./dashboard/server');
 
 // ─── Validate required environment variables ─────────────────────────────────
 
@@ -66,6 +67,7 @@ async function handleMatch(contactData, dealData) {
     await enrollInWorkflow(ghl, contactId, dealType);
 
     logger.info(`GHL processing complete for ${fullName} (ID: ${contactId}).`);
+    recordLead(contactData, dealType);
 
     // Step 4: Append row to Google Sheets pipeline tracker
     if (process.env.GOOGLE_SHEET_ID) {
@@ -121,6 +123,7 @@ async function main() {
   startStatusLogger();
   startWatcher(gmail, handleEmail);
   scheduleDailyReport();
+  startDashboard();
 
   logger.info('=== All systems running. Watching for HubSpot emails... ===');
 }
