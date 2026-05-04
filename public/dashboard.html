@@ -780,7 +780,7 @@ async function sendJarvis() {
     const response = await fetch('/api/jarvis/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${S.token}` },
-      body: JSON.stringify({ messages: S.jarvisMessages.slice(0, -0), context }),
+      body: JSON.stringify({ messages: [...S.jarvisMessages], context }),
     });
 
     typingEl.remove();
