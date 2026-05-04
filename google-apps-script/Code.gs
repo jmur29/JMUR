@@ -6,7 +6,6 @@ var MONTHS_ = [
   'July','August','September','October','November','December'
 ];
 
-// Three-state deal lifecycle
 var STATUS_PENDING  = '⏳ Pending Close';
 var STATUS_AWAITING = '🔄 Awaiting Payment';
 var STATUS_PAID     = '✅ Paid';
@@ -17,21 +16,18 @@ function onOpen() {
   SpreadsheetApp.getActiveSpreadsheet().addMenu('JM Tools', [
     { name: 'Add Deal from Inbox',       functionName: 'addDealFromInbox'       },
     { name: 'Fix Totals & References',   functionName: 'fixAllTotalsAndRefs'    },
+    { name: 'Fix Status Column',         functionName: 'fixStatusColumn'        },
+    { name: 'Refresh Deal Statuses',     functionName: 'refreshDealStatuses'    },
     { name: 'Rebuild Month vs Month',    functionName: 'setupMonthVsMonth'      },
     { name: 'Setup Projected Income',    functionName: 'setupProjectedIncome'   },
-    { name: 'Refresh Deal Statuses',     functionName: 'refreshDealStatuses'    },
     { name: 'Format All Sheets',         functionName: 'formatAllSheets'        },
+    { name: 'Run Diagnostic',            functionName: 'runDiagnostic'          },
     { name: 'Create Renewal Trigger',    functionName: 'createRenewalTrigger'   },
     { name: 'Send Renewal Reminders',    functionName: 'sendRenewalReminders'   },
   ]);
 }
 
 // ─── writeDeal ────────────────────────────────────────────────────────────────
-// Adds a funded deal to the appropriate year sheet.
-// params: { year, borrower, type, source, lender, closing, amt, term,
-//           rateType, rate, bps, split, grossComm, yourComm, notes,
-//           email, phone }
-//
 // Column layout A–U:
 //   A  # | B  Borrower | C  Type | D  Source | E  Lender | F  Closing Date
 //   G  Amount | H  Term | I  Rate Type | J  Rate | K  BPS | L  Split
@@ -69,12 +65,11 @@ function writeDeal(params) {
 
   var totalsRow = findTotalsRow_(sheet);
   var insertRow = totalsRow === -1 ? sheet.getLastRow() + 1 : totalsRow;
-  var dealNum   = insertRow - 3; // 3 header rows (title, col-headers, blank)
+  var dealNum   = insertRow - 3;
 
   sheet.insertRowBefore(insertRow);
   var r = String(insertRow);
 
-  // Write cols A–Q (17 cols)
   sheet.getRange(insertRow, 1, 1, 17).setValues([[
     dealNum, borrower, dealType, source, lender,
     closing, amt, term, rateType, rate,
@@ -82,15 +77,13 @@ function writeDeal(params) {
     email, phone
   ]]);
 
-  // Number formats
-  sheet.getRange(insertRow, 7 ).setNumberFormat('$#,##0.00');  // G: amt
-  sheet.getRange(insertRow, 10).setNumberFormat('0.00"%"');     // J: rate
-  sheet.getRange(insertRow, 11).setNumberFormat('0" bps"');     // K: bps
-  sheet.getRange(insertRow, 12).setNumberFormat('0%');          // L: split
-  sheet.getRange(insertRow, 13).setNumberFormat('$#,##0.00');   // M: grossComm
-  sheet.getRange(insertRow, 14).setNumberFormat('$#,##0.00');   // N: yourComm
+  sheet.getRange(insertRow, 7 ).setNumberFormat('$#,##0.00');
+  sheet.getRange(insertRow, 10).setNumberFormat('0.00"%"');
+  sheet.getRange(insertRow, 11).setNumberFormat('0" bps"');
+  sheet.getRange(insertRow, 12).setNumberFormat('0%');
+  sheet.getRange(insertRow, 13).setNumberFormat('$#,##0.00');
+  sheet.getRange(insertRow, 14).setNumberFormat('$#,##0.00');
 
-  // R (col 18): Maturity Date = closing + term months
   sheet.getRange(insertRow, 18)
     .setFormula(
       '=IF(OR(F'+r+'="",H'+r+'=""),"",EDATE(' +
@@ -99,30 +92,22 @@ function writeDeal(params) {
     )
     .setNumberFormat('yyyy-mm-dd');
 
-  // S (col 19): Renewal Alert
   sheet.getRange(insertRow, 19)
     .setFormula(
       '=IF(R'+r+'="","",IF(R'+r+'-TODAY()<=30,"🔴 URGENT",' +
         'IF(R'+r+'-TODAY()<=90,"🟡 SOON","🟢 OK")))'
     );
 
-  // T (col 20): Status — auto-set based on closing date, stays manually editable
   var statusVal = computeInitialStatus_(closing);
   sheet.getRange(insertRow, 20)
     .setValue(statusVal)
     .setHorizontalAlignment('center')
     .setFontFamily('Arial').setFontSize(10);
   applyStatusValidation_(sheet, insertRow);
-
-  // U (col 21): Pay Date — blank, user fills when commission lands
   sheet.getRange(insertRow, 21).setNumberFormat('yyyy-mm-dd');
 
-  // Font / size for whole row
   sheet.getRange(insertRow, 1, 1, 21).setFontFamily('Arial').setFontSize(10);
-
-  // Apply status CF to col T for this sheet
   applyStatusCF_(sheet);
-
   fixTotalsAndRefs_(sheet);
   SpreadsheetApp.flush();
   checkNewDealRenewal_(sheet, insertRow);
@@ -131,10 +116,6 @@ function writeDeal(params) {
 }
 
 // ─── addDealFromInbox ─────────────────────────────────────────────────────────
-// Reads the Inbox sheet (cols A–Q, starting row 2) and calls writeDeal for each.
-// Inbox col layout: A borrower | B year | C type | D source | E lender |
-//   F closing | G amt | H term | I rateType | J rate | K bps | L split |
-//   M grossComm | N yourComm | O notes | P email | Q phone
 
 function addDealFromInbox() {
   var ss    = SpreadsheetApp.getActiveSpreadsheet();
@@ -156,23 +137,12 @@ function addDealFromInbox() {
 
     try {
       writeDeal({
-        borrower:  borrower,
-        year:      year,
-        type:      row[2],
-        source:    row[3],
-        lender:    row[4],
-        closing:   row[5],
-        amt:       row[6],
-        term:      row[7],
-        rateType:  row[8],
-        rate:      row[9],
-        bps:       row[10],
-        split:     row[11],
-        grossComm: row[12],
-        yourComm:  row[13],
-        notes:     row[14],
-        email:     row[15],
-        phone:     row[16],
+        borrower:  borrower,  year:      year,
+        type:      row[2],    source:    row[3],    lender:    row[4],
+        closing:   row[5],    amt:       row[6],    term:      row[7],
+        rateType:  row[8],    rate:      row[9],    bps:       row[10],
+        split:     row[11],   grossComm: row[12],   yourComm:  row[13],
+        notes:     row[14],   email:     row[15],   phone:     row[16],
       });
       added++;
     } catch (e) {
@@ -181,14 +151,11 @@ function addDealFromInbox() {
     }
   }
 
-  if (added > 0) {
-    inbox.getRange(2, 1, lastRow - 1, 17).clearContent();
-  }
-
+  if (added > 0) inbox.getRange(2, 1, lastRow - 1, 17).clearContent();
   ss.toast(added + ' deal(s) added' + (errors > 0 ? ', ' + errors + ' skipped.' : '.'));
 }
 
-// ─── fixAllTotalsAndRefs (public) ─────────────────────────────────────────────
+// ─── fixAllTotalsAndRefs ──────────────────────────────────────────────────────
 
 function fixAllTotalsAndRefs() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -199,15 +166,11 @@ function fixAllTotalsAndRefs() {
   ss.toast('Totals & references fixed.');
 }
 
-// ─── fixTotalsAndRefs_ (private) ─────────────────────────────────────────────
-
 function fixTotalsAndRefs_(sheet) {
   var totalsRow = findTotalsRow_(sheet);
   if (totalsRow === -1) return;
-
   var lastDataRow = totalsRow - 1;
   if (lastDataRow < 4) return;
-
   var numCols = { 7: 'G', 13: 'M', 14: 'N' };
   for (var col in numCols) {
     var letter = numCols[col];
@@ -215,8 +178,6 @@ function fixTotalsAndRefs_(sheet) {
       .setFormula('=SUM(' + letter + '4:' + letter + lastDataRow + ')');
   }
 }
-
-// ─── findTotalsRow_ ───────────────────────────────────────────────────────────
 
 function findTotalsRow_(sheet) {
   var data = sheet.getRange('A1:A' + Math.min(sheet.getLastRow(), 200)).getValues();
@@ -226,10 +187,168 @@ function findTotalsRow_(sheet) {
   return -1;
 }
 
+// ─── runDiagnostic ────────────────────────────────────────────────────────────
+// Logs an audit of 2026 Funded to Logger. Open View → Logs to inspect.
+
+function runDiagnostic() {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('2026 Funded');
+  if (!sheet) { ss.toast('2026 Funded sheet not found.'); return; }
+
+  var totalsRow   = findTotalsRow_(sheet);
+  var lastDataRow = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+
+  Logger.log('=== 2026 Funded Audit ===');
+  Logger.log('Last data row: ' + lastDataRow + ' | TOTALS row: ' + totalsRow);
+
+  if (lastDataRow < 4) { Logger.log('No data rows found.'); return; }
+
+  var data = sheet.getRange(4, 1, lastDataRow - 3, 21).getValues();
+  for (var i = 0; i < data.length; i++) {
+    var row      = data[i];
+    var borrower = String(row[1]  || '').trim();
+    if (!borrower) continue;
+    var closing  = row[5];
+    var yourComm = row[13];
+    var tRaw     = row[19];
+    var uRaw     = row[20];
+
+    Logger.log(
+      'Row ' + (i + 4) + ': ' + borrower +
+      ' | F closing=' + closing + ' (type=' + typeof closing + ')' +
+      ' | N yourComm=' + yourComm + ' (type=' + typeof yourComm + ')' +
+      ' | T status=[' + String(tRaw) + '] (len=' + String(tRaw).length + ')' +
+      ' | U payDate=' + uRaw
+    );
+  }
+
+  // Also check the MvM tab formula in May cell (row 9, col H = 2026 Paid Comm)
+  var mvm = ss.getSheetByName('Month vs Month');
+  if (mvm) {
+    var mayCell = mvm.getRange(9, 8); // row 9 = May, col H = 2026 Paid Comm
+    Logger.log('MvM May 2026 Paid Comm formula: ' + mayCell.getFormula());
+    Logger.log('MvM May 2026 Paid Comm value:   ' + mayCell.getValue());
+    var summaryCell = mvm.getRange(21, 7); // G21 = Paid Comm total
+    Logger.log('MvM Summary G21 (Paid Comm) formula: ' + summaryCell.getFormula());
+    Logger.log('MvM Summary G21 (Paid Comm) value:   ' + summaryCell.getValue());
+  }
+
+  ss.toast('Diagnostic complete — open View → Logs to see results.');
+}
+
+// ─── fixStatusColumn (public) ─────────────────────────────────────────────────
+// Reads ALL rows in both funded sheets and sets col T (Status) to the correct
+// value based on:
+//   1. Pay Date in col U → ✅ Paid (if user has filled it in)
+//   2. Closing date <= TODAY() → 🔄 Awaiting Payment
+//   3. Closing date > TODAY() or blank → ⏳ Pending Close
+//
+// Clears any old formula in col T. Applies validation + CF.
+// Never auto-sets ✅ Paid — only honours it if Pay Date is present OR if the
+// existing value is ✅ Paid and there is no formula (i.e. manually entered).
+
+function fixStatusColumn() {
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var log = getReminderLog_(ss);
+  var NAVY = '#1B3A6B';
+  var totalFixed = 0;
+
+  ['2025 Funded', '2026 Funded'].forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+
+    // Ensure col T + U headers
+    sheet.getRange(2, 20)
+      .setValue('Status')
+      .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
+      .setHorizontalAlignment('center').setBackground(NAVY).setFontColor('#FFFFFF');
+    sheet.getRange(2, 21)
+      .setValue('Pay Date')
+      .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
+      .setHorizontalAlignment('center').setBackground(NAVY).setFontColor('#FFFFFF');
+
+    var totalsRow   = findTotalsRow_(sheet);
+    var lastDataRow = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+    if (lastDataRow < 4) return;
+
+    var numRows = lastDataRow - 3;
+    // Read cols A–U for all data rows in one call
+    var data = sheet.getRange(4, 1, numRows, 21).getValues();
+
+    var newStatuses = [];
+    var fixed       = 0;
+
+    for (var i = 0; i < data.length; i++) {
+      var row      = data[i];
+      var borrower = String(row[1]  || '').trim();
+      var closingV = row[5];    // col F
+      var tVal     = String(row[19] || '').trim(); // col T (may have old formula text)
+      var uVal     = row[20];   // col U Pay Date
+
+      // Check if col T currently contains a formula (old approach — must clear it)
+      var tCell      = sheet.getRange(i + 4, 20);
+      var hasFormula = tCell.getFormula() !== '';
+
+      if (!borrower) {
+        newStatuses.push([tVal]); // preserve whatever is there for blank rows
+        continue;
+      }
+
+      var hasPayDate = uVal && String(uVal).trim() !== '' && uVal !== 0;
+
+      var correctStatus;
+      if (hasPayDate) {
+        correctStatus = STATUS_PAID;
+      } else if (tVal === STATUS_PAID && !hasFormula) {
+        // Manually set ✅ Paid — keep it (user confirmed payment even without Pay Date)
+        correctStatus = STATUS_PAID;
+      } else {
+        correctStatus = computeInitialStatus_(closingV);
+      }
+
+      if (hasFormula || tVal !== correctStatus) {
+        if (borrower) {
+          log.appendRow([
+            new Date(), sheetName, borrower,
+            hasFormula ? '(formula)' : (tVal || '(blank)'),
+            correctStatus,
+            'fixStatusColumn'
+          ]);
+          fixed++;
+        }
+      }
+
+      newStatuses.push([correctStatus]);
+    }
+
+    // Clear formulas in bulk, then set values + formatting in bulk
+    sheet.getRange(4, 20, numRows, 1).clearContent();
+    sheet.getRange(4, 20, numRows, 1)
+      .setValues(newStatuses)
+      .setHorizontalAlignment('center')
+      .setFontFamily('Arial').setFontSize(10);
+
+    // Apply dropdown validation to entire col T data range at once
+    var valRule = SpreadsheetApp.newDataValidation()
+      .requireValueInList([STATUS_PENDING, STATUS_AWAITING, STATUS_PAID], true)
+      .setAllowInvalid(false)
+      .build();
+    sheet.getRange(4, 20, numRows, 1).setDataValidation(valRule);
+
+    // Set Pay Date number format
+    sheet.getRange(4, 21, numRows, 1).setNumberFormat('yyyy-mm-dd');
+
+    applyStatusCF_(sheet);
+    SpreadsheetApp.flush();
+    totalFixed += fixed;
+    Logger.log('fixStatusColumn: ' + sheetName + ' → ' + fixed + ' change(s)');
+  });
+
+  ss.toast('Status column fixed — ' + totalFixed + ' update(s) applied.');
+}
+
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
-// Determines the initial status value from a closing date string or Date.
-// Never auto-sets ✅ Paid — that's always manual.
 function computeInitialStatus_(closingDateValue) {
   if (!closingDateValue) return STATUS_PENDING;
   var closing;
@@ -248,13 +367,12 @@ function computeInitialStatus_(closingDateValue) {
       : new Date(s);
   }
   if (isNaN(closing.getTime())) return STATUS_PENDING;
-  var today = new Date();
+  var today   = new Date();
   today   = new Date(today.getFullYear(),   today.getMonth(),   today.getDate());
   closing = new Date(closing.getFullYear(), closing.getMonth(), closing.getDate());
   return closing > today ? STATUS_PENDING : STATUS_AWAITING;
 }
 
-// Applies dropdown validation (3 options) to col T for a specific row.
 function applyStatusValidation_(sheet, row) {
   var rule = SpreadsheetApp.newDataValidation()
     .requireValueInList([STATUS_PENDING, STATUS_AWAITING, STATUS_PAID], true)
@@ -263,11 +381,11 @@ function applyStatusValidation_(sheet, row) {
   sheet.getRange(row, 20).setDataValidation(rule);
 }
 
-// Replaces all conditional format rules on the sheet, adding col-T status colours.
-// Safe to call repeatedly — re-generates the full rule set.
 function applyStatusCF_(sheet) {
-  var lastDataRow = Math.max(sheet.getLastRow(), 4);
-  var colTRange   = sheet.getRange(4, 20, lastDataRow - 3, 1);
+  var totalsRow   = findTotalsRow_(sheet);
+  var lastDataRow = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+  var numRows     = Math.max(1, lastDataRow - 3);
+  var colTRange   = sheet.getRange(4, 20, numRows, 1);
 
   var statusRules = [
     SpreadsheetApp.newConditionalFormatRule()
@@ -284,32 +402,31 @@ function applyStatusCF_(sheet) {
       .setRanges([colTRange]).build(),
   ];
 
-  // Preserve any existing rules that target other columns, append status rules
   var existing = sheet.getConditionalFormatRules().filter(function(rule) {
-    return rule.getRanges().every(function(rng) {
-      return rng.getColumn() !== 20;
-    });
+    return rule.getRanges().every(function(rng) { return rng.getColumn() !== 20; });
   });
   sheet.setConditionalFormatRules(existing.concat(statusRules));
 }
 
 // ─── setupProjectedIncome_ (private) ─────────────────────────────────────────
-// Initialises col T (Status) and col U (Pay Date) for a single row.
-// Sets the auto-computed status value + dropdown validation — NOT a formula,
-// so the user can override by typing ✅ Paid manually.
+// Sets col T (Status value) + validation for a single row.
+// Only overwrites if the cell contains an old formula or is blank.
 
 function setupProjectedIncome_(ss, sheetName, rowNum) {
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) return;
 
-  // Read closing date from col F to compute initial status
-  var closingVal = sheet.getRange(rowNum, 6).getValue();
-  // Only overwrite if cell currently holds a formula (old approach) or is empty
-  var currentVal = sheet.getRange(rowNum, 20).getValue();
-  var hasFormula = sheet.getRange(rowNum, 20).getFormula() !== '';
+  var tCell      = sheet.getRange(rowNum, 20);
+  var hasFormula = tCell.getFormula() !== '';
+  var currentVal = String(tCell.getValue() || '').trim();
+
   if (hasFormula || !currentVal) {
-    var statusVal = computeInitialStatus_(closingVal);
-    sheet.getRange(rowNum, 20)
+    var closingVal = sheet.getRange(rowNum, 6).getValue();
+    var uVal       = sheet.getRange(rowNum, 21).getValue();
+    var hasPayDate = uVal && String(uVal).trim() !== '' && uVal !== 0;
+    var statusVal  = hasPayDate ? STATUS_PAID : computeInitialStatus_(closingVal);
+
+    tCell.clearContent()
       .setValue(statusVal)
       .setHorizontalAlignment('center')
       .setFontFamily('Arial').setFontSize(10);
@@ -320,55 +437,22 @@ function setupProjectedIncome_(ss, sheetName, rowNum) {
 }
 
 // ─── setupStatusColumn_ (private) ────────────────────────────────────────────
-// Initialises col T (Status) and col U (Pay Date) headers + all data rows
-// for BOTH funded sheets.
 
 function setupStatusColumn_(ss) {
-  var NAVY = '#1B3A6B';
-
-  ['2025 Funded', '2026 Funded'].forEach(function(sheetName) {
-    var sheet = ss.getSheetByName(sheetName);
-    if (!sheet) return;
-
-    // Col T header
-    sheet.getRange(2, 20)
-      .setValue('Status')
-      .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
-      .setHorizontalAlignment('center')
-      .setBackground(NAVY).setFontColor('#FFFFFF');
-
-    // Col U header
-    sheet.getRange(2, 21)
-      .setValue('Pay Date')
-      .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
-      .setHorizontalAlignment('center')
-      .setBackground(NAVY).setFontColor('#FFFFFF');
-
-    var totalsRow   = findTotalsRow_(sheet);
-    var lastDataRow = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
-
-    for (var r = 4; r <= lastDataRow; r++) {
-      setupProjectedIncome_(ss, sheetName, r);
-    }
-
-    applyStatusCF_(sheet);
-  });
+  // Delegate fully to the public fixStatusColumn function
+  fixStatusColumn();
 }
 
 // ─── setupProjectedIncome (public menu) ──────────────────────────────────────
 
 function setupProjectedIncome() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  setupStatusColumn_(ss);
+  fixStatusColumn();
   setupMonthVsMonth();
   ss.toast('Projected Income setup complete.');
 }
 
 // ─── refreshDealStatuses (public) ────────────────────────────────────────────
-// Scans 2025 Funded and 2026 Funded. For any row where:
-//   • Status = ⏳ Pending Close  AND  closing date <= TODAY()
-//   → flips status to 🔄 Awaiting Payment
-// Never touches ✅ Paid rows. Logs every change to Reminder Log tab.
 
 function refreshDealStatuses() {
   var ss  = SpreadsheetApp.getActiveSpreadsheet();
@@ -387,35 +471,33 @@ function refreshDealStatuses() {
     var data    = sheet.getRange(4, 1, numRows, 21).getValues();
 
     for (var i = 0; i < data.length; i++) {
-      var row       = data[i];
-      var borrower  = String(row[1]  || '').trim();
-      var closingV  = row[5];   // col F (index 5)
-      var currentT  = String(row[19] || '').trim(); // col T (index 19)
+      var row      = data[i];
+      var borrower = String(row[1]  || '').trim();
+      var closingV = row[5];
+      var currentT = String(row[19] || '').trim();
+      var uVal     = row[20];
 
       if (!borrower) continue;
-      if (currentT === STATUS_PAID) continue; // never touch paid rows
-      if (currentT !== STATUS_PENDING) continue; // only flip Pending Close
+      if (currentT === STATUS_PAID) continue;
+      if (currentT !== STATUS_PENDING) continue;
 
-      var shouldFlip = computeInitialStatus_(closingV) === STATUS_AWAITING;
-      if (!shouldFlip) continue;
+      var hasPayDate = uVal && String(uVal).trim() !== '' && uVal !== 0;
+      var shouldBeAwaiting = hasPayDate
+        ? false // will be set to Paid by fixStatusColumn
+        : computeInitialStatus_(closingV) === STATUS_AWAITING;
 
-      var sheetRow = i + 4;
-      sheet.getRange(sheetRow, 20).setValue(STATUS_AWAITING);
-      log.appendRow([
-        new Date(), sheetName, borrower,
-        STATUS_PENDING, STATUS_AWAITING,
-        'Auto-flipped by refreshDealStatuses'
-      ]);
+      if (!shouldBeAwaiting) continue;
+
+      sheet.getRange(i + 4, 20).setValue(STATUS_AWAITING);
+      log.appendRow([new Date(), sheetName, borrower, STATUS_PENDING, STATUS_AWAITING, 'Auto-flipped']);
       changed++;
     }
   });
 
   SpreadsheetApp.flush();
-  SpreadsheetApp.getActiveSpreadsheet()
-    .toast(changed + ' deal status(es) updated to 🔄 Awaiting Payment.');
+  ss.toast(changed + ' deal(s) flipped to ' + STATUS_AWAITING + '.');
 }
 
-// Returns (or creates) the Reminder Log sheet with a header row.
 function getReminderLog_(ss) {
   var log = ss.getSheetByName('Reminder Log');
   if (!log) {
@@ -437,17 +519,12 @@ function createRenewalTrigger() {
     }
   }
   ScriptApp.newTrigger('sendRenewalReminders')
-    .timeBased()
-    .atHour(8)
-    .everyDays(1)
-    .inTimezone('America/Toronto')
-    .create();
+    .timeBased().atHour(8).everyDays(1).inTimezone('America/Toronto').create();
   SpreadsheetApp.getActiveSpreadsheet()
     .toast('Renewal trigger created — runs daily at 8 am Toronto time.');
 }
 
 function sendRenewalReminders() {
-  // Auto-refresh statuses before sending reminders
   refreshDealStatuses();
 
   var ss     = SpreadsheetApp.getActiveSpreadsheet();
@@ -464,7 +541,7 @@ function sendRenewalReminders() {
     var data = sheet.getRange(4, 1, lastRow - 3, 19).getValues();
     data.forEach(function(row) {
       var borrower = String(row[1]  || '').trim();
-      var alert    = String(row[18] || '').trim(); // col S
+      var alert    = String(row[18] || '').trim();
       if (!borrower) return;
       if (alert.indexOf('🔴') !== -1) urgent.push(borrower + ' (' + name + ')');
       else if (alert.indexOf('🟡') !== -1) soon.push(borrower + ' (' + name + ')');
@@ -475,35 +552,28 @@ function sendRenewalReminders() {
 
   var body = 'JM Mortgages — Renewal Reminders\n' + new Date().toDateString() + '\n\n';
   if (urgent.length) {
-    body += '🔴 URGENT (within 30 days):\n';
+    body += '🔴 URGENT:\n';
     urgent.forEach(function(d) { body += '  • ' + d + '\n'; });
     body += '\n';
   }
   if (soon.length) {
-    body += '🟡 COMING UP (within 90 days):\n';
+    body += '🟡 COMING UP:\n';
     soon.forEach(function(d) { body += '  • ' + d + '\n'; });
   }
 
-  MailApp.sendEmail(
-    Session.getActiveUser().getEmail(),
-    'JM Mortgages — Renewal Reminders',
-    body
-  );
+  MailApp.sendEmail(Session.getActiveUser().getEmail(),
+    'JM Mortgages — Renewal Reminders', body);
 }
 
 function checkNewDealRenewal_(sheet, row) {
-  var alert = String(sheet.getRange(row, 19).getValue() || '');
+  var alert    = String(sheet.getRange(row, 19).getValue() || '');
+  var borrower = String(sheet.getRange(row,  2).getValue() || '');
   if (alert.indexOf('🔴') === -1 && alert.indexOf('🟡') === -1) return;
-  var borrower = String(sheet.getRange(row, 2).getValue() || '');
   try {
-    MailApp.sendEmail(
-      Session.getActiveUser().getEmail(),
+    MailApp.sendEmail(Session.getActiveUser().getEmail(),
       'New Deal Alert — ' + borrower + ' needs renewal attention',
-      'A new deal was added for ' + borrower + ' with renewal status: ' + alert
-    );
-  } catch (e) {
-    Logger.log('checkNewDealRenewal_ email failed: ' + e.message);
-  }
+      borrower + ' was added with renewal status: ' + alert);
+  } catch (e) { Logger.log('checkNewDealRenewal_ email failed: ' + e.message); }
 }
 
 // ─── columnLetter_ ────────────────────────────────────────────────────────────
@@ -519,85 +589,90 @@ function columnLetter_(n) {
 }
 
 // ─── SUMPRODUCT formula builders ──────────────────────────────────────────────
-// Return formula strings written into MvM cells.
-// All status params now use the 3-state values defined at the top.
+// All formulas use:
+//   • TRIM(T range) for exact status matching (handles stray whitespace)
+//   • IFERROR(VALUE(amount range), 0) for amounts (handles text-stored numbers)
+//   • Robust DATEVALUE pattern for closing dates (handles text AND date serials)
+// Range limit $100 covers up to 97 data rows (rows 4–100), safe for this volume.
 
 function mvs2025Count_(mo, status) {
-  var ref      = "'2025 Funded'!F$4:F$200";
-  var dExpr    = 'IFERROR(DATEVALUE(IF(ISNUMBER('+ref+'),TEXT('+ref+',"yyyy-mm-dd"),'+ref+')),0)';
+  var fRef     = "'2025 Funded'!F$4:F$100";
+  var tRef     = "'2025 Funded'!T$4:T$100";
+  var dExpr    = 'IFERROR(DATEVALUE(IF(ISNUMBER('+fRef+'),TEXT('+fRef+',"yyyy-mm-dd"),'+fRef+')),0)';
   var start    = 'DATE(2025,'+mo+',1)';
   var end      = mo < 12 ? 'DATE(2025,'+(mo+1)+',1)' : 'DATE(2026,1,1)';
   var dateCond = '('+dExpr+'>='+start+')*('+dExpr+'<'+end+')';
-  if (status) {
-    var tRef  = "'2025 Funded'!T$4:T$200";
-    var sCond = '(IFERROR('+tRef+'="'+status+'",FALSE))';
-    return '=SUMPRODUCT('+dateCond+'*'+sCond+')';
-  }
+  if (status) return '=SUMPRODUCT('+dateCond+'*(TRIM('+tRef+')="'+status+'"))';
   return '=SUMPRODUCT('+dateCond+')';
 }
 
 function mvs2025Sum_(mo, col, status) {
-  var ref      = "'2025 Funded'!F$4:F$200";
-  var colRef   = "'2025 Funded'!"+columnLetter_(col)+'$4:'+columnLetter_(col)+'$200';
-  var dExpr    = 'IFERROR(DATEVALUE(IF(ISNUMBER('+ref+'),TEXT('+ref+',"yyyy-mm-dd"),'+ref+')),0)';
+  var fRef     = "'2025 Funded'!F$4:F$100";
+  var tRef     = "'2025 Funded'!T$4:T$100";
+  var cLetter  = columnLetter_(col);
+  var vRef     = "'2025 Funded'!"+cLetter+"$4:"+cLetter+"$100";
+  var dExpr    = 'IFERROR(DATEVALUE(IF(ISNUMBER('+fRef+'),TEXT('+fRef+',"yyyy-mm-dd"),'+fRef+')),0)';
   var start    = 'DATE(2025,'+mo+',1)';
   var end      = mo < 12 ? 'DATE(2025,'+(mo+1)+',1)' : 'DATE(2026,1,1)';
   var dateCond = '('+dExpr+'>='+start+')*('+dExpr+'<'+end+')';
-  if (status) {
-    var tRef  = "'2025 Funded'!T$4:T$200";
-    var sCond = '(IFERROR('+tRef+'="'+status+'",FALSE))';
-    return '=SUMPRODUCT('+dateCond+'*'+sCond+'*'+colRef+')';
-  }
-  return '=SUMPRODUCT('+dateCond+'*'+colRef+')';
+  var values   = 'IFERROR(VALUE('+vRef+'),0)';
+  if (status) return '=SUMPRODUCT('+dateCond+'*(TRIM('+tRef+')="'+status+'")*'+values+')';
+  return '=SUMPRODUCT('+dateCond+'*'+values+')';
 }
 
 function mvs2026Count_(mo, status) {
-  var ref      = "'2026 Funded'!F$4:F$200";
-  var dExpr    = 'IFERROR(DATEVALUE(IF(ISNUMBER('+ref+'),TEXT('+ref+',"yyyy-mm-dd"),'+ref+')),0)';
+  var fRef     = "'2026 Funded'!F$4:F$100";
+  var tRef     = "'2026 Funded'!T$4:T$100";
+  var dExpr    = 'IFERROR(DATEVALUE(IF(ISNUMBER('+fRef+'),TEXT('+fRef+',"yyyy-mm-dd"),'+fRef+')),0)';
   var start    = 'DATE(2026,'+mo+',1)';
   var end      = mo < 12 ? 'DATE(2026,'+(mo+1)+',1)' : 'DATE(2027,1,1)';
   var dateCond = '('+dExpr+'>='+start+')*('+dExpr+'<'+end+')';
-  if (status) {
-    var tRef  = "'2026 Funded'!T$4:T$200";
-    var sCond = '(IFERROR('+tRef+'="'+status+'",FALSE))';
-    return '=SUMPRODUCT('+dateCond+'*'+sCond+')';
-  }
+  if (status) return '=SUMPRODUCT('+dateCond+'*(TRIM('+tRef+')="'+status+'"))';
   return '=SUMPRODUCT('+dateCond+')';
 }
 
 function mvs2026Sum_(mo, col, status) {
-  var ref      = "'2026 Funded'!F$4:F$200";
-  var colRef   = "'2026 Funded'!"+columnLetter_(col)+'$4:'+columnLetter_(col)+'$200';
-  var dExpr    = 'IFERROR(DATEVALUE(IF(ISNUMBER('+ref+'),TEXT('+ref+',"yyyy-mm-dd"),'+ref+')),0)';
+  var fRef     = "'2026 Funded'!F$4:F$100";
+  var tRef     = "'2026 Funded'!T$4:T$100";
+  var cLetter  = columnLetter_(col);
+  var vRef     = "'2026 Funded'!"+cLetter+"$4:"+cLetter+"$100";
+  var dExpr    = 'IFERROR(DATEVALUE(IF(ISNUMBER('+fRef+'),TEXT('+fRef+',"yyyy-mm-dd"),'+fRef+')),0)';
   var start    = 'DATE(2026,'+mo+',1)';
   var end      = mo < 12 ? 'DATE(2026,'+(mo+1)+',1)' : 'DATE(2027,1,1)';
   var dateCond = '('+dExpr+'>='+start+')*('+dExpr+'<'+end+')';
-  if (status) {
-    var tRef  = "'2026 Funded'!T$4:T$200";
-    var sCond = '(IFERROR('+tRef+'="'+status+'",FALSE))';
-    return '=SUMPRODUCT('+dateCond+'*'+sCond+'*'+colRef+')';
-  }
-  return '=SUMPRODUCT('+dateCond+'*'+colRef+')';
+  var values   = 'IFERROR(VALUE('+vRef+'),0)';
+  if (status) return '=SUMPRODUCT('+dateCond+'*(TRIM('+tRef+')="'+status+'")*'+values+')';
+  return '=SUMPRODUCT('+dateCond+'*'+values+')';
 }
 
 // ─── setupMvMSummaryBlock_ ────────────────────────────────────────────────────
-// Builds the 2026 Performance Dashboard (rows 18–30).
-// Table spans cols B–P (15 cols), so:
-//   Labels: cols B–F (2–6), 5 merged cells
-//   Values: cols G–P (7–16), 10 merged cells  ← value references use col G
-// Returns an array of ConditionalFormatRule objects.
+// Performance Dashboard rows 19–30.
+// Label cols B–F (2–6). Value cols G–P (7–16).
+// All summary formulas use SUMPRODUCT + TRIM + IFERROR(VALUE()) for robustness.
 
 function setupMvMSummaryBlock_(sheet, NAVY, GOLD) {
-  var NUM_TABLE_COLS = 15; // B through P
+  var NUM_COLS = 15; // B through P
 
-  // Row 18: section header spanning full table width
-  sheet.getRange(18, 2, 1, NUM_TABLE_COLS).clearContent().clearFormat();
-  sheet.getRange(18, 2, 1, NUM_TABLE_COLS).merge()
+  // Row 19: section header
+  sheet.getRange(19, 2, 1, NUM_COLS).clearContent().clearFormat();
+  sheet.getRange(19, 2, 1, NUM_COLS).merge()
     .setValue('📊 2026 PERFORMANCE DASHBOARD')
     .setBackground(NAVY).setFontColor('#FFFFFF')
     .setFontWeight('bold').setFontSize(13).setFontFamily('Arial')
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
-  sheet.setRowHeight(18, 38);
+  sheet.setRowHeight(19, 38);
+
+  // T (col T) range in 2026 Funded
+  var tRef  = "'2026 Funded'!T$4:T$100";
+  var gRef  = "'2026 Funded'!G$4:G$100";   // Amount col
+  var nRef  = "'2026 Funded'!N$4:N$100";   // Your Comm col
+  var n25   = "'2025 Funded'!N$4:N$100";
+
+  var trimPaid     = 'TRIM('+tRef+')="'+STATUS_PAID+'"';
+  var trimAwaiting = 'TRIM('+tRef+')="'+STATUS_AWAITING+'"';
+  var trimPending  = 'TRIM('+tRef+')="'+STATUS_PENDING+'"';
+  var valN         = 'IFERROR(VALUE('+nRef+'),0)';
+  var valG         = 'IFERROR(VALUE('+gRef+'),0)';
 
   var labels = [
     '✅ Paid — Deal Count (2026)',
@@ -610,59 +685,62 @@ function setupMvMSummaryBlock_(sheet, NAVY, GOLD) {
     '⏳ Pending Close — Volume (2026)',
     '⏳ Pending Close — Comm (2026)',
     'Combined Total Comm — Full Pipeline (2026)',
-    '2025 Full Year Comm (✅ Paid)',
+    '2025 Full Year Comm (all deals)',
     'YTD Pace vs 2025 (Paid comm only)',
   ];
 
   var formats = [
-    '0',          // Paid count
-    '$#,##0.00',  // Paid vol
-    '$#,##0.00',  // Paid comm
-    '0',          // Awaiting count
-    '$#,##0.00',  // Awaiting vol
-    '$#,##0.00',  // Awaiting comm
-    '0',          // Pending count
-    '$#,##0.00',  // Pending vol
-    '$#,##0.00',  // Pending comm
-    '$#,##0.00',  // Combined
-    '$#,##0.00',  // 2025 FY
-    '0.0%',       // YTD Pace
+    '0', '$#,##0.00', '$#,##0.00',   // Paid
+    '0', '$#,##0.00', '$#,##0.00',   // Awaiting
+    '0', '$#,##0.00', '$#,##0.00',   // Pending
+    '$#,##0.00',                      // Combined
+    '$#,##0.00',                      // 2025 FY
+    '0.0%',                           // YTD Pace
   ];
 
-  // Rows 19–30 (i=0 → row 19, i=11 → row 30)
-  // Value cells start at col G (col 7). Reference: G19…G30.
+  // All formulas reference col G (7) = top-left of merged value cell.
+  // Rows: 20=Paid count, 21=Paid vol, 22=Paid comm,
+  //       23=Await count, 24=Await vol, 25=Await comm,
+  //       26=Pend count,  27=Pend vol,  28=Pend comm,
+  //       29=Combined, 30=2025FY, 31=YTDPace
   var formulas = [
-    '=COUNTIF(\'2026 Funded\'!T$4:T$200,"'+STATUS_PAID+'")',
-    '=SUMIF(\'2026 Funded\'!T$4:T$200,"'+STATUS_PAID+'",\'2026 Funded\'!G$4:G$200)',
-    '=SUMIF(\'2026 Funded\'!T$4:T$200,"'+STATUS_PAID+'",\'2026 Funded\'!N$4:N$200)',
-    '=COUNTIF(\'2026 Funded\'!T$4:T$200,"'+STATUS_AWAITING+'")',
-    '=SUMIF(\'2026 Funded\'!T$4:T$200,"'+STATUS_AWAITING+'",\'2026 Funded\'!G$4:G$200)',
-    '=SUMIF(\'2026 Funded\'!T$4:T$200,"'+STATUS_AWAITING+'",\'2026 Funded\'!N$4:N$200)',
-    '=COUNTIF(\'2026 Funded\'!T$4:T$200,"'+STATUS_PENDING+'")',
-    '=SUMIF(\'2026 Funded\'!T$4:T$200,"'+STATUS_PENDING+'",\'2026 Funded\'!G$4:G$200)',
-    '=SUMIF(\'2026 Funded\'!T$4:T$200,"'+STATUS_PENDING+'",\'2026 Funded\'!N$4:N$200)',
-    '=G21+G24+G27',    // Paid + Awaiting + Pending comm
-    '=SUM(E4:E15)',     // 2025 Paid Comm from MvM table col E
-    '=IF(G29=0,"—",G21/G29)', // YTD Pace — paid comm / 2025 full-year paid comm
+    '=SUMPRODUCT(('+trimPaid+')*1)',
+    '=SUMPRODUCT(('+trimPaid+')*'+valG+')',
+    '=SUMPRODUCT(('+trimPaid+')*'+valN+')',
+    '=SUMPRODUCT(('+trimAwaiting+')*1)',
+    '=SUMPRODUCT(('+trimAwaiting+')*'+valG+')',
+    '=SUMPRODUCT(('+trimAwaiting+')*'+valN+')',
+    '=SUMPRODUCT(('+trimPending+')*1)',
+    '=SUMPRODUCT(('+trimPending+')*'+valG+')',
+    '=SUMPRODUCT(('+trimPending+')*'+valN+')',
+    '=G22+G25+G28',     // Combined = Paid comm + Awaiting comm + Pending comm
+    '=SUMPRODUCT(IFERROR(VALUE('+n25+'),0))', // All 2025 Funded comm, no status filter
+    '=IF(G30=0,"—",G22/G30)',  // YTD Pace = Paid Comm / 2025 Full Year
   ];
 
   var cfRules = [];
 
   for (var i = 0; i < labels.length; i++) {
-    var r  = 19 + i;
+    var r  = 20 + i; // rows 20–31
     var bg = i % 2 === 0 ? '#EEF2F7' : '#FFFFFF';
+    if (i < 3) bg = '#F0FFF0';                     // Paid: green tint
+    if (i >= 3 && i < 6) bg = '#FFFDE7';           // Awaiting: yellow tint
+    if (i >= 6 && i < 9) bg = '#E8F4FD';           // Pending: blue tint
+    if (i === 9) bg = '#F5F5F5';                    // Combined: grey
+    if (i === 10) bg = '#FFFFFF';
+    if (i === 11) bg = '#F0F0F0';
 
-    sheet.getRange(r, 2, 1, NUM_TABLE_COLS).clearContent().clearFormat();
-    sheet.setRowHeight(r, 27);
+    sheet.getRange(r, 2, 1, NUM_COLS).clearContent().clearFormat();
+    sheet.setRowHeight(r, 26);
 
-    // Label: cols B–F (5 cells)
+    // Label: B–F
     sheet.getRange(r, 2, 1, 5).merge()
       .setValue(labels[i])
       .setBackground(bg)
       .setFontFamily('Arial').setFontSize(9).setFontWeight('bold')
       .setHorizontalAlignment('left').setVerticalAlignment('middle');
 
-    // Value: cols G–P (10 cells)
+    // Value: G–P
     var valueCell = sheet.getRange(r, 7, 1, 10).merge();
     valueCell
       .setBackground(bg)
@@ -671,7 +749,7 @@ function setupMvMSummaryBlock_(sheet, NAVY, GOLD) {
       .setFormula(formulas[i])
       .setNumberFormat(formats[i]);
 
-    // CF for YTD Pace (i=11, row 30)
+    // CF for YTD Pace (i=11, row 31)
     if (i === 11) {
       var paceRange = sheet.getRange(r, 7);
       cfRules.push(
@@ -687,29 +765,31 @@ function setupMvMSummaryBlock_(sheet, NAVY, GOLD) {
           .setRanges([paceRange]).build()
       );
     }
-
-    // Highlight Paid rows (i=0,1,2) with light green tint
-    if (i < 3) sheet.getRange(r, 2, 1, NUM_TABLE_COLS).setBackground('#F0FFF0');
-    // Highlight Awaiting rows (i=3,4,5) with light yellow tint
-    if (i >= 3 && i < 6) sheet.getRange(r, 2, 1, NUM_TABLE_COLS).setBackground('#FFFDE7');
-    // Highlight Pending rows (i=6,7,8) with light blue tint
-    if (i >= 6 && i < 9) sheet.getRange(r, 2, 1, NUM_TABLE_COLS).setBackground('#E8F4FD');
   }
 
   return cfRules;
 }
 
 // ─── setupMonthVsMonth (public) ──────────────────────────────────────────────
-// Completely rebuilds the "Month vs Month" tab.
-//
-// Column layout (cols B–P = 2–16):
+// Column layout B–P (cols 2–16):
 //   B   Month
-//   C   2025 ✅ Paid #      D   2025 Paid Vol     E   2025 Paid Comm
-//   F   2026 ✅ Paid #      G   2026 Paid Vol     H   2026 Paid Comm
-//   I   2026 🔄 Awaiting #  J   Awaiting Vol      K   Awaiting Comm
-//   L   2026 ⏳ Pending #   M   Pending Vol       N   Pending Comm
+//   C–E 2025 ✅ Paid (#, Vol, Comm)
+//   F–H 2026 ✅ Paid (#, Vol, Comm)
+//   I–K 2026 🔄 Awaiting (#, Vol, Comm)
+//   L–N 2026 ⏳ Pending (#, Vol, Comm)
 //   O   Total 2026 Comm
-//   P   vs 2025
+//   P   Δ vs 2025
+//
+// Row structure:
+//   1  Title
+//   2  Subtitle
+//   3  Group headers (merged)
+//   4  Sub-headers
+//   5–16  January–December
+//   17  TOTALS
+//   18  Spacer
+//   19  Dashboard header
+//   20–31  Summary rows
 
 function setupMonthVsMonth() {
   var ss    = SpreadsheetApp.getActiveSpreadsheet();
@@ -721,11 +801,11 @@ function setupMonthVsMonth() {
   if (!sheet) sheet = ss.insertSheet('Month vs Month');
   sheet.clear();
 
-  // Column widths: A(spacer), B–P
-  var widths = [25, 115, 68, 98, 105, 68, 98, 105, 72, 98, 105, 72, 98, 105, 115, 90];
-  for (var w = 0; w < widths.length; w++) sheet.setColumnWidth(w + 1, widths[w]);
-
   var NUM_COLS = 15; // B through P
+
+  // Column widths: A spacer, B–P
+  var widths = [25, 115, 65, 95, 105, 65, 95, 105, 68, 95, 105, 68, 95, 105, 115, 88];
+  for (var w = 0; w < widths.length; w++) sheet.setColumnWidth(w + 1, widths[w]);
 
   // ── Row 1: Title ────────────────────────────────────────────────────────────
   sheet.getRange(1, 2, 1, NUM_COLS).merge()
@@ -746,16 +826,15 @@ function setupMonthVsMonth() {
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
   sheet.setRowHeight(2, 28);
 
-  // ── Row 3: Column headers ───────────────────────────────────────────────────
-  // Group headers row (row 3) — merge the 3-col groups
+  // ── Row 3: Group headers ────────────────────────────────────────────────────
   var groups = [
-    { col: 2,  span: 1,  label: 'Month',             bg: NAVY },
-    { col: 3,  span: 3,  label: '2025  ✅ Paid',      bg: '#276221' },
-    { col: 6,  span: 3,  label: '2026  ✅ Paid',      bg: '#276221' },
-    { col: 9,  span: 3,  label: '2026  🔄 Awaiting',  bg: '#9C6500' },
-    { col: 12, span: 3,  label: '2026  ⏳ Pending',   bg: '#1F4E79' },
-    { col: 15, span: 1,  label: 'Total 2026',         bg: NAVY      },
-    { col: 16, span: 1,  label: 'vs 2025',            bg: NAVY      },
+    { col: 2,  span: 1, label: 'Month',            bg: NAVY      },
+    { col: 3,  span: 3, label: '2025  ✅ Paid',     bg: '#276221' },
+    { col: 6,  span: 3, label: '2026  ✅ Paid',     bg: '#276221' },
+    { col: 9,  span: 3, label: '2026  🔄 Awaiting', bg: '#9C6500' },
+    { col: 12, span: 3, label: '2026  ⏳ Pending',  bg: '#1F4E79' },
+    { col: 15, span: 1, label: 'Total 2026',        bg: NAVY      },
+    { col: 16, span: 1, label: 'Δ vs 2025',         bg: NAVY      },
   ];
   groups.forEach(function(g) {
     var rng = g.span > 1
@@ -766,14 +845,15 @@ function setupMonthVsMonth() {
       .setFontWeight('bold').setFontSize(9).setFontFamily('Arial')
       .setHorizontalAlignment('center').setVerticalAlignment('middle');
   });
+  sheet.setRowHeight(3, 30);
 
-  // Sub-headers row (row 4)
+  // ── Row 4: Sub-headers ──────────────────────────────────────────────────────
   var subHeaders = [
     'Month',
-    '#', 'Volume', 'Comm',          // 2025 Paid
-    '#', 'Volume', 'Comm',          // 2026 Paid
-    '#', 'Volume', 'Comm',          // 2026 Awaiting
-    '#', 'Volume', 'Comm',          // 2026 Pending
+    '#', 'Volume', 'Comm',
+    '#', 'Volume', 'Comm',
+    '#', 'Volume', 'Comm',
+    '#', 'Volume', 'Comm',
     'Comm', 'Δ vs 2025',
   ];
   for (var sh = 0; sh < subHeaders.length; sh++) {
@@ -783,7 +863,6 @@ function setupMonthVsMonth() {
       .setFontWeight('bold').setFontSize(8).setFontFamily('Arial')
       .setHorizontalAlignment('center').setVerticalAlignment('middle');
   }
-  sheet.setRowHeight(3, 30);
   sheet.setRowHeight(4, 26);
 
   // ── Rows 5–16: Monthly data ─────────────────────────────────────────────────
@@ -793,36 +872,27 @@ function setupMonthVsMonth() {
     sheet.setRowHeight(r, 22);
     sheet.getRange(r, 2, 1, NUM_COLS).setBackground(bg).setFontFamily('Arial').setFontSize(9);
 
-    // B: Month name
-    sheet.getRange(r, 2).setValue(MONTHS_[mo - 1])
-      .setFontWeight('bold').setHorizontalAlignment('left');
+    // B: Month
+    sheet.getRange(r, 2).setValue(MONTHS_[mo - 1]).setFontWeight('bold').setHorizontalAlignment('left');
 
-    // C: 2025 Paid #
+    // C–E: 2025 Paid
     sheet.getRange(r, 3).setFormula(mvs2025Count_(mo, STATUS_PAID)).setHorizontalAlignment('center');
-    // D: 2025 Paid Vol
     sheet.getRange(r, 4).setFormula(mvs2025Sum_(mo, 7, STATUS_PAID)).setNumberFormat('$#,##0');
-    // E: 2025 Paid Comm
     sheet.getRange(r, 5).setFormula(mvs2025Sum_(mo, 14, STATUS_PAID)).setNumberFormat('$#,##0.00');
 
-    // F: 2026 Paid #
+    // F–H: 2026 Paid
     sheet.getRange(r, 6).setFormula(mvs2026Count_(mo, STATUS_PAID)).setHorizontalAlignment('center');
-    // G: 2026 Paid Vol
     sheet.getRange(r, 7).setFormula(mvs2026Sum_(mo, 7, STATUS_PAID)).setNumberFormat('$#,##0');
-    // H: 2026 Paid Comm
     sheet.getRange(r, 8).setFormula(mvs2026Sum_(mo, 14, STATUS_PAID)).setNumberFormat('$#,##0.00');
 
-    // I: 2026 Awaiting #
+    // I–K: 2026 Awaiting
     sheet.getRange(r, 9).setFormula(mvs2026Count_(mo, STATUS_AWAITING)).setHorizontalAlignment('center');
-    // J: 2026 Awaiting Vol
     sheet.getRange(r, 10).setFormula(mvs2026Sum_(mo, 7, STATUS_AWAITING)).setNumberFormat('$#,##0');
-    // K: 2026 Awaiting Comm
     sheet.getRange(r, 11).setFormula(mvs2026Sum_(mo, 14, STATUS_AWAITING)).setNumberFormat('$#,##0.00');
 
-    // L: 2026 Pending #
+    // L–N: 2026 Pending
     sheet.getRange(r, 12).setFormula(mvs2026Count_(mo, STATUS_PENDING)).setHorizontalAlignment('center');
-    // M: 2026 Pending Vol
     sheet.getRange(r, 13).setFormula(mvs2026Sum_(mo, 7, STATUS_PENDING)).setNumberFormat('$#,##0');
-    // N: 2026 Pending Comm
     sheet.getRange(r, 14).setFormula(mvs2026Sum_(mo, 14, STATUS_PENDING)).setNumberFormat('$#,##0.00');
 
     // O: Total 2026 Comm = Paid + Awaiting + Pending
@@ -830,7 +900,7 @@ function setupMonthVsMonth() {
       .setFormula('=H'+r+'+K'+r+'+N'+r)
       .setNumberFormat('$#,##0.00').setFontWeight('bold');
 
-    // P: vs 2025 (blank dash when 2025 has no data)
+    // P: Δ vs 2025
     sheet.getRange(r, 16)
       .setFormula('=IF(E'+r+'=0,"—",O'+r+'-E'+r+')')
       .setNumberFormat('$#,##0.00');
@@ -863,10 +933,10 @@ function setupMonthVsMonth() {
   // ── Row 18: Spacer ──────────────────────────────────────────────────────────
   sheet.setRowHeight(18, 16);
 
-  // ── Rows 19–30: Performance Dashboard ──────────────────────────────────────
+  // ── Rows 19–31: Performance Dashboard ──────────────────────────────────────
   var cfRules = setupMvMSummaryBlock_(sheet, NAVY, GOLD);
 
-  // CF for vs 2025 column (P = col 16, rows 5–16)
+  // CF for Δ vs 2025 (col P = 16, rows 5–16)
   var vsRange = sheet.getRange(5, 16, 12, 1);
   cfRules.push(
     SpreadsheetApp.newConditionalFormatRule()
@@ -913,14 +983,14 @@ function formatAllSheets() {
     var lastRow   = totalsRow === -1 ? sheet.getLastRow() : totalsRow;
     if (lastRow >= 4) {
       var rows = lastRow - 3;
-      sheet.getRange(4, 7,  rows).setNumberFormat('$#,##0.00');   // G: amt
-      sheet.getRange(4, 10, rows).setNumberFormat('0.00"%"');      // J: rate
-      sheet.getRange(4, 11, rows).setNumberFormat('0" bps"');      // K: bps
-      sheet.getRange(4, 12, rows).setNumberFormat('0%');           // L: split
-      sheet.getRange(4, 13, rows).setNumberFormat('$#,##0.00');    // M: grossComm
-      sheet.getRange(4, 14, rows).setNumberFormat('$#,##0.00');    // N: yourComm
-      sheet.getRange(4, 18, rows).setNumberFormat('yyyy-mm-dd');   // R: maturity
-      sheet.getRange(4, 21, rows).setNumberFormat('yyyy-mm-dd');   // U: pay date
+      sheet.getRange(4, 7,  rows).setNumberFormat('$#,##0.00');
+      sheet.getRange(4, 10, rows).setNumberFormat('0.00"%"');
+      sheet.getRange(4, 11, rows).setNumberFormat('0" bps"');
+      sheet.getRange(4, 12, rows).setNumberFormat('0%');
+      sheet.getRange(4, 13, rows).setNumberFormat('$#,##0.00');
+      sheet.getRange(4, 14, rows).setNumberFormat('$#,##0.00');
+      sheet.getRange(4, 18, rows).setNumberFormat('yyyy-mm-dd');
+      sheet.getRange(4, 21, rows).setNumberFormat('yyyy-mm-dd');
     }
 
     applyStatusCF_(sheet);
