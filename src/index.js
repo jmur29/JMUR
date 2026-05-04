@@ -12,6 +12,7 @@ const { addContact, addDeal, startMatcher, getPendingSnapshot } = require('./mat
 const { createSheetsClient } = require('./sheets/client');
 const { appendLeadRow } = require('./sheets/tracker');
 const { scheduleDailyReport } = require('./reports/scheduler');
+const { startServer } = require('./server');
 
 // ─── Validate required environment variables ─────────────────────────────────
 
@@ -26,8 +27,8 @@ const REQUIRED_ENV = [
 function validateEnv() {
   const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
   if (missing.length > 0) {
-    logger.error(`Missing required environment variables: ${missing.join(', ')}`);
-    process.exit(1);
+    logger.warn(`GHL env vars not set (${missing.join(', ')}) — email automation disabled, dashboard still running.`);
+    return false;
   }
 
   if (!process.env.GOOGLE_SHEET_ID) {
@@ -113,16 +114,20 @@ function startStatusLogger() {
 
 async function main() {
   logger.info('=== Mortgage Lead Automation starting up ===');
-  validateEnv();
+  const ghlReady = validateEnv();
 
-  const gmail = createGmailClient();
+  startServer();
 
-  startMatcher();
-  startStatusLogger();
-  startWatcher(gmail, handleEmail);
-  scheduleDailyReport();
-
-  logger.info('=== All systems running. Watching for HubSpot emails... ===');
+  if (ghlReady !== false) {
+    const gmail = createGmailClient();
+    startMatcher();
+    startStatusLogger();
+    startWatcher(gmail, handleEmail);
+    scheduleDailyReport();
+    logger.info('=== All systems running. Watching for HubSpot emails... ===');
+  } else {
+    logger.info('=== Dashboard running. Set GHL env vars to enable email automation. ===');
+  }
 }
 
 main().catch((err) => {
