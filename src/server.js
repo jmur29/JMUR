@@ -10,6 +10,12 @@ const { streamChat, generateReport, getMortgageSuggestions } = require('./ai/jar
 
 const app = express();
 app.use(express.json());
+
+// Never cache dashboard.html so deploys take effect immediately
+app.get('/dashboard.html', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(__dirname, '../public/dashboard.html'));
+});
 app.use(express.static(path.join(__dirname, '../public')));
 
 // ─── Supabase ─────────────────────────────────────────────────────────────────
@@ -215,13 +221,22 @@ app.post('/api/jarvis/stream', dashboardAuth, async (req, res) => {
   res.flushHeaders();
 
   const { messages, context } = req.body;
-  if (!messages || !Array.isArray(messages)) {
+  logger.info(`Jarvis: received ${Array.isArray(messages) ? messages.length : 'non-array'} messages`);
+
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
     res.write(`data: ${JSON.stringify({ error: 'messages array required' })}\n\n`);
     return res.end();
   }
 
+  // Strip any empty-content messages that would be rejected by the API
+  const cleanMessages = messages.filter(m => m.content && String(m.content).trim());
+  if (!cleanMessages.length) {
+    res.write(`data: ${JSON.stringify({ error: 'all messages have empty content' })}\n\n`);
+    return res.end();
+  }
+
   try {
-    for await (const chunk of streamChat(messages, context || '')) {
+    for await (const chunk of streamChat(cleanMessages, context || '')) {
       res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
     }
     res.write('data: [DONE]\n\n');
