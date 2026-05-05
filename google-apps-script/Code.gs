@@ -177,7 +177,25 @@ function importCommissionReport() {
 
   var today = new Date();
   today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  var added = 0;
+
+  // Build a set of existing (borrower + closing) keys to skip duplicates.
+  var lastRow  = sheet.getLastRow();
+  var existing = {};
+  if (lastRow >= 4) {
+    var existingData = sheet.getRange(4, 2, lastRow - 3, 5).getValues(); // cols B–F
+    existingData.forEach(function(row) {
+      var name = String(row[0] || '').trim().toLowerCase();
+      var cl   = row[4]; // col F (index 4 within B–F)
+      if (!name) return;
+      var clStr = cl instanceof Date
+        ? Utilities.formatDate(cl, 'UTC', 'yyyy-MM-dd')
+        : String(cl || '').trim();
+      existing[name + '|' + clStr] = true;
+    });
+  }
+
+  var added   = 0;
+  var skipped = 0;
 
   deals.forEach(function(d) {
     var borrower  = d[0];
@@ -188,6 +206,10 @@ function importCommissionReport() {
     var grossComm = d[5];
     var yourComm  = d[6];
     var payDate   = d[7];
+
+    // Skip if this borrower + closing date combo already exists in the sheet.
+    var key = borrower.trim().toLowerCase() + '|' + closing;
+    if (existing[key]) { skipped++; return; }
 
     var totalsRow = findTotalsRow_(sheet);
     var insertRow = totalsRow === -1 ? sheet.getLastRow() + 1 : totalsRow;
@@ -251,7 +273,8 @@ function importCommissionReport() {
   applyStatusCF_(sheet);
   fixTotalsAndRefs_(sheet);
   SpreadsheetApp.flush();
-  ss.toast(added + ' deals imported. Run "Rebuild Month vs Month" to update the dashboard.');
+  ss.toast(added + ' deal(s) imported' + (skipped > 0 ? ', ' + skipped + ' skipped (already in sheet).' : '.') +
+    (added > 0 ? ' Run "Rebuild Month vs Month" to update the dashboard.' : ''));
 }
 
 // ─── fixAllTotalsAndRefs ──────────────────────────────────────────────────────
