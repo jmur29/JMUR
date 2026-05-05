@@ -163,6 +163,12 @@
     .j-send{background:var(--primary);border:none;color:#fff;width:42px;height:42px;border-radius:8px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
     .j-send:hover{background:var(--primary-h)}
     .j-send:disabled{opacity:.4;cursor:not-allowed}
+    .attach-btn{background:none;border:1px solid var(--border);color:var(--dim);width:42px;height:42px;border-radius:8px;cursor:pointer;font-size:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s}
+    .attach-btn:hover{border-color:var(--primary);color:var(--primary)}
+    .drag-overlay{display:none;position:absolute;inset:0;background:rgba(59,130,246,.12);border:2px dashed var(--primary);border-radius:inherit;align-items:center;justify-content:center;flex-direction:column;gap:6px;font-size:15px;font-weight:600;color:var(--primary);z-index:10;pointer-events:none}
+    #jarvis-panel.drag-over .drag-overlay{display:flex}
+    .msg.pdf-msg{background:var(--bg3);border:1px solid var(--border);color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px;padding:8px 12px}
+    .msg.pdf-msg .pdf-icon{font-size:18px}
 
     /* ── Modal ── */
     .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;align-items:center;justify-content:center}
@@ -343,6 +349,7 @@
 
 <!-- ── Jarvis Panel ───────────────────────────────────────────────────────────── -->
 <div id="jarvis-panel">
+  <div class="drag-overlay">📄<br>Drop PDF</div>
   <div class="jarvis-header">
     <div>
       <div class="j-title">Jarvis</div>
@@ -359,7 +366,9 @@
     Context: <span class="ctx-label" id="ctx-label">General</span>
   </div>
   <div class="jarvis-input-row">
-    <textarea id="jarvis-input" placeholder="Ask Jarvis…" rows="1"
+    <input type="file" id="pdf-input" accept=".pdf" style="display:none" onchange="handlePdfFile(this.files[0]);this.value=''">
+    <button class="attach-btn" onclick="document.getElementById('pdf-input').click()" title="Attach PDF">📎</button>
+    <textarea id="jarvis-input" placeholder="Ask Jarvis… or drop a PDF deal summary" rows="1"
       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendJarvis()}"
       oninput="this.style.height='42px';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
     <button class="j-send" id="j-send-btn" onclick="sendJarvis()">↑</button>
@@ -456,6 +465,7 @@ const DEL = (p) => api('DELETE', p);
 async function bootApp() {
   document.getElementById('login').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
+  initJarvisDrop();
   await Promise.all([loadDeals(), loadClients(), loadChatHistory()]);
 }
 
@@ -772,19 +782,75 @@ function clearChat() {
   document.getElementById('jarvis-msgs').innerHTML = '<div class="msg assistant">Chat cleared. What can I help with?</div>';
 }
 
-async function sendJarvis() {
+// ── PDF drag-and-drop ──────────────────────────────────────────────────────────
+
+function initJarvisDrop() {
+  const panel = document.getElementById('jarvis-panel');
+  panel.addEventListener('dragover', e => {
+    if ([...e.dataTransfer.items].some(i => i.type === 'application/pdf')) {
+      e.preventDefault();
+      panel.classList.add('drag-over');
+    }
+  });
+  panel.addEventListener('dragleave', e => {
+    if (!panel.contains(e.relatedTarget)) panel.classList.remove('drag-over');
+  });
+  panel.addEventListener('drop', e => {
+    e.preventDefault();
+    panel.classList.remove('drag-over');
+    const file = [...e.dataTransfer.files].find(f => f.type === 'application/pdf');
+    if (file) handlePdfFile(file);
+  });
+}
+
+function handlePdfFile(file) {
+  if (!file || file.type !== 'application/pdf') return;
+  const text = document.getElementById('jarvis-input').value.trim();
+  const prompt = text || 'Please read this mortgage deal PDF and add any funded deal details to the pipeline. Confirm what you recorded.';
+  document.getElementById('jarvis-input').value = '';
+  document.getElementById('jarvis-input').style.height = '42px';
+
+  fileToBase64(file).then(b64 => {
+    const content = [
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+      { type: 'text', text: prompt },
+    ];
+    sendJarvis(content, `📄 ${file.name} — ${prompt}`);
+  }).catch(err => appendMsg('assistant', `⚠️ Could not read PDF: ${err.message}`));
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = () => reject(new Error('FileReader failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function sendJarvis(contentOverride, displayText) {
   const input = document.getElementById('jarvis-input');
-  const text = input.value.trim();
-  if (!text) return;
+  const text = contentOverride ? displayText : input.value.trim();
+  if (!contentOverride && !text) return;
 
   input.value = '';
   input.style.height = '42px';
   document.getElementById('j-send-btn').disabled = true;
 
-  S.jarvisMessages.push({ role: 'user', content: text });
+  // For PDF messages: store text-only in history (avoid bloating Supabase with base64)
+  S.jarvisMessages.push({ role: 'user', content: contentOverride ? displayText : text });
   if (S.jarvisMessages.length > 40) S.jarvisMessages = S.jarvisMessages.slice(-40);
 
-  appendMsg('user', text);
+  if (contentOverride) {
+    // Show a PDF attachment pill in the chat
+    const el = document.createElement('div');
+    el.className = 'msg user pdf-msg';
+    el.innerHTML = `<span class="pdf-icon">📄</span><span>${esc(displayText)}</span>`;
+    document.getElementById('jarvis-msgs').appendChild(el);
+    scrollJarvis();
+  } else {
+    appendMsg('user', text);
+  }
   const typingEl = appendTyping();
 
   // Build context string
@@ -794,12 +860,21 @@ async function sendJarvis() {
     if (c) context = `Currently viewing client: ${JSON.stringify(c)}`;
   }
 
+  // Build messages — for PDF, swap last history entry with the rich content block
+  let messagesToSend = [...S.jarvisMessages];
+  if (contentOverride) {
+    messagesToSend = [
+      ...S.jarvisMessages.slice(0, -1),
+      { role: 'user', content: contentOverride },
+    ];
+  }
+
   let msgEl = null;
   try {
     const response = await fetch('/api/jarvis/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${S.token}` },
-      body: JSON.stringify({ messages: [...S.jarvisMessages], context }),
+      body: JSON.stringify({ messages: messagesToSend, context }),
     });
 
     if (!response.ok) {

@@ -228,7 +228,11 @@ app.post('/api/jarvis/stream', dashboardAuth, async (req, res) => {
     return res.end();
   }
 
-  const cleanMessages = messages.filter(m => m.content && String(m.content).trim());
+  const cleanMessages = messages.filter(m => {
+    if (!m.content) return false;
+    if (Array.isArray(m.content)) return m.content.length > 0;
+    return String(m.content).trim().length > 0;
+  });
   if (!cleanMessages.length) {
     res.write(`data: ${JSON.stringify({ error: 'all messages have empty content' })}\n\n`);
     return res.end();
