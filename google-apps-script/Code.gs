@@ -1010,17 +1010,25 @@ function rebuildYearOverYear_(ss) {
   var GOLD  = '#C9A84C';
   var LGOLD = '#FFF8E7';
 
-  // Find any existing "year over year / yoy / comparison" tab; otherwise create one.
+  // Find the YoY tab: first by tab name, then by scanning every sheet's title cell.
+  // This handles cases where the tab has an unexpected name.
   var sheet = null;
+  var TARGET_NAME = 'Year Over Year';
   ss.getSheets().forEach(function(s) {
     if (sheet) return;
     var n = s.getName().toLowerCase();
+    if (n === 'year over year' || n === 'yoy' || n === 'year-over-year') { sheet = s; return; }
     if ((n.indexOf('year') > -1 || n.indexOf('yoy') > -1 || n.indexOf('comparison') > -1)
-        && n.indexOf('funded') === -1) {
-      sheet = s;
-    }
+        && n.indexOf('funded') === -1) { sheet = s; return; }
+    // Fallback: check if any cell in row 1 contains "YEAR OVER YEAR"
+    try {
+      var row1 = s.getRange(1, 1, 1, s.getLastColumn() || 1).getDisplayValues()[0].join('');
+      if (row1.toUpperCase().indexOf('YEAR OVER YEAR') > -1) { sheet = s; }
+    } catch(e) {}
   });
-  if (!sheet) sheet = ss.insertSheet('Year Over Year');
+  if (!sheet) sheet = ss.insertSheet(TARGET_NAME);
+  // Ensure the tab is named consistently so it can be found reliably next time.
+  if (sheet.getName() !== TARGET_NAME) sheet.setName(TARGET_NAME);
   sheet.clear();
 
   var NC = 6; // cols B–G (2–7)
