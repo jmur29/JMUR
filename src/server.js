@@ -9,7 +9,7 @@ const { addFundedDeal } = require('./sheets/addDeal');
 const { streamChat, generateReport, getMortgageSuggestions } = require('./ai/jarvis');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
 
 // Never cache dashboard.html so deploys take effect immediately
 app.get('/dashboard.html', (_req, res) => {
