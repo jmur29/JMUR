@@ -655,7 +655,9 @@ function columnLetter_(n) {
 
 function dExpr_(sheetName, colF) {
   var ref = "'"+sheetName+"'!"+colF+"$4:"+colF+"$100";
-  return 'IFERROR(DATEVALUE(IF(ISNUMBER('+ref+'),TEXT('+ref+',"yyyy-mm-dd"),'+ref+')),0)';
+  // Numeric dates (serials): use directly — avoids locale-sensitive TEXT/DATEVALUE round-trip.
+  // Text dates (fallback): attempt DATEVALUE; IFERROR → 0 so empty/bad cells don't count.
+  return 'IF(ISNUMBER('+ref+'),'+ref+',IFERROR(DATEVALUE('+ref+'),0))';
 }
 
 function isPaid_(sheetName) {
