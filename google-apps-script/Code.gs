@@ -1171,7 +1171,6 @@ function rebuildFundedSheet_(ss, sheetName) {
 
   // ── 10. Freeze rows 1–2 and cols A–B; hide Email + Phone ─────────────────
   sheet.setFrozenRows(2);
-  sheet.setFrozenColumns(2);
   sheet.hideColumns(16, 2); // P: Email, Q: Phone
 
   // ── 11. Status conditional formatting ────────────────────────────────────
