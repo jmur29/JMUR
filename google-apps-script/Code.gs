@@ -15,6 +15,7 @@ var STATUS_PAID     = '✅ Paid';
 function onOpen() {
   SpreadsheetApp.getActiveSpreadsheet().addMenu('JM Tools', [
     { name: 'Add Deal from Inbox',       functionName: 'addDealFromInbox'       },
+    { name: 'Import Commission Report',  functionName: 'importCommissionReport' },
     { name: 'Fix Totals & References',   functionName: 'fixAllTotalsAndRefs'    },
     { name: 'Fix Status Column',         functionName: 'fixStatusColumn'        },
     { name: 'Refresh Deal Statuses',     functionName: 'refreshDealStatuses'    },
@@ -145,6 +146,112 @@ function addDealFromInbox() {
   }
   if (added > 0) inbox.getRange(2, 1, lastRow - 1, 17).clearContent();
   ss.toast(added + ' deal(s) added' + (errors > 0 ? ', ' + errors + ' skipped.' : '.'));
+}
+
+// ─── importCommissionReport ───────────────────────────────────────────────────
+// One-shot import of 12 deals extracted from the May 2026 commission report.
+// Columns not available in the report (Amount, Term, Rate, Lender) are left blank.
+// Status is auto-assigned: ✅ Paid if Pay Date present, 🔄 Awaiting if closing past.
+
+function importCommissionReport() {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('2026 Funded');
+  if (!sheet) { ss.toast('2026 Funded sheet not found.'); return; }
+
+  // [borrower, type, source, closing, split, grossComm, yourComm, payDate]
+  // Oldest first so chronological order is preserved in the sheet.
+  var deals = [
+    ['Andrea Campbell', 'Self-Sourced', 'Self',  '2026-01-15', 0.90,  2794.60,  2515.14, '2026-02-25'],
+    ['Mike Shaw',       'Switch',       '',      '2026-01-19', 0.35,  3933.00,  1376.55, '2026-01-22'],
+    ['Jennifer Barned', 'Switch',       '',      '2026-02-20', 0.35,  2445.52,   855.93, '2026-02-24'],
+    ['Kevin Palma',     'Self-Sourced', 'Self',  '2026-02-24', 0.90,  1764.85,  1588.37, '2026-03-09'],
+    ['Joe Morrow',      'Self-Sourced', 'Self',  '2026-02-27', 0.90, 11250.00, 10125.00, '2026-03-03'],
+    ['Andrew McGuigan', 'Refinance',    '',      '2026-03-05', 0.35,  3455.86,  1209.55, '2026-04-13'],
+    ['Roger Bachelor',  'Self-Sourced', 'Self',  '2026-03-16', 0.90,  2920.00,  2628.00, '2026-03-25'],
+    ['Phillip Wolfe',   'Purchase',     '',      '2026-03-16', 0.40,  2227.50,   891.00, '2026-03-30'],
+    ['Doug Oldenburg',  'Refinance',    '',      '2026-03-16', 0.35,  4410.00,  1543.50, '2026-04-01'],
+    ['Megan Mlynczak',  'Purchase',     '',      '2026-03-31', 0.35,  5321.26,  1862.44, '2026-04-08'],
+    ['Greg Mason',      'Refinance',    '',      '2026-04-21', 0.35,  5113.50,  1789.73, '2026-04-28'],
+    ['Sylvia Murray',   'Self-Sourced', 'Self',  '2026-04-30', 0.90,  5617.50,  5055.75, ''],
+  ];
+
+  var today = new Date();
+  today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  var added = 0;
+
+  deals.forEach(function(d) {
+    var borrower  = d[0];
+    var dealType  = d[1];
+    var source    = d[2];
+    var closing   = d[3];
+    var split     = d[4];
+    var grossComm = d[5];
+    var yourComm  = d[6];
+    var payDate   = d[7];
+
+    var totalsRow = findTotalsRow_(sheet);
+    var insertRow = totalsRow === -1 ? sheet.getLastRow() + 1 : totalsRow;
+    var dealNum   = insertRow - 3;
+    sheet.insertRowBefore(insertRow);
+    var r = String(insertRow);
+
+    // Cols A–Q (17 cols). Amount, Term, Rate, BPS, Lender left blank.
+    sheet.getRange(insertRow, 1, 1, 17).setValues([[
+      dealNum, borrower, dealType, source, '',
+      closing, '', '', '', '',
+      '', split, grossComm, yourComm, '',
+      '', ''
+    ]]);
+
+    sheet.getRange(insertRow, 12).setNumberFormat('0%');
+    sheet.getRange(insertRow, 13).setNumberFormat('$#,##0.00');
+    sheet.getRange(insertRow, 14).setNumberFormat('$#,##0.00');
+
+    // R: Maturity Date
+    sheet.getRange(insertRow, 18)
+      .setFormula(
+        '=IF(OR(F'+r+'="",H'+r+'=""),"",EDATE(' +
+          'IFERROR(DATEVALUE(IF(ISNUMBER(F'+r+'),TEXT(F'+r+',"yyyy-mm-dd"),F'+r+')),F'+r+'),' +
+          'H'+r+'))'
+      )
+      .setNumberFormat('yyyy-mm-dd');
+
+    // S: Renewal Alert
+    sheet.getRange(insertRow, 19)
+      .setFormula(
+        '=IF(R'+r+'="","",IF(R'+r+'-TODAY()<=30,"🔴 URGENT",' +
+          'IF(R'+r+'-TODAY()<=90,"🟡 SOON","🟢 OK")))'
+      );
+
+    // T: Status — Paid if pay date recorded, else date-based
+    var status;
+    if (payDate) {
+      status = STATUS_PAID;
+    } else {
+      var parts = closing.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      var closingDate = parts
+        ? new Date(parseInt(parts[1]), parseInt(parts[2]) - 1, parseInt(parts[3]))
+        : new Date(closing);
+      status = closingDate <= today ? STATUS_AWAITING : STATUS_PENDING;
+    }
+    sheet.getRange(insertRow, 20)
+      .setValue(status)
+      .setHorizontalAlignment('center')
+      .setFontFamily('Arial').setFontSize(10);
+    applyStatusValidation_(sheet, insertRow);
+
+    // U: Pay Date
+    if (payDate) sheet.getRange(insertRow, 21).setValue(payDate);
+    sheet.getRange(insertRow, 21).setNumberFormat('yyyy-mm-dd');
+
+    sheet.getRange(insertRow, 1, 1, 21).setFontFamily('Arial').setFontSize(10);
+    added++;
+  });
+
+  applyStatusCF_(sheet);
+  fixTotalsAndRefs_(sheet);
+  SpreadsheetApp.flush();
+  ss.toast(added + ' deals imported. Run "Rebuild Month vs Month" to update the dashboard.');
 }
 
 // ─── fixAllTotalsAndRefs ──────────────────────────────────────────────────────
