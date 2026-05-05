@@ -218,13 +218,15 @@ function importCommissionReport() {
     var r = String(insertRow);
 
     // Cols A–Q (17 cols). Amount, Term, Rate, BPS, Lender left blank.
+    var closingDate = parseDateVal_(closing);
     sheet.getRange(insertRow, 1, 1, 17).setValues([[
       dealNum, borrower, dealType, source, '',
-      closing, '', '', '', '',
+      closingDate, '', '', '', '',
       '', split, grossComm, yourComm, '',
       '', ''
     ]]);
 
+    sheet.getRange(insertRow, 6).setNumberFormat('yyyy-mm-dd');
     sheet.getRange(insertRow, 12).setNumberFormat('0%');
     sheet.getRange(insertRow, 13).setNumberFormat('$#,##0.00');
     sheet.getRange(insertRow, 14).setNumberFormat('$#,##0.00');
@@ -263,7 +265,7 @@ function importCommissionReport() {
     applyStatusValidation_(sheet, insertRow);
 
     // U: Pay Date
-    if (payDate) sheet.getRange(insertRow, 21).setValue(payDate);
+    if (payDate) sheet.getRange(insertRow, 21).setValue(parseDateVal_(payDate));
     sheet.getRange(insertRow, 21).setNumberFormat('yyyy-mm-dd');
 
     sheet.getRange(insertRow, 1, 1, 21).setFontFamily('Arial').setFontSize(10);
@@ -927,10 +929,10 @@ function setupMonthVsMonth() {
     sheet.getRange(r, 14).setFormula(mvs2026Sum_(mo, 14, STATUS_PENDING)).setNumberFormat('$#,##0.00');
 
     // O: Total 2026 Comm
-    sheet.getRange(r, 15).setFormula('=H'+r+'+K'+r+'+N'+r).setNumberFormat('$#,##0.00').setFontWeight('bold');
+    sheet.getRange(r, 15).setFormula('=IFERROR(H'+r+'+K'+r+'+N'+r+',0)').setNumberFormat('$#,##0.00').setFontWeight('bold');
 
     // P: Δ vs 2025
-    sheet.getRange(r, 16).setFormula('=IF(E'+r+'=0,"—",O'+r+'-E'+r+')').setNumberFormat('$#,##0.00');
+    sheet.getRange(r, 16).setFormula('=IFERROR(IF(E'+r+'=0,"—",O'+r+'-E'+r+'),"—")').setNumberFormat('$#,##0.00');
   }
 
   // Row 17: TOTALS
@@ -1072,7 +1074,7 @@ function rebuildFundedSheet_(ss, sheetName) {
         i + 1,
         String(d[1] || '').trim(),
         d[2]  || '', d[3]  || '', d[4]  || '',   // Type, Source, Lender
-        d[5]  || '',                               // Closing Date
+        parseDateVal_(d[5]),                       // Closing Date
         d[6]  !== '' ? d[6]  : '',                 // Amount
         d[7]  !== '' ? d[7]  : '',                 // Term
         d[8]  || '',                               // Rate Type
@@ -1091,7 +1093,7 @@ function rebuildFundedSheet_(ss, sheetName) {
     var tU = deduped.map(function(d) {
       var tVal = String(d[19] || '').trim();
       if (VALID_STATUSES.indexOf(tVal) === -1) tVal = computeInitialStatus_(d[5]);
-      return [tVal, d[20] || ''];
+      return [tVal, parseDateVal_(d[20])];
     });
     sheet.getRange(4, 20, n, 2).setValues(tU);
     sheet.getRange(4, 20, n, 1).setHorizontalAlignment('center');
@@ -1165,6 +1167,57 @@ function rebuildFundedSheet_(ss, sheetName) {
       .setFormula('=SUM(N4:N' + lastData + ')').setNumberFormat('$#,##0.00');
   }
 
+  // ── 8b. Pipeline Summary block ────────────────────────────────────────────
+  if (n > 0) {
+    var lastData    = n + 3;
+    var spacerRow   = totalsRow + 1;
+    var pHdrRow     = totalsRow + 2;
+    var paidRow     = totalsRow + 3;
+    var awaitRow    = totalsRow + 4;
+    var pendRow     = totalsRow + 5;
+    var totalPipRow = totalsRow + 6;
+
+    sheet.setRowHeight(spacerRow, 8);
+
+    sheet.getRange(pHdrRow, 1, 1, 21).merge()
+      .setValue('PIPELINE SUMMARY')
+      .setBackground(NAVY).setFontColor('#FFFFFF')
+      .setFontWeight('bold').setFontFamily('Arial').setFontSize(11)
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sheet.setRowHeight(pHdrRow, 28);
+
+    var pRows = [
+      [paidRow,     '✅ Comm Received',       STATUS_PAID,     '#C6EFCE', '#276221'],
+      [awaitRow,    '🔄 Comm Due (Awaiting)', STATUS_AWAITING, '#FFFDE7', '#9C6500'],
+      [pendRow,     '⏳ Projected if Closed', STATUS_PENDING,  '#E8F4FD', '#1F4E79'],
+      [totalPipRow, '📊 Total Pipeline',      null,            '#F0F0F0', '#333333'],
+    ];
+
+    pRows.forEach(function(pr) {
+      var rn     = pr[0];
+      var label  = pr[1];
+      var status = pr[2];
+      var bg     = pr[3];
+      var fc     = pr[4];
+      sheet.setRowHeight(rn, 24);
+      sheet.getRange(rn, 1, 1, 13).merge()
+        .setValue(label)
+        .setBackground(bg).setFontColor(fc)
+        .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
+        .setHorizontalAlignment('left').setVerticalAlignment('middle');
+      var fml = status
+        ? '=IFERROR(SUMIF(T4:T' + lastData + ',"' + status + '",N4:N' + lastData + '),0)'
+        : '=IFERROR(SUM(N4:N' + lastData + '),0)';
+      sheet.getRange(rn, 14)
+        .setFormula(fml)
+        .setNumberFormat('$#,##0.00')
+        .setBackground(bg).setFontColor(fc)
+        .setFontWeight('bold').setFontFamily('Arial').setFontSize(11)
+        .setHorizontalAlignment('right').setVerticalAlignment('middle');
+      sheet.getRange(rn, 15, 1, 7).setBackground(bg);
+    });
+  }
+
   // ── 9. Column widths ──────────────────────────────────────────────────────
   var widths = [36, 165, 95, 80, 115, 100, 110, 52, 90, 68, 58, 55, 112, 112, 120, 140, 105, 100, 78, 135, 100];
   for (var ci = 0; ci < widths.length; ci++) sheet.setColumnWidth(ci + 1, widths[ci]);
@@ -1178,6 +1231,17 @@ function rebuildFundedSheet_(ss, sheetName) {
 }
 
 function pad2_(n) { return n < 10 ? '0' + n : String(n); }
+
+function parseDateVal_(v) {
+  if (v === '' || v === null || v === undefined) return '';
+  if (v instanceof Date) return v;
+  var s = String(v).trim();
+  if (!s) return '';
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? s : d;
+}
 
 // ─── formatAllSheets (public) ─────────────────────────────────────────────────
 
