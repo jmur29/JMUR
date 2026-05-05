@@ -456,7 +456,7 @@ const DEL = (p) => api('DELETE', p);
 async function bootApp() {
   document.getElementById('login').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
-  await Promise.all([loadDeals(), loadClients()]);
+  await Promise.all([loadDeals(), loadClients(), loadChatHistory()]);
 }
 
 document.getElementById('pw-input').addEventListener('keydown', e => {
@@ -749,9 +749,27 @@ function toggleJarvis() { S.jarvisOpen ? closeJarvis() : openJarvis(); }
 function openJarvis() { S.jarvisOpen = true; document.getElementById('jarvis-panel').classList.add('open'); setTimeout(() => document.getElementById('jarvis-input').focus(), 250); }
 function closeJarvis() { S.jarvisOpen = false; document.getElementById('jarvis-panel').classList.remove('open'); }
 
+// ─── Chat history persistence ─────────────────────────────────────────────────
+async function loadChatHistory() {
+  try {
+    const data = await GET('/api/chat-session');
+    if (!data?.messages?.length) return;
+    S.jarvisMessages = data.messages;
+    const msgsEl = document.getElementById('jarvis-msgs');
+    msgsEl.innerHTML = '';
+    for (const msg of data.messages.slice(-60)) appendMsg(msg.role, msg.content);
+    scrollJarvis();
+  } catch { /* start fresh */ }
+}
+
+function saveChatHistory() {
+  POST('/api/chat-session', { messages: S.jarvisMessages.slice(-80) }).catch(() => {});
+}
+
 function clearChat() {
   S.jarvisMessages = [];
-  document.getElementById('jarvis-msgs').innerHTML = '<div class="msg assistant">Chat cleared. What would you like to work on?</div>';
+  POST('/api/chat-session', { messages: [] }).catch(() => {});
+  document.getElementById('jarvis-msgs').innerHTML = '<div class="msg assistant">Chat cleared. What can I help with?</div>';
 }
 
 async function sendJarvis() {
@@ -809,6 +827,7 @@ async function sendJarvis() {
         if (payload === '[DONE]') break;
         const parsed = JSON.parse(payload);
         if (parsed.error) throw new Error(parsed.error);
+        if (parsed.reload === 'deals') loadDeals(); // deal was added — refresh table
         if (parsed.text) {
           full += parsed.text;
           msgEl.innerHTML = md(full);
@@ -816,7 +835,10 @@ async function sendJarvis() {
         }
       }
     }
-    if (full) S.jarvisMessages.push({ role: 'assistant', content: full });
+    if (full) {
+      S.jarvisMessages.push({ role: 'assistant', content: full });
+      saveChatHistory();
+    }
   } catch (e) {
     // roll back the user message so history stays valid
     if (S.jarvisMessages.at(-1)?.role === 'user') S.jarvisMessages.pop();

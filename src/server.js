@@ -228,16 +228,49 @@ app.post('/api/jarvis/stream', dashboardAuth, async (req, res) => {
     return res.end();
   }
 
-  // Strip any empty-content messages that would be rejected by the API
   const cleanMessages = messages.filter(m => m.content && String(m.content).trim());
   if (!cleanMessages.length) {
     res.write(`data: ${JSON.stringify({ error: 'all messages have empty content' })}\n\n`);
     return res.end();
   }
 
+  // Auto-inject live pipeline into every Jarvis request
+  const { data: deals } = await getSupabase()
+    .from('funded_deals').select('*').order('closing', { ascending: false });
+
+  // Tool executor — runs when Jarvis decides to add a deal
+  async function onTool(name, input) {
+    if (name !== 'add_funded_deal') throw new Error(`Unknown tool: ${name}`);
+
+    const [sheetsResult, supabaseResult] = await Promise.allSettled([
+      (async () => {
+        const sheets = createSheetsClient();
+        return addFundedDeal(sheets, input);
+      })(),
+      insertSupabaseDeal(input),
+    ]);
+
+    if (sheetsResult.status === 'rejected' && supabaseResult.status === 'rejected') {
+      throw new Error(`Save failed: ${sheetsResult.reason?.message}`);
+    }
+
+    logger.info(`Deal added via Jarvis: ${input.borrower} $${input.amt}`);
+    return {
+      success: true,
+      borrower: input.borrower,
+      amount: input.amt,
+      sheets: sheetsResult.status === 'fulfilled' ? 'saved' : 'skipped (no credentials)',
+      supabase: supabaseResult.status === 'fulfilled' ? 'saved' : 'failed',
+    };
+  }
+
   try {
-    for await (const chunk of streamChat(cleanMessages, context || '')) {
-      res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+    for await (const chunk of streamChat(cleanMessages, context || '', deals || [], onTool)) {
+      if (chunk.text !== undefined) {
+        res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+      } else if (chunk.action === 'reload') {
+        res.write(`data: ${JSON.stringify({ reload: chunk.target })}\n\n`);
+      }
     }
     res.write('data: [DONE]\n\n');
   } catch (err) {
@@ -245,6 +278,34 @@ app.post('/api/jarvis/stream', dashboardAuth, async (req, res) => {
     res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
   }
   res.end();
+});
+
+// ─── Chat session (persistent memory) ────────────────────────────────────────
+
+app.get('/api/chat-session', dashboardAuth, async (req, res) => {
+  try {
+    const { data, error } = await getSupabase()
+      .from('chat_sessions').select('messages').eq('id', 'main').single();
+    if (error || !data) return res.json({ messages: [] });
+    res.json({ messages: data.messages || [] });
+  } catch {
+    res.json({ messages: [] });
+  }
+});
+
+app.post('/api/chat-session', dashboardAuth, async (req, res) => {
+  try {
+    const { messages } = req.body;
+    const { error } = await getSupabase().from('chat_sessions').upsert({
+      id: 'main',
+      messages: messages || [],
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(error.message);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── Report generation ─────────────────────────────────────────────────────────
