@@ -14,14 +14,14 @@ var STATUS_PAID     = '✅ Paid';
 
 function onOpen() {
   SpreadsheetApp.getActiveSpreadsheet().addMenu('JM Tools', [
+    { name: '✦ Overhaul All Sheets',     functionName: 'overhaulSheet'          },
     { name: 'Add Deal from Inbox',       functionName: 'addDealFromInbox'       },
     { name: 'Import Commission Report',  functionName: 'importCommissionReport' },
-    { name: 'Fix Totals & References',   functionName: 'fixAllTotalsAndRefs'    },
-    { name: 'Fix Status Column',         functionName: 'fixStatusColumn'        },
-    { name: 'Refresh Deal Statuses',     functionName: 'refreshDealStatuses'    },
     { name: 'Rebuild Month vs Month',    functionName: 'setupMonthVsMonth'      },
+    { name: 'Refresh Deal Statuses',     functionName: 'refreshDealStatuses'    },
+    { name: 'Fix Status Column',         functionName: 'fixStatusColumn'        },
+    { name: 'Fix Totals & References',   functionName: 'fixAllTotalsAndRefs'    },
     { name: 'Setup Projected Income',    functionName: 'setupProjectedIncome'   },
-    { name: 'Format All Sheets',         functionName: 'formatAllSheets'        },
     { name: 'Run Diagnostic',            functionName: 'runDiagnostic'          },
     { name: 'Create Renewal Trigger',    functionName: 'createRenewalTrigger'   },
     { name: 'Send Renewal Reminders',    functionName: 'sendRenewalReminders'   },
@@ -970,6 +970,215 @@ function setupMonthVsMonth() {
   SpreadsheetApp.flush();
   ss.toast('Month vs Month rebuilt. May row should now show 2026 Awaiting + Pending deals.');
 }
+
+// ─── overhaulSheet (public) ───────────────────────────────────────────────────
+// Full clean rebuild of both funded sheets:
+//   • Deduplicates rows by borrower + closing date (keeps most-complete version)
+//   • Sorts chronologically by closing date
+//   • Clears and re-writes headers, data, and TOTALS cleanly
+//   • Applies professional formatting, column widths, freeze panes
+//   • Hides Email / Phone columns (clutter-free daily view)
+//   • Rebuilds Month vs Month dashboard
+
+function overhaulSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  rebuildFundedSheet_(ss, '2025 Funded');
+  rebuildFundedSheet_(ss, '2026 Funded');
+  setupMonthVsMonth();
+  ss.toast('Overhaul complete — duplicates removed, all sheets rebuilt cleanly.');
+}
+
+function rebuildFundedSheet_(ss, sheetName) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return;
+  var NAVY = '#1B3A6B';
+  var year = sheetName.indexOf('2025') !== -1 ? '2025' : '2026';
+
+  // ── 1. Read every row and keep only real data rows ───────────────────────
+  var lastRow = sheet.getLastRow();
+  var rawData = [];
+  if (lastRow > 0) {
+    var allVals = sheet.getRange(1, 1, lastRow, 21).getValues();
+    allVals.forEach(function(row) {
+      var aNum = parseFloat(row[0]);
+      var b    = String(row[1] || '').trim();
+      if (!isNaN(aNum) && aNum > 0 && b && b.toLowerCase() !== 'borrower') {
+        rawData.push(row.slice());
+      }
+    });
+  }
+
+  // ── 2. Deduplicate: same borrower + closing date → keep most complete row ─
+  var seen     = {};
+  var keyOrder = [];
+  rawData.forEach(function(row) {
+    var borrower = String(row[1] || '').trim().toLowerCase();
+    var cl       = row[5];
+    var clStr    = cl instanceof Date
+      ? cl.getFullYear() + '-' + pad2_(cl.getMonth() + 1) + '-' + pad2_(cl.getDate())
+      : String(cl || '').trim();
+    var key   = borrower + '|' + clStr;
+    var score = row.filter(function(v) { return v !== '' && v !== null && v !== 0; }).length;
+    if (!seen[key]) {
+      seen[key] = { row: row, score: score };
+      keyOrder.push(key);
+    } else if (score > seen[key].score) {
+      seen[key].row = row;
+      seen[key].score = score;
+    }
+  });
+  var deduped = keyOrder.map(function(k) { return seen[k].row; });
+
+  // Sort oldest → newest closing date
+  deduped.sort(function(a, b) {
+    var da = a[5] instanceof Date ? a[5] : new Date(String(a[5]));
+    var db = b[5] instanceof Date ? b[5] : new Date(String(b[5]));
+    return da - db;
+  });
+  var n = deduped.length;
+
+  // ── 3. Clear sheet ────────────────────────────────────────────────────────
+  sheet.clear();
+  sheet.clearNotes();
+
+  // ── 4. Row 1: Title banner ────────────────────────────────────────────────
+  sheet.getRange(1, 1, 1, 21).merge()
+    .setValue('JM MORTGAGES — ' + year + ' FUNDED DEALS')
+    .setBackground(NAVY).setFontColor('#FFFFFF')
+    .setFontWeight('bold').setFontSize(15).setFontFamily('Arial')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 42);
+
+  // ── 5. Row 2: Column headers ──────────────────────────────────────────────
+  sheet.getRange(2, 1, 1, 21)
+    .setValues([['#','Borrower','Type','Source','Lender','Closing',
+                 'Amount','Term','Rate Type','Rate','BPS','Split',
+                 'Gross Comm','Net Comm','Notes','Email','Phone',
+                 'Maturity','Alert','Status','Pay Date']])
+    .setBackground('#2C5F9E').setFontColor('#FFFFFF')
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(2, 30);
+
+  // ── 6. Row 3: gold accent line ────────────────────────────────────────────
+  sheet.getRange(3, 1, 1, 21).setBackground('#C9A84C');
+  sheet.setRowHeight(3, 3);
+
+  // ── 7. Write data rows ────────────────────────────────────────────────────
+  if (n > 0) {
+    // Cols A–Q batch write
+    var aToQ = deduped.map(function(d, i) {
+      return [
+        i + 1,
+        String(d[1] || '').trim(),
+        d[2]  || '', d[3]  || '', d[4]  || '',   // Type, Source, Lender
+        d[5]  || '',                               // Closing Date
+        d[6]  !== '' ? d[6]  : '',                 // Amount
+        d[7]  !== '' ? d[7]  : '',                 // Term
+        d[8]  || '',                               // Rate Type
+        d[9]  !== '' ? d[9]  : '',                 // Rate
+        d[10] !== '' ? d[10] : '',                 // BPS
+        d[11] !== '' ? d[11] : '',                 // Split
+        d[12] !== '' ? d[12] : '',                 // Gross Comm
+        d[13] !== '' ? d[13] : '',                 // Net Comm
+        d[14] || '', d[15] || '', d[16] || '',     // Notes, Email, Phone
+      ];
+    });
+    sheet.getRange(4, 1, n, 17).setValues(aToQ);
+
+    // Status (col T) and Pay Date (col U) batch write
+    var VALID_STATUSES = [STATUS_PAID, STATUS_AWAITING, STATUS_PENDING];
+    var tU = deduped.map(function(d) {
+      var tVal = String(d[19] || '').trim();
+      if (VALID_STATUSES.indexOf(tVal) === -1) tVal = computeInitialStatus_(d[5]);
+      return [tVal, d[20] || ''];
+    });
+    sheet.getRange(4, 20, n, 2).setValues(tU);
+    sheet.getRange(4, 20, n, 1).setHorizontalAlignment('center');
+    sheet.getRange(4, 21, n, 1).setNumberFormat('yyyy-mm-dd');
+
+    // Dropdown validation for Status column
+    var dropRule = SpreadsheetApp.newDataValidation()
+      .requireValueInList([STATUS_PENDING, STATUS_AWAITING, STATUS_PAID], true)
+      .setAllowInvalid(false).build();
+    sheet.getRange(4, 20, n, 1).setDataValidation(dropRule);
+
+    // Maturity (R) and Renewal Alert (S) formulas — row-by-row (need row refs)
+    for (var i = 0; i < n; i++) {
+      var rn = i + 4;
+      var r  = String(rn);
+      sheet.getRange(rn, 18)
+        .setFormula(
+          '=IF(OR(F'+r+'="",H'+r+'=""),"",EDATE(' +
+            'IFERROR(DATEVALUE(IF(ISNUMBER(F'+r+'),TEXT(F'+r+',"yyyy-mm-dd"),F'+r+')),F'+r+'),' +
+            'H'+r+'))'
+        ).setNumberFormat('yyyy-mm-dd');
+      sheet.getRange(rn, 19)
+        .setFormula(
+          '=IF(R'+r+'="","",IF(R'+r+'-TODAY()<=30,"🔴 URGENT",' +
+            'IF(R'+r+'-TODAY()<=90,"🟡 SOON","🟢 OK")))'
+        );
+    }
+
+    // Alternating row colours (batch setBackgrounds)
+    var bgGrid = deduped.map(function(_, i) {
+      var bg = i % 2 === 0 ? '#FFFFFF' : '#F2F5FA';
+      var rowBg = [];
+      for (var c = 0; c < 21; c++) rowBg.push(bg);
+      return rowBg;
+    });
+    sheet.getRange(4, 1, n, 21).setBackgrounds(bgGrid);
+
+    // Font / size / alignment
+    sheet.getRange(4, 1, n, 21).setFontFamily('Arial').setFontSize(10).setVerticalAlignment('middle');
+    sheet.getRange(4, 1, n, 1).setHorizontalAlignment('center').setFontColor('#999999'); // # col
+    sheet.getRange(4, 2, n, 1).setFontWeight('bold');  // Borrower name bold
+
+    // Number formats
+    sheet.getRange(4, 6,  n, 1).setNumberFormat('yyyy-mm-dd');
+    sheet.getRange(4, 7,  n, 1).setNumberFormat('$#,##0');
+    sheet.getRange(4, 10, n, 1).setNumberFormat('0.00"%"');
+    sheet.getRange(4, 11, n, 1).setNumberFormat('0" bps"');
+    sheet.getRange(4, 12, n, 1).setNumberFormat('0%');
+    sheet.getRange(4, 13, n, 1).setNumberFormat('$#,##0.00');
+    sheet.getRange(4, 14, n, 1).setNumberFormat('$#,##0.00');
+
+    // Row heights
+    for (var rh = 4; rh < 4 + n; rh++) sheet.setRowHeight(rh, 22);
+  }
+
+  // ── 8. TOTALS row ─────────────────────────────────────────────────────────
+  var totalsRow = n + 4;
+  sheet.getRange(totalsRow, 1, 1, 21)
+    .setBackground(NAVY).setFontColor('#FFFFFF')
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
+    .setVerticalAlignment('middle');
+  sheet.setRowHeight(totalsRow, 30);
+  sheet.getRange(totalsRow, 1).setValue('TOTALS').setHorizontalAlignment('center');
+  if (n > 0) {
+    var lastData = n + 3;
+    sheet.getRange(totalsRow, 7)
+      .setFormula('=SUM(G4:G' + lastData + ')').setNumberFormat('$#,##0');
+    sheet.getRange(totalsRow, 13)
+      .setFormula('=SUM(M4:M' + lastData + ')').setNumberFormat('$#,##0.00');
+    sheet.getRange(totalsRow, 14)
+      .setFormula('=SUM(N4:N' + lastData + ')').setNumberFormat('$#,##0.00');
+  }
+
+  // ── 9. Column widths ──────────────────────────────────────────────────────
+  var widths = [36, 165, 95, 80, 115, 100, 110, 52, 90, 68, 58, 55, 112, 112, 120, 140, 105, 100, 78, 135, 100];
+  for (var ci = 0; ci < widths.length; ci++) sheet.setColumnWidth(ci + 1, widths[ci]);
+
+  // ── 10. Freeze rows 1–2 and cols A–B; hide Email + Phone ─────────────────
+  sheet.setFrozenRows(2);
+  sheet.setFrozenColumns(2);
+  sheet.hideColumns(16, 2); // P: Email, Q: Phone
+
+  // ── 11. Status conditional formatting ────────────────────────────────────
+  applyStatusCF_(sheet);
+}
+
+function pad2_(n) { return n < 10 ? '0' + n : String(n); }
 
 // ─── formatAllSheets (public) ─────────────────────────────────────────────────
 
