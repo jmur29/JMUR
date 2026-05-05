@@ -18,6 +18,7 @@ function onOpen() {
     { name: 'Add Deal from Inbox',       functionName: 'addDealFromInbox'       },
     { name: 'Import Commission Report',  functionName: 'importCommissionReport' },
     { name: 'Rebuild Month vs Month',    functionName: 'setupMonthVsMonth'      },
+    { name: 'Rebuild Year Over Year',   functionName: 'rebuildYearOverYear'    },
     { name: 'Refresh Deal Statuses',     functionName: 'refreshDealStatuses'    },
     { name: 'Fix Status Column',         functionName: 'fixStatusColumn'        },
     { name: 'Fix Totals & References',   functionName: 'fixAllTotalsAndRefs'    },
@@ -989,7 +990,243 @@ function overhaulSheet() {
   rebuildFundedSheet_(ss, '2025 Funded');
   rebuildFundedSheet_(ss, '2026 Funded');
   setupMonthVsMonth();
+  rebuildYearOverYear_(ss);
   ss.toast('Overhaul complete — duplicates removed, all sheets rebuilt cleanly.');
+}
+
+// ─── rebuildYearOverYear (public) ────────────────────────────────────────────
+function rebuildYearOverYear() {
+  rebuildYearOverYear_(SpreadsheetApp.getActiveSpreadsheet());
+  SpreadsheetApp.getActiveSpreadsheet().toast('Year Over Year tab rebuilt.');
+}
+
+// ─── rebuildYearOverYear_ ─────────────────────────────────────────────────────
+// Finds (or creates) the Year Over Year comparison tab and rebuilds it with
+// SUMIF/COUNTIF formulas pointing at the canonical column positions in the
+// funded sheets (col G = Amount, col M = Gross Comm, col N = Net Comm,
+// col T = Status, col C = Type, col L = Split).
+function rebuildYearOverYear_(ss) {
+  var NAVY  = '#1B3A6B';
+  var GOLD  = '#C9A84C';
+  var LGOLD = '#FFF8E7';
+
+  // Find any existing "year over year / yoy / comparison" tab; otherwise create one.
+  var sheet = null;
+  ss.getSheets().forEach(function(s) {
+    if (sheet) return;
+    var n = s.getName().toLowerCase();
+    if ((n.indexOf('year') > -1 || n.indexOf('yoy') > -1 || n.indexOf('comparison') > -1)
+        && n.indexOf('funded') === -1) {
+      sheet = s;
+    }
+  });
+  if (!sheet) sheet = ss.insertSheet('Year Over Year');
+  sheet.clear();
+
+  var NC = 6; // cols B–G (2–7)
+  [24, 200, 110, 120, 110, 100, 115].forEach(function(w, i) { sheet.setColumnWidth(i + 1, w); });
+
+  // Row 1: title
+  sheet.getRange(1, 2, 1, NC).merge()
+    .setValue('JM MORTGAGES — YEAR OVER YEAR COMPARISON')
+    .setBackground(NAVY).setFontColor('#FFFFFF').setFontWeight('bold')
+    .setFontSize(15).setFontFamily('Arial')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 42);
+
+  // Row 2: gold accent
+  sheet.getRange(2, 2, 1, NC).setBackground(GOLD);
+  sheet.setRowHeight(2, 3);
+
+  // ── Metrics table ──────────────────────────────────────────────────────────
+  ['METRIC','2025 ACTUAL','2026 YTD ACTUAL','$ / # CHANGE','% CHANGE','ON PACE (full yr)']
+    .forEach(function(h, i) {
+      sheet.getRange(3, 2 + i)
+        .setValue(h)
+        .setBackground(i === 5 ? GOLD : '#2C5F9E').setFontColor('#FFFFFF')
+        .setFontWeight('bold').setFontSize(10).setFontFamily('Arial')
+        .setHorizontalAlignment('center').setVerticalAlignment('middle');
+    });
+  sheet.setRowHeight(3, 28);
+
+  var paid = '"' + STATUS_PAID + '"';
+  var t25  = "'2025 Funded'!T$4:T$100";
+  var t26  = "'2026 Funded'!T$4:T$100";
+  var g25  = "'2025 Funded'!G$4:G$100";
+  var g26  = "'2026 Funded'!G$4:G$100";
+  var m25  = "'2025 Funded'!M$4:M$100";
+  var m26  = "'2026 Funded'!M$4:M$100";
+  var n25  = "'2025 Funded'!N$4:N$100";
+  var n26  = "'2026 Funded'!N$4:N$100";
+  // months elapsed in 2026 (e.g. Apr 21 → 3.7)
+  var pf   = '12/MAX(1,MONTH(TODAY())-1+DAY(TODAY())/DAY(EOMONTH(TODAY(),0)))';
+
+  // Each entry: [label, f25, f26, fDelta, fPct, fPace, fmtVal, fmtPace]
+  var mRows = [
+    ['Funded deals',
+     '=IFERROR(COUNTIF('+t25+','+paid+'),0)',
+     '=IFERROR(COUNTIF('+t26+','+paid+'),0)',
+     '=IFERROR(D4-C4,0)',
+     '=IFERROR(IF(C4=0,"—",(D4-C4)/C4),"—")',
+     '=IFERROR(ROUND(D4*('+pf+'),0),"")',
+     '0','0'],
+    ['Total volume',
+     '=IFERROR(SUMIF('+t25+','+paid+','+g25+'),0)',
+     '=IFERROR(SUMIF('+t26+','+paid+','+g26+'),0)',
+     '=IFERROR(D5-C5,0)',
+     '=IFERROR(IF(C5=0,"—",(D5-C5)/C5),"—")',
+     '=IFERROR(D5*('+pf+'),"")',
+     '$#,##0','$#,##0'],
+    ['Gross commission',
+     '=IFERROR(SUMIF('+t25+','+paid+','+m25+'),0)',
+     '=IFERROR(SUMIF('+t26+','+paid+','+m26+'),0)',
+     '=IFERROR(D6-C6,0)',
+     '=IFERROR(IF(C6=0,"—",(D6-C6)/C6),"—")',
+     '=IFERROR(D6*('+pf+'),"")',
+     '$#,##0','$#,##0'],
+    ['Your commission',
+     '=IFERROR(SUMIF('+t25+','+paid+','+n25+'),0)',
+     '=IFERROR(SUMIF('+t26+','+paid+','+n26+'),0)',
+     '=IFERROR(D7-C7,0)',
+     '=IFERROR(IF(C7=0,"—",(D7-C7)/C7),"—")',
+     '=IFERROR(D7*('+pf+'),"")',
+     '$#,##0','$#,##0'],
+    ['Avg mortgage / deal',
+     '=IFERROR(IF(C4=0,"—",C5/C4),"—")',
+     '=IFERROR(IF(D4=0,"—",D5/D4),"—")',
+     '=IFERROR(IF(OR(C8="—",D8="—"),"—",D8-C8),"—")',
+     '=IFERROR(IF(OR(C8="—",D8="—",C8=0),"—",(D8-C8)/C8),"—")',
+     '=IFERROR(IF(D4=0,"—",D5*('+pf+')/ROUND(D4*('+pf+'),0)),"—")',
+     '$#,##0','$#,##0'],
+    ['Avg your comm / deal',
+     '=IFERROR(IF(C4=0,"—",C7/C4),"—")',
+     '=IFERROR(IF(D4=0,"—",D7/D4),"—")',
+     '=IFERROR(IF(OR(C9="—",D9="—"),"—",D9-C9),"—")',
+     '=IFERROR(IF(OR(C9="—",D9="—",C9=0),"—",(D9-C9)/C9),"—")',
+     '=IFERROR(IF(D4=0,"—",D7*('+pf+')/ROUND(D4*('+pf+'),0)),"—")',
+     '$#,##0','$#,##0'],
+  ];
+
+  mRows.forEach(function(m, i) {
+    var r  = 4 + i;
+    var bg = i % 2 === 0 ? '#FFFFFF' : '#F2F5FA';
+    sheet.setRowHeight(r, 24);
+    sheet.getRange(r, 2).setValue(m[0]).setBackground(bg)
+      .setFontWeight('bold').setFontFamily('Arial').setFontSize(10).setVerticalAlignment('middle');
+    sheet.getRange(r, 3).setFormula(m[1]).setNumberFormat(m[6]).setBackground(bg)
+      .setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('right').setVerticalAlignment('middle');
+    sheet.getRange(r, 4).setFormula(m[2]).setNumberFormat(m[6]).setBackground(bg)
+      .setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('right').setVerticalAlignment('middle');
+    sheet.getRange(r, 5).setFormula(m[3]).setNumberFormat(m[6]).setBackground(bg)
+      .setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('right').setVerticalAlignment('middle');
+    sheet.getRange(r, 6).setFormula(m[4]).setNumberFormat('0.0%').setBackground(bg)
+      .setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('right').setVerticalAlignment('middle');
+    sheet.getRange(r, 7).setFormula(m[5]).setNumberFormat(m[7]).setBackground(LGOLD)
+      .setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
+      .setHorizontalAlignment('right').setVerticalAlignment('middle');
+  });
+
+  sheet.setRowHeight(10, 16); // spacer
+
+  // ── Deal type breakdown ────────────────────────────────────────────────────
+  sheet.getRange(11, 2, 1, NC).merge()
+    .setValue('DEAL TYPE BREAKDOWN')
+    .setBackground('#2C5F9E').setFontColor('#FFFFFF').setFontWeight('bold')
+    .setFontSize(11).setFontFamily('Arial').setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(11, 28);
+
+  ['DEAL TYPE','2025 deals','2026 deals','2025 volume','2026 volume','2026 your comm']
+    .forEach(function(h, i) {
+      sheet.getRange(12, 2 + i).setValue(h)
+        .setBackground('#2C5F9E').setFontColor('#FFFFFF').setFontWeight('bold')
+        .setFontSize(9).setFontFamily('Arial').setHorizontalAlignment('center').setVerticalAlignment('middle');
+    });
+  sheet.setRowHeight(12, 24);
+
+  var c25 = "'2025 Funded'!C$4:C$100";
+  var c26 = "'2026 Funded'!C$4:C$100";
+  ['Purchase','Refinance','Switch/Transfer','Renewal'].forEach(function(dt, i) {
+    var r  = 13 + i;
+    var bg = i % 2 === 0 ? '#FFFFFF' : '#F2F5FA';
+    var q  = '"' + dt + '"';
+    sheet.setRowHeight(r, 22);
+    sheet.getRange(r, 2).setValue(dt).setBackground(bg)
+      .setFontWeight('bold').setFontFamily('Arial').setFontSize(10).setVerticalAlignment('middle');
+    sheet.getRange(r, 3)
+      .setFormula('=IFERROR(COUNTIFS('+t25+','+paid+','+c25+','+q+'),0)').setNumberFormat('0')
+      .setBackground(bg).setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sheet.getRange(r, 4)
+      .setFormula('=IFERROR(COUNTIFS('+t26+','+paid+','+c26+','+q+'),0)').setNumberFormat('0')
+      .setBackground(bg).setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sheet.getRange(r, 5)
+      .setFormula('=IFERROR(SUMIFS('+g25+','+t25+','+paid+','+c25+','+q+'),0)').setNumberFormat('$#,##0')
+      .setBackground(bg).setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('right').setVerticalAlignment('middle');
+    sheet.getRange(r, 6)
+      .setFormula('=IFERROR(SUMIFS('+g26+','+t26+','+paid+','+c26+','+q+'),0)').setNumberFormat('$#,##0')
+      .setBackground(bg).setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('right').setVerticalAlignment('middle');
+    sheet.getRange(r, 7)
+      .setFormula('=IFERROR(SUMIFS('+n26+','+t26+','+paid+','+c26+','+q+'),0)').setNumberFormat('$#,##0')
+      .setBackground(bg).setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('right').setVerticalAlignment('middle');
+  });
+
+  sheet.setRowHeight(17, 16); // spacer
+
+  // ── Split type breakdown ───────────────────────────────────────────────────
+  sheet.getRange(18, 2, 1, NC).merge()
+    .setValue('SPLIT TYPE BREAKDOWN')
+    .setBackground('#2C5F9E').setFontColor('#FFFFFF').setFontWeight('bold')
+    .setFontSize(11).setFontFamily('Arial').setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(18, 28);
+
+  ['SPLIT TYPE','2025 deals','2026 deals','2025 your comm','2026 your comm','2026 on pace']
+    .forEach(function(h, i) {
+      sheet.getRange(19, 2 + i).setValue(h)
+        .setBackground(i === 5 ? GOLD : '#2C5F9E').setFontColor('#FFFFFF').setFontWeight('bold')
+        .setFontSize(9).setFontFamily('Arial').setHorizontalAlignment('center').setVerticalAlignment('middle');
+    });
+  sheet.setRowHeight(19, 24);
+
+  var l25 = "'2025 Funded'!L$4:L$100";
+  var l26 = "'2026 Funded'!L$4:L$100";
+  [{label:'Self-sourced (90%)',val:0.9},{label:'HW Pre-Appr (40%)',val:0.4},{label:'HW Switch/Refi (35%)',val:0.35}]
+    .forEach(function(st, i) {
+      var r  = 20 + i;
+      var bg = i % 2 === 0 ? '#FFFFFF' : '#F2F5FA';
+      sheet.setRowHeight(r, 22);
+      sheet.getRange(r, 2).setValue(st.label).setBackground(bg)
+        .setFontWeight('bold').setFontFamily('Arial').setFontSize(10).setVerticalAlignment('middle');
+      sheet.getRange(r, 3)
+        .setFormula('=IFERROR(COUNTIFS('+t25+','+paid+','+l25+','+st.val+'),0)').setNumberFormat('0')
+        .setBackground(bg).setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('center').setVerticalAlignment('middle');
+      sheet.getRange(r, 4)
+        .setFormula('=IFERROR(COUNTIFS('+t26+','+paid+','+l26+','+st.val+'),0)').setNumberFormat('0')
+        .setBackground(bg).setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('center').setVerticalAlignment('middle');
+      sheet.getRange(r, 5)
+        .setFormula('=IFERROR(SUMIFS('+n25+','+t25+','+paid+','+l25+','+st.val+'),0)').setNumberFormat('$#,##0')
+        .setBackground(bg).setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('right').setVerticalAlignment('middle');
+      sheet.getRange(r, 6)
+        .setFormula('=IFERROR(SUMIFS('+n26+','+t26+','+paid+','+l26+','+st.val+'),0)').setNumberFormat('$#,##0')
+        .setBackground(bg).setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('right').setVerticalAlignment('middle');
+      sheet.getRange(r, 7)
+        .setFormula('=IFERROR(F'+r+'*('+pf+'),0)').setNumberFormat('$#,##0')
+        .setBackground(LGOLD).setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
+        .setHorizontalAlignment('right').setVerticalAlignment('middle');
+    });
+
+  sheet.setRowHeight(23, 16); // spacer
+
+  // Row 24: on-pace footnote
+  sheet.getRange(24, 2, 1, NC).merge()
+    .setFormula(
+      '="On-pace factor: "&TEXT('+pf+',"0.00")&"x  (based on ~"' +
+      '&TEXT(MONTH(TODAY())-1+DAY(TODAY())/DAY(EOMONTH(TODAY(),0)),"0.0")' +
+      '&" months elapsed in 2026 as of "&TEXT(TODAY(),"Mmmm d, yyyy")&")"'
+    )
+    .setBackground('#F5F5F5').setFontColor('#666666').setFontStyle('italic')
+    .setFontSize(9).setFontFamily('Arial').setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(24, 22);
+
+  sheet.setFrozenRows(1);
 }
 
 function rebuildFundedSheet_(ss, sheetName) {
