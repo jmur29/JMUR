@@ -108,7 +108,10 @@
     .report-output ul,.report-output ol{padding-left:20px;margin:8px 0}
     .report-output li{margin:4px 0}
     .report-output p{margin:8px 0}
-    .report-actions{display:flex;gap:8px;margin-bottom:16px}
+    .report-actions{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+    .btn-pdf{background:var(--primary)!important;color:#fff!important;border-color:var(--primary)!important;font-weight:600!important}
+    .btn-pdf:hover{background:var(--primary-h)!important;border-color:var(--primary-h)!important}
+    .btn-pdf:disabled{opacity:.5;cursor:not-allowed}
     .placeholder-text{color:var(--dim);font-size:13px;text-align:center;padding:60px 20px}
 
     /* ── Clients tab ── */
@@ -312,7 +315,8 @@
             <h3>Report Output</h3>
             <div class="report-actions" id="report-actions" style="display:none">
               <button class="btn-sm" onclick="copyReport()">Copy</button>
-              <button class="btn-sm" onclick="downloadReport()">Download</button>
+              <button class="btn-sm" onclick="downloadReport()">Download .txt</button>
+              <button class="btn-sm btn-pdf" id="pdf-download-btn" onclick="downloadPdf()">⬇ Download PDF</button>
               <button class="btn-sm" onclick="sendToJarvis()">Send to Jarvis</button>
             </div>
           </div>
@@ -593,6 +597,37 @@ function downloadReport() {
   const blob = new Blob([S.currentReport], { type: 'text/plain' });
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${client}-report.txt` });
   a.click();
+}
+
+async function downloadPdf() {
+  const btn = document.getElementById('pdf-download-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Generating PDF…';
+  try {
+    const clientName = document.getElementById('r-client').value || 'Client';
+    const dealType   = document.getElementById('r-deal-type')?.value || '';
+    const reportType = document.getElementById('r-report-type')?.value || 'Mortgage Report';
+
+    const res = await fetch('/api/report-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${S.token}` },
+      body: JSON.stringify({ clientName, reportType, dealType, reportText: S.currentReport }),
+    });
+    if (!res.ok) throw new Error(`Server ${res.status}`);
+
+    const blob = await res.blob();
+    const safe = clientName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob),
+      download: `${safe}-mortgage-report.pdf`,
+    });
+    a.click();
+    toast('PDF downloaded');
+  } catch (e) {
+    toast(`PDF failed: ${e.message}`, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = '⬇ Download PDF';
 }
 
 function sendToJarvis() {

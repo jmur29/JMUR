@@ -4,6 +4,7 @@ const path = require('path');
 const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const logger = require('./utils/logger');
+const { buildReportPdf } = require('./pdf/builder');
 const { createSheetsClient } = require('./sheets/client');
 const { addFundedDeal } = require('./sheets/addDeal');
 const { streamChat, generateReport, getMortgageSuggestions } = require('./ai/jarvis');
@@ -324,6 +325,30 @@ app.post('/api/generate-report', dashboardAuth, async (req, res) => {
     res.json({ report });
   } catch (err) {
     logger.error(`Report gen error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PDF report export ────────────────────────────────────────────────────────
+
+app.post('/api/report-pdf', dashboardAuth, async (req, res) => {
+  try {
+    const { clientName, reportType, dealType, reportText } = req.body;
+    if (!reportText) return res.status(400).json({ error: 'reportText required' });
+
+    const pdf = await buildReportPdf({
+      clientName: clientName || 'Client',
+      reportType: reportType || 'Mortgage Report',
+      dealType: dealType || '',
+      reportText,
+    });
+
+    const safe = (clientName || 'report').replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safe}-mortgage-report.pdf"`);
+    res.send(pdf);
+  } catch (err) {
+    logger.error(`PDF export error: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
 });
