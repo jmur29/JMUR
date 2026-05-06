@@ -75,7 +75,7 @@ function writeDeal(params) {
   sheet.getRange(insertRow, 1, 1, 17).setValues([[
     dealNum, borrower, dealType, source, lender,
     closing, amt, term, rateType, rate,
-    bps, split, grossComm, yourComm, notes,
+    bps, split, '', '', notes,
     email, phone
   ]]);
 
@@ -83,7 +83,23 @@ function writeDeal(params) {
   sheet.getRange(insertRow, 10).setNumberFormat('0.00"%"');
   sheet.getRange(insertRow, 11).setNumberFormat('0" bps"');
   sheet.getRange(insertRow, 12).setNumberFormat('0%');
+
+  // M: Gross Comm — explicit value if provided, otherwise formula from Amount × BPS
+  if (grossComm !== '' && grossComm !== 0) {
+    sheet.getRange(insertRow, 13).setValue(grossComm);
+  } else {
+    sheet.getRange(insertRow, 13)
+      .setFormula('=IF(G'+r+'="","",IFERROR(ROUND(G'+r+'*(K'+r+'/10000),2),0))');
+  }
   sheet.getRange(insertRow, 13).setNumberFormat('$#,##0.00');
+
+  // N: Your Comm — explicit value if provided, otherwise formula from Gross Comm × Split
+  if (yourComm !== '' && yourComm !== 0) {
+    sheet.getRange(insertRow, 14).setValue(yourComm);
+  } else {
+    sheet.getRange(insertRow, 14)
+      .setFormula('=IF(M'+r+'="","",IFERROR(ROUND(M'+r+'*L'+r+',2),0))');
+  }
   sheet.getRange(insertRow, 14).setNumberFormat('$#,##0.00');
 
   sheet.getRange(insertRow, 18)
@@ -1328,8 +1344,7 @@ function rebuildFundedSheet_(ss, sheetName) {
         d[9]  !== '' ? d[9]  : '',                 // Rate
         d[10] !== '' ? d[10] : '',                 // BPS
         d[11] !== '' ? d[11] : '',                 // Split
-        d[12] !== '' ? d[12] : '',                 // Gross Comm
-        d[13] !== '' ? d[13] : '',                 // Net Comm
+        '', '',                                    // Gross Comm + Net Comm set below
         d[14] || '', d[15] || '', d[16] || '',     // Notes, Email, Phone
       ];
     });
@@ -1352,16 +1367,39 @@ function rebuildFundedSheet_(ss, sheetName) {
       .setAllowInvalid(false).build();
     sheet.getRange(4, 20, n, 1).setDataValidation(dropRule);
 
-    // Maturity (R) and Renewal Alert (S) formulas — row-by-row (need row refs)
+    // M, N, R, S — row-by-row (need row refs)
     for (var i = 0; i < n; i++) {
       var rn = i + 4;
       var r  = String(rn);
+      var d  = deduped[i];
+
+      // M: Gross Comm — explicit value if present, else formula: Amount × (BPS/10000)
+      var gc = parseFloat(d[12]);
+      if (!isNaN(gc) && gc !== 0) {
+        sheet.getRange(rn, 13).setValue(gc);
+      } else {
+        sheet.getRange(rn, 13)
+          .setFormula('=IF(G'+r+'="","",IFERROR(ROUND(G'+r+'*(K'+r+'/10000),2),0))');
+      }
+
+      // N: Your Comm — explicit value if present, else formula: Gross Comm × Split
+      var nc = parseFloat(d[13]);
+      if (!isNaN(nc) && nc !== 0) {
+        sheet.getRange(rn, 14).setValue(nc);
+      } else {
+        sheet.getRange(rn, 14)
+          .setFormula('=IF(M'+r+'="","",IFERROR(ROUND(M'+r+'*L'+r+',2),0))');
+      }
+
+      // R: Maturity Date
       sheet.getRange(rn, 18)
         .setFormula(
           '=IF(OR(F'+r+'="",H'+r+'=""),"",EDATE(' +
             'IFERROR(DATEVALUE(IF(ISNUMBER(F'+r+'),TEXT(F'+r+',"yyyy-mm-dd"),F'+r+')),F'+r+'),' +
             'H'+r+'))'
         ).setNumberFormat('yyyy-mm-dd');
+
+      // S: Renewal Alert
       sheet.getRange(rn, 19)
         .setFormula(
           '=IF(R'+r+'="","",IF(R'+r+'-TODAY()<=30,"🔴 URGENT",' +
