@@ -16,6 +16,7 @@ function onOpen() {
   SpreadsheetApp.getActiveSpreadsheet().addMenu('JM Tools', [
     { name: '✦ Overhaul All Sheets',     functionName: 'overhaulSheet'          },
     { name: 'Add Deal from Inbox',       functionName: 'addDealFromInbox'       },
+    { name: 'Setup Inbox Sheet',        functionName: 'setupInbox'             },
     { name: 'Import Commission Report',  functionName: 'importCommissionReport' },
     { name: 'Rebuild Month vs Month',    functionName: 'setupMonthVsMonth'      },
     { name: 'Rebuild Year Over Year',   functionName: 'rebuildYearOverYear'    },
@@ -45,25 +46,28 @@ function writeDeal(params) {
   var sheet     = ss.getSheetByName(sheetName);
   if (!sheet) throw new Error('Sheet not found: ' + sheetName);
 
-  var borrower  = String(params.borrower  || '').trim();
-  var amt       = parseFloat(params.amt)  || 0;
+  var borrower  = String(params.borrower || '').trim();
   if (!borrower) throw new Error('Missing required field: borrower');
-  if (!amt)      throw new Error('Missing required field: amt');
 
-  var dealType  = String(params.type      || '').trim();
-  var source    = String(params.source    || '').trim();
-  var lender    = String(params.lender    || '').trim();
-  var closing   = String(params.closing   || '').trim();
-  var term      = params.term      != null ? parseInt(params.term)       : '';
-  var rateType  = String(params.rateType  || '').trim();
-  var rate      = params.rate      != null ? parseFloat(params.rate)     : '';
-  var bps       = params.bps       != null ? parseInt(params.bps)        : '';
-  var split     = params.split     != null ? parseFloat(params.split)    : '';
-  var grossComm = params.grossComm != null ? parseFloat(params.grossComm): '';
-  var yourComm  = params.yourComm  != null ? parseFloat(params.yourComm) : '';
-  var notes     = String(params.notes     || '').trim();
-  var email     = String(params.email     || '').trim();
-  var phone     = String(params.phone     || '').trim();
+  var dealType  = String(params.type     || '').trim();
+  var source    = String(params.source   || '').trim();
+  var lender    = String(params.lender   || '').trim();
+  var closing   = String(params.closing  || '').trim();
+  var notes     = String(params.notes    || '').trim();
+  var email     = String(params.email    || '').trim();
+  var phone     = String(params.phone    || '').trim();
+
+  // Numeric fields — blank beats NaN so formulas can fill in later
+  var amt       = parseFloat(params.amt)      || '';
+  var term      = parseInt(params.term)        || '';
+  var rateType  = String(params.rateType || '').trim();
+  var rate      = parseFloat(params.rate)      || '';
+  var bps       = parseInt(params.bps)         || '';
+  var split     = parseFloat(params.split)     || '';
+  var grossComm = parseFloat(params.grossComm);
+  grossComm = (!isNaN(grossComm) && grossComm !== 0) ? grossComm : '';
+  var yourComm  = parseFloat(params.yourComm);
+  yourComm  = (!isNaN(yourComm)  && yourComm  !== 0) ? yourComm  : '';
 
   var totalsRow = findTotalsRow_(sheet);
   var insertRow = totalsRow === -1 ? sheet.getLastRow() + 1 : totalsRow;
@@ -137,18 +141,27 @@ function writeDeal(params) {
 function addDealFromInbox() {
   var ss    = SpreadsheetApp.getActiveSpreadsheet();
   var inbox = ss.getSheetByName('Inbox');
-  if (!inbox) { ss.toast('No Inbox sheet found.'); return; }
+  if (!inbox) {
+    ss.toast('No Inbox sheet found. Run "Setup Inbox Sheet" first.');
+    return;
+  }
   var lastRow = inbox.getLastRow();
-  if (lastRow < 2) { ss.toast('Inbox is empty.'); return; }
+  if (lastRow < 3) { ss.toast('Inbox has no deals to add (paste below row 2).'); return; }
 
-  var data   = inbox.getRange(2, 1, lastRow - 1, 17).getValues();
-  var added  = 0, errors = 0;
+  // Row 1 = headers, row 2 = hint text — data starts at row 3
+  var data   = inbox.getRange(3, 1, lastRow - 2, 17).getValues();
+  var added  = 0, errors = 0, errorMsgs = [];
 
   for (var i = 0; i < data.length; i++) {
     var row      = data[i];
     var borrower = String(row[0] || '').trim();
     var year     = String(row[1] || '').trim();
-    if (!borrower || !year) { errors++; continue; }
+    if (!borrower && !year) continue; // blank row — skip silently
+    if (!borrower || !year) {
+      errorMsgs.push('Row '+(i+3)+': missing Borrower or Year');
+      errors++;
+      continue;
+    }
     try {
       writeDeal({
         borrower:  borrower,  year:      year,
@@ -159,10 +172,58 @@ function addDealFromInbox() {
         notes:     row[14],   email:     row[15],   phone:     row[16],
       });
       added++;
-    } catch (e) { Logger.log('Inbox row '+(i+2)+' error: '+e.message); errors++; }
+    } catch (e) {
+      errorMsgs.push('Row '+(i+3)+' ('+borrower+'): '+e.message);
+      Logger.log('Inbox row '+(i+3)+' error: '+e.message);
+      errors++;
+    }
   }
-  if (added > 0) inbox.getRange(2, 1, lastRow - 1, 17).clearContent();
-  ss.toast(added + ' deal(s) added' + (errors > 0 ? ', ' + errors + ' skipped.' : '.'));
+  if (added > 0) inbox.getRange(3, 1, lastRow - 2, 17).clearContent();
+  if (errorMsgs.length) Logger.log('Inbox errors:\n' + errorMsgs.join('\n'));
+  ss.toast(
+    added + ' deal(s) added' +
+    (errors > 0 ? ', ' + errors + ' skipped — check View → Logs for details.' : '.')
+  );
+}
+
+// ─── setupInbox ──────────────────────────────────────────────────────────────
+// Creates (or resets) the Inbox sheet with the correct column headers.
+// Paste one deal per row starting at row 2. Only Borrower and Year are required.
+// Run "Add Deal from Inbox" when ready to push deals into the funded sheets.
+
+function setupInbox() {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var NAVY  = '#1B3A6B';
+  var sheet = ss.getSheetByName('Inbox');
+  if (!sheet) sheet = ss.insertSheet('Inbox');
+
+  // Clear only header row; preserve any data rows the user already filled in
+  sheet.getRange(1, 1, 1, 17).clearContent().clearFormat();
+
+  var headers = [
+    'Borrower*', 'Year*', 'Type', 'Source', 'Lender',
+    'Closing Date', 'Loan Amount', 'Term (mo)', 'Rate Type', 'Rate (%)',
+    'BPS', 'Split', 'Gross Comm', 'Your Comm', 'Notes',
+    'Email', 'Phone'
+  ];
+  sheet.getRange(1, 1, 1, headers.length)
+    .setValues([headers])
+    .setBackground(NAVY).setFontColor('#FFFFFF').setFontWeight('bold')
+    .setFontFamily('Arial').setFontSize(10)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 30);
+
+  // Column widths
+  [160, 60, 110, 90, 110, 110, 110, 80, 90, 80, 60, 60, 110, 110, 130, 140, 110]
+    .forEach(function(w, i) { sheet.setColumnWidth(i + 1, w); });
+
+  sheet.setFrozenRows(1);
+
+  // Note row below headers
+  sheet.getRange(2, 1).setValue('← Paste deals here. * = required. Year must be 2025 or 2026.')
+    .setFontStyle('italic').setFontColor('#999999').setFontSize(9);
+
+  ss.toast('Inbox sheet ready. Paste deals starting at row 3.');
 }
 
 // ─── importCommissionReport ───────────────────────────────────────────────────
