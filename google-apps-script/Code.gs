@@ -128,7 +128,15 @@ function writeDeal(params) {
   applyStatusValidation_(sheet, insertRow);
   sheet.getRange(insertRow, 21).setNumberFormat('yyyy-mm-dd');
 
-  sheet.getRange(insertRow, 1, 1, 21).setFontFamily('Arial').setFontSize(10);
+  // Match row formatting of rebuildFundedSheet_
+  var rowBg = (insertRow - 4) % 2 === 0 ? '#FFFFFF' : '#F2F5FA';
+  sheet.getRange(insertRow, 1, 1, 21)
+    .setFontFamily('Arial').setFontSize(10)
+    .setBackground(rowBg).setVerticalAlignment('middle');
+  sheet.getRange(insertRow, 1).setHorizontalAlignment('center').setFontColor('#999999');
+  sheet.getRange(insertRow, 2).setFontWeight('bold');
+  sheet.getRange(insertRow, 6).setNumberFormat('yyyy-mm-dd');
+  sheet.setRowHeight(insertRow, 22);
   applyStatusCF_(sheet);
   fixTotalsAndRefs_(sheet);
   SpreadsheetApp.flush();
