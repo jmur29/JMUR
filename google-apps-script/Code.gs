@@ -20,6 +20,8 @@ function onOpen() {
     { name: 'Import Commission Report',  functionName: 'importCommissionReport' },
     { name: 'Rebuild Month vs Month',    functionName: 'setupMonthVsMonth'      },
     { name: 'Rebuild Year Over Year',   functionName: 'rebuildYearOverYear'    },
+    { name: 'Fix Maturity Dates',        functionName: 'fixAllMaturityDates'    },
+    { name: 'Fix Renewal Alerts',        functionName: 'fixAllRenewalAlerts'    },
     { name: 'Refresh Deal Statuses',     functionName: 'refreshDealStatuses'    },
     { name: 'Fix Status Column',         functionName: 'fixStatusColumn'        },
     { name: 'Fix Totals & References',   functionName: 'fixAllTotalsAndRefs'    },
@@ -107,18 +109,12 @@ function writeDeal(params) {
   sheet.getRange(insertRow, 14).setNumberFormat('$#,##0.00');
 
   sheet.getRange(insertRow, 18)
-    .setFormula(
-      '=IF(OR(F'+r+'="",H'+r+'=""),"",EDATE(' +
-        'IFERROR(DATEVALUE(IF(ISNUMBER(F'+r+'),TEXT(F'+r+',"yyyy-mm-dd"),F'+r+')),F'+r+'),' +
-        'H'+r+'))'
-    )
+    .setFormula('=IF(AND(F'+r+'<>"",H'+r+'<>""),DATE(YEAR(F'+r+')+H'+r+',MONTH(F'+r+'),DAY(F'+r+')),"")')
     .setNumberFormat('yyyy-mm-dd');
 
   sheet.getRange(insertRow, 19)
-    .setFormula(
-      '=IF(R'+r+'="","",IF(R'+r+'-TODAY()<=30,"🔴 URGENT",' +
-        'IF(R'+r+'-TODAY()<=90,"🟡 SOON","🟢 OK")))'
-    );
+    .setFormula('=IF(R'+r+'="","",IF(R'+r+'-TODAY()<=30,"🔴 RENEW NOW",IF(R'+r+'-TODAY()<=120,"🟡 SOON","🟢 OK")))');
+
 
   // T: status value (NOT formula)
   var statusVal = computeInitialStatus_(closing);
@@ -1319,6 +1315,48 @@ function rebuildYearOverYear_(ss) {
     .setFontSize(9).setFontFamily('Arial').setHorizontalAlignment('center').setVerticalAlignment('middle');
   sheet.setRowHeight(24, 22);
 
+  // ── Pipeline Summary block ────────────────────────────────────────────────
+  sheet.setRowHeight(25, 16); // spacer
+
+  sheet.getRange(26, 2, 1, NC).merge()
+    .setValue('📊 PIPELINE SUMMARY (2026)')
+    .setBackground(NAVY).setFontColor('#FFFFFF').setFontWeight('bold')
+    .setFontSize(11).setFontFamily('Arial')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(26, 28);
+
+  // Rows 27-35: pipeline metrics. Label = cols B-D merged, value = cols E-G merged.
+  // Row 30 (Total Pipeline) sums rows 27-29 — using IFERROR to prevent #VALUE! if any cell is text.
+  // Row 32 (YTD Pace) divides Paid comm (E27) by 2025 Full Year Comm (E31).
+  var pipRows = [
+    // [label, formula, numFmt, bg, fontColor]
+    ['✅ Comm Received (Paid)',     '=IFERROR(SUMIF('+t26+','+paid+','+n26+'),0)',                         '$#,##0.00', '#F0FFF0', '#276221'],
+    ['🔄 Comm Due (Awaiting)',      '=IFERROR(SUMIF('+t26+',"'+STATUS_AWAITING+'",'+n26+'),0)',            '$#,##0.00', '#FFFDE7', '#9C6500'],
+    ['⏳ Projected if Closed',      '=IFERROR(SUMIF('+t26+',"'+STATUS_PENDING+'",'+n26+'),0)',             '$#,##0.00', '#E8F4FD', '#1F4E79'],
+    ['💰 Total Pipeline',           '=IFERROR(E27+E28+E29,0)',                                            '$#,##0.00', '#F5F5F5', '#333333'],
+    ['📈 2025 Full Year Comm',      '=IFERROR(SUM('+n25+'),0)',                                           '$#,##0.00', '#FFFFFF', '#333333'],
+    ['🔄 YTD Pace vs 2025',        '=IFERROR(IF(E31=0,"—",E27/E31),"—")',                               '0.0%',      '#FFFFFF', '#333333'],
+    ['📋 Deals Pending Close',     '=IFERROR(COUNTIF('+t26+',"'+STATUS_PENDING+'"),0)',                   '0',         '#E8F4FD', '#1F4E79'],
+    ['🔄 Deals Awaiting Payment',  '=IFERROR(COUNTIF('+t26+',"'+STATUS_AWAITING+'"),0)',                  '0',         '#FFFDE7', '#9C6500'],
+    ['📦 Pipeline Volume (Pending)','=IFERROR(SUMIF('+t26+',"'+STATUS_PENDING+'",'+g26+'),0)',            '$#,##0',    '#E8F4FD', '#1F4E79'],
+  ];
+
+  for (var pi = 0; pi < pipRows.length; pi++) {
+    var pr  = 27 + pi;
+    var pbg = pipRows[pi][3];
+    var pfc = pipRows[pi][4];
+    sheet.setRowHeight(pr, 24);
+    sheet.getRange(pr, 2, 1, 3).merge()
+      .setValue(pipRows[pi][0]).setBackground(pbg).setFontColor(pfc)
+      .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
+      .setHorizontalAlignment('left').setVerticalAlignment('middle');
+    sheet.getRange(pr, 5, 1, 3).merge()
+      .setFormula(pipRows[pi][1]).setNumberFormat(pipRows[pi][2])
+      .setBackground(pbg).setFontColor(pfc).setFontWeight('bold')
+      .setFontFamily('Arial').setFontSize(11)
+      .setHorizontalAlignment('right').setVerticalAlignment('middle');
+  }
+
   sheet.setFrozenRows(1);
 }
 
@@ -1460,20 +1498,15 @@ function rebuildFundedSheet_(ss, sheetName) {
           .setFormula('=IF(M'+r+'="","",IFERROR(ROUND(M'+r+'*L'+r+',2),0))');
       }
 
-      // R: Maturity Date
+      // R: Maturity Date — term (col H) is in years
       sheet.getRange(rn, 18)
-        .setFormula(
-          '=IF(OR(F'+r+'="",H'+r+'=""),"",EDATE(' +
-            'IFERROR(DATEVALUE(IF(ISNUMBER(F'+r+'),TEXT(F'+r+',"yyyy-mm-dd"),F'+r+')),F'+r+'),' +
-            'H'+r+'))'
-        ).setNumberFormat('yyyy-mm-dd');
+        .setFormula('=IF(AND(F'+r+'<>"",H'+r+'<>""),DATE(YEAR(F'+r+')+H'+r+',MONTH(F'+r+'),DAY(F'+r+')),"")')
+        .setNumberFormat('yyyy-mm-dd');
 
-      // S: Renewal Alert
+      // S: Renewal Alert — 120-day threshold from RENEWAL_DAYS setting
       sheet.getRange(rn, 19)
-        .setFormula(
-          '=IF(R'+r+'="","",IF(R'+r+'-TODAY()<=30,"🔴 URGENT",' +
-            'IF(R'+r+'-TODAY()<=90,"🟡 SOON","🟢 OK")))'
-        );
+        .setFormula('=IF(R'+r+'="","",IF(R'+r+'-TODAY()<=30,"🔴 RENEW NOW",IF(R'+r+'-TODAY()<=120,"🟡 SOON","🟢 OK")))');
+
     }
 
     // Alternating row colours (batch setBackgrounds)
@@ -1595,6 +1628,58 @@ function parseDateVal_(v) {
   if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
   var d = new Date(s);
   return isNaN(d.getTime()) ? s : d;
+}
+
+// ─── fixAllMaturityDates (public) ────────────────────────────────────────────
+// Re-writes col R for every existing deal row using DATE(YEAR(F)+H, MONTH(F), DAY(F)).
+// Run once after upgrading from the old EDATE(months) formula.
+
+function fixAllMaturityDates() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var fixed = 0;
+  ['2025 Funded', '2026 Funded'].forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    var totalsRow   = findTotalsRow_(sheet);
+    var lastDataRow = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+    if (lastDataRow < 4) return;
+    for (var rn = 4; rn <= lastDataRow; rn++) {
+      var borrower = String(sheet.getRange(rn, 2).getValue() || '').trim();
+      if (!borrower) continue;
+      var r = String(rn);
+      sheet.getRange(rn, 18)
+        .setFormula('=IF(AND(F'+r+'<>"",H'+r+'<>""),DATE(YEAR(F'+r+')+H'+r+',MONTH(F'+r+'),DAY(F'+r+')),"")')
+        .setNumberFormat('yyyy-mm-dd');
+      fixed++;
+    }
+  });
+  SpreadsheetApp.flush();
+  ss.toast('Maturity dates fixed — ' + fixed + ' rows updated. Run "Fix Renewal Alerts" next.');
+}
+
+// ─── fixAllRenewalAlerts (public) ─────────────────────────────────────────────
+// Re-writes col S for every existing deal row: 120-day threshold, "RENEW NOW" text.
+
+function fixAllRenewalAlerts() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var fixed = 0;
+  ['2025 Funded', '2026 Funded'].forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    var totalsRow   = findTotalsRow_(sheet);
+    var lastDataRow = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+    if (lastDataRow < 4) return;
+    for (var rn = 4; rn <= lastDataRow; rn++) {
+      var borrower = String(sheet.getRange(rn, 2).getValue() || '').trim();
+      if (!borrower) continue;
+      var r = String(rn);
+      sheet.getRange(rn, 19)
+        .setFormula('=IF(R'+r+'="","",IF(R'+r+'-TODAY()<=30,"🔴 RENEW NOW",IF(R'+r+'-TODAY()<=120,"🟡 SOON","🟢 OK")))');
+      fixed++;
+    }
+  });
+  SpreadsheetApp.flush();
+  ss.toast('Renewal alerts fixed — ' + fixed + ' rows updated.');
 }
 
 // ─── formatAllSheets (public) ─────────────────────────────────────────────────
