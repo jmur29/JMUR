@@ -38,3 +38,7 @@ uploads/
 
 # TypeScript
 *.tsbuildinfo
+
+# Test coverage
+coverage/
+*/coverage/
