@@ -248,6 +248,14 @@ export async function exportPipeline(
 
 // ─── Pipeline statistics ──────────────────────────────────────────────────────
 
+export interface MonthlyTrendItem {
+  month: string;      // "Jan 2026"
+  total: number;
+  approved: number;
+  declined: number;
+  inReview: number;
+}
+
 export interface PipelineStats {
   totalApplications: number;
   byStatus: Record<string, number>;
@@ -257,11 +265,15 @@ export interface PipelineStats {
   avgLtv: number | null;
   approvalRate: number | null;
   totalDecisions: number;
+  monthlyTrend: MonthlyTrendItem[];
 }
 
 export async function getPipelineStats(tenantId: string): Promise<PipelineStats> {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  // Start date for 6-month trend: first day of the month 6 months ago
+  const trendStart = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
   // Total apps and breakdown by status
   const [statusGroups, approvedThisMonth, decisionAggregates, totalDecisions] =
@@ -318,6 +330,41 @@ export async function getPipelineStats(tenantId: string): Promise<PipelineStats>
   const toAvgNum = (d: Prisma.Decimal | null): number | null =>
     d ? parseFloat(parseFloat(d.toString()).toFixed(3)) : null;
 
+  // Monthly trend — last 6 calendar months
+  interface RawTrendRow {
+    month: string;
+    month_start: Date;
+    total: bigint;
+    approved: bigint;
+    declined: bigint;
+    in_review: bigint;
+  }
+
+  const startDate = trendStart;
+  const trendRows = await prisma.$queryRaw<RawTrendRow[]>(Prisma.sql`
+    SELECT
+      TO_CHAR(DATE_TRUNC('month', created_at), 'Mon YYYY') AS month,
+      DATE_TRUNC('month', created_at) AS month_start,
+      COUNT(*) AS total,
+      COUNT(*) FILTER (WHERE status = 'APPROVED') AS approved,
+      COUNT(*) FILTER (WHERE status = 'DECLINED') AS declined,
+      COUNT(*) FILTER (WHERE status = 'IN_REVIEW') AS in_review
+    FROM applications
+    WHERE tenant_id = ${tenantId}
+      AND deleted_at IS NULL
+      AND created_at >= ${startDate}
+    GROUP BY DATE_TRUNC('month', created_at), TO_CHAR(DATE_TRUNC('month', created_at), 'Mon YYYY')
+    ORDER BY DATE_TRUNC('month', created_at) ASC
+  `);
+
+  const monthlyTrend: MonthlyTrendItem[] = trendRows.map((row) => ({
+    month: row.month,
+    total: Number(row.total),
+    approved: Number(row.approved),
+    declined: Number(row.declined),
+    inReview: Number(row.in_review),
+  }));
+
   return {
     totalApplications,
     byStatus,
@@ -327,5 +374,6 @@ export async function getPipelineStats(tenantId: string): Promise<PipelineStats>
     avgLtv: toAvgNum(decisionAggregates._avg.ltv),
     approvalRate,
     totalDecisions,
+    monthlyTrend,
   };
 }

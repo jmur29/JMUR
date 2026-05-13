@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import { validateEnv } from './utils/validateEnv';
+if (process.env.NODE_ENV !== 'test') validateEnv();
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
