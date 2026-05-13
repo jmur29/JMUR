@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Info } from 'lucide-react';
+import { Info, ClipboardList } from 'lucide-react';
 import { adminApi } from '../lib/api';
 import type { AuditLog } from '../types';
 import { cn } from '../lib/utils';
 import { formatDateTime } from '../lib/utils';
 import Spinner from '../components/ui/Spinner';
+import Breadcrumb from '../components/ui/Breadcrumb';
 
 // ─── Action badge ─────────────────────────────────────────────────────────────
 
@@ -112,6 +113,9 @@ export default function AuditLogPage() {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb
+        items={[{ label: 'Admin', href: '/admin' }, { label: 'Audit Log' }]}
+      />
       {/* Page header */}
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Audit Log</h1>
@@ -160,7 +164,15 @@ export default function AuditLogPage() {
             <Spinner size="lg" />
           </div>
         ) : !data || data.data.length === 0 ? (
-          <p className="text-center text-sm text-slate-400 py-16">No audit logs found.</p>
+          <div className="flex flex-col items-center py-16 px-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+              <ClipboardList size={22} className="text-slate-400" />
+            </div>
+            <p className="text-slate-700 font-medium mb-1">No audit events found for these filters</p>
+            <p className="text-slate-400 text-sm">
+              Try adjusting the application ID or action filter.
+            </p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

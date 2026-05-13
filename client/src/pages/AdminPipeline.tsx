@@ -17,6 +17,7 @@ import { adminApi } from '../lib/api';
 import type { ApplicationStatus } from '../types';
 import { StatCard } from '../components/ui/Card';
 import Spinner from '../components/ui/Spinner';
+import Breadcrumb from '../components/ui/Breadcrumb';
 import { formatPercent, getStatusLabel } from '../lib/utils';
 
 const STATUS_COLORS: Record<ApplicationStatus, string> = {
@@ -53,6 +54,9 @@ export default function AdminPipeline() {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb
+        items={[{ label: 'Admin', href: '/admin' }, { label: 'Pipeline Analytics' }]}
+      />
       <div className="flex items-center gap-3">
         <div className="p-2 bg-blue-50 rounded-lg">
           <BarChart2 size={20} className="text-blue-600" />

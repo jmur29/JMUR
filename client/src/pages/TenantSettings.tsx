@@ -8,6 +8,7 @@ import type { Tenant } from '../types';
 import { cn } from '../lib/utils';
 import Button from '../components/ui/Button';
 import Spinner from '../components/ui/Spinner';
+import Breadcrumb from '../components/ui/Breadcrumb';
 
 // ─── Color picker ─────────────────────────────────────────────────────────────
 
@@ -232,6 +233,9 @@ export default function TenantSettings() {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb
+        items={[{ label: 'Admin', href: '/admin' }, { label: 'Settings' }]}
+      />
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Tenant Settings</h1>
         <p className="text-sm text-slate-500 mt-1">Customize your organization's branding and display settings.</p>
