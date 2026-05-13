@@ -10,6 +10,7 @@ import Button from '../ui/Button';
 import Spinner from '../ui/Spinner';
 import { formatDate, formatPercent, getDecisionColor, getDecisionLabel, getStatusColor } from '../../lib/utils';
 import { cn } from '../../lib/utils';
+import ConditionsPanel from './ConditionsPanel';
 
 interface DecisionTabProps {
   application: Application;
@@ -193,6 +194,9 @@ export default function DecisionTab({ application }: DecisionTabProps) {
           )}
         </div>
       </div>
+
+      {/* Approval Conditions */}
+      <ConditionsPanel application={application} />
 
       {/* Decision history */}
       {latestHistory.length > 0 && (

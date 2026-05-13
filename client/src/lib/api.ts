@@ -4,6 +4,9 @@ import { useRef, useEffect } from 'react';
 import type {
   Application,
   ApplicationListParams,
+  ApplicationNote,
+  ApprovalCondition,
+  AuditLog,
   Borrower,
   Document,
   DocumentStatus,
@@ -14,6 +17,7 @@ import type {
   PipelineStats,
   Property,
   SaveDecisionPayload,
+  Tenant,
   User,
   UserRole,
   UWResult,
@@ -235,6 +239,83 @@ export const reportsApi = {
 };
 
 // ---------------------------------------------------------------------------
+// Notes
+// ---------------------------------------------------------------------------
+export const notesApi = {
+  list(applicationId: string): Promise<ApplicationNote[]> {
+    return apiClient
+      .get<ApplicationNote[]>(`/applications/${applicationId}/notes`)
+      .then((r) => r.data);
+  },
+
+  create(applicationId: string, body: string): Promise<ApplicationNote> {
+    return apiClient
+      .post<ApplicationNote>(`/applications/${applicationId}/notes`, { body })
+      .then((r) => r.data);
+  },
+
+  update(noteId: string, body: string): Promise<ApplicationNote> {
+    return apiClient
+      .patch<ApplicationNote>(`/notes/${noteId}`, { body })
+      .then((r) => r.data);
+  },
+
+  delete(noteId: string): Promise<void> {
+    return apiClient.delete(`/notes/${noteId}`).then(() => undefined);
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Conditions
+// ---------------------------------------------------------------------------
+export const conditionsApi = {
+  list(applicationId: string): Promise<ApprovalCondition[]> {
+    return apiClient
+      .get<ApprovalCondition[]>(`/applications/${applicationId}/conditions`)
+      .then((r) => r.data);
+  },
+
+  create(applicationId: string, body: string): Promise<ApprovalCondition> {
+    return apiClient
+      .post<ApprovalCondition>(`/applications/${applicationId}/conditions`, { body })
+      .then((r) => r.data);
+  },
+
+  update(conditionId: string, data: { body?: string; cleared?: boolean }): Promise<ApprovalCondition> {
+    return apiClient
+      .patch<ApprovalCondition>(`/conditions/${conditionId}`, data)
+      .then((r) => r.data);
+  },
+
+  delete(conditionId: string): Promise<void> {
+    return apiClient.delete(`/conditions/${conditionId}`).then(() => undefined);
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Tenant
+// ---------------------------------------------------------------------------
+export const tenantApi = {
+  get(): Promise<Tenant> {
+    return apiClient.get<Tenant>('/admin/tenant').then((r) => r.data);
+  },
+
+  update(data: { name?: string; primaryColor?: string; logoUrl?: string }): Promise<Tenant> {
+    return apiClient.patch<Tenant>('/admin/tenant', data).then((r) => r.data);
+  },
+
+  uploadLogo(file: File): Promise<{ logoUrl: string }> {
+    const formData = new FormData();
+    formData.append('logo', file);
+    return apiClient
+      .post<{ logoUrl: string }>('/admin/tenant/logo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      .then((r) => r.data);
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Admin
 // ---------------------------------------------------------------------------
 export const adminApi = {
@@ -250,6 +331,18 @@ export const adminApi = {
 
   getPipelineStats(): Promise<PipelineStats> {
     return apiClient.get<PipelineStats>('/admin/pipeline').then((r) => r.data);
+  },
+
+  listAuditLogs(params?: {
+    applicationId?: string;
+    userId?: string;
+    action?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<PaginatedResponse<AuditLog & { user: { firstName: string; lastName: string; email: string } }>> {
+    return apiClient
+      .get<PaginatedResponse<AuditLog & { user: { firstName: string; lastName: string; email: string } }>>('/admin/audit', { params })
+      .then((r) => r.data);
   },
 };
 

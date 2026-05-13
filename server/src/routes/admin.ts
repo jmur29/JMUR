@@ -25,4 +25,36 @@ router.patch(
 // GET /admin/stats
 router.get('/stats', ctrl.stats);
 
+// GET /admin/audit
+router.get(
+  '/audit',
+  validate(
+    z.object({
+      applicationId: z.string().uuid().optional(),
+      userId: z.string().uuid().optional(),
+      action: z.string().max(100).optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      pageSize: z.coerce.number().int().min(1).max(100).default(20),
+    }),
+    'query'
+  ),
+  ctrl.auditLogs
+);
+
+// GET /admin/tenant
+router.get('/tenant', ctrl.getTenantSettings);
+
+// PATCH /admin/tenant
+router.patch(
+  '/tenant',
+  validate(
+    z.object({
+      name: z.string().min(1).max(200).optional(),
+      primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Must be a valid hex color').optional(),
+      logoUrl: z.string().url().optional().nullable(),
+    })
+  ),
+  ctrl.updateTenantSettings
+);
+
 export default router;

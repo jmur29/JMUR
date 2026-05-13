@@ -25,6 +25,7 @@ import TermsTab from '../components/application/TermsTab';
 import DocumentsTab from '../components/application/DocumentsTab';
 import RatiosTab from '../components/application/RatiosTab';
 import DecisionTab from '../components/application/DecisionTab';
+import NotesTimeline from '../components/application/NotesTimeline';
 
 const TABS = [
   { id: 'borrower', label: 'Borrower', icon: <User size={15} /> },
@@ -98,43 +99,51 @@ export default function ApplicationDetail() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-        <Tabs
-          tabs={TABS.map((t) => ({
-            ...t,
-            badge:
-              t.id === 'documents' && application.documents.length > 0
-                ? application.documents.length
-                : undefined,
-          }))}
-          activeTab={activeTab}
-          onChange={setActiveTab}
-          className="px-4"
-        />
+      {/* Main content + Notes sidebar */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* Tabs — takes 2/3 on desktop */}
+        <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+          <Tabs
+            tabs={TABS.map((t) => ({
+              ...t,
+              badge:
+                t.id === 'documents' && application.documents.length > 0
+                  ? application.documents.length
+                  : undefined,
+            }))}
+            activeTab={activeTab}
+            onChange={setActiveTab}
+            className="px-4"
+          />
 
-        <div className="p-6">
-          {activeTab === 'borrower' && (
-            <BorrowerTab application={application} />
-          )}
-          {activeTab === 'income' && (
-            <IncomeTab application={application} />
-          )}
-          {activeTab === 'property' && (
-            <PropertyTab application={application} />
-          )}
-          {activeTab === 'terms' && (
-            <TermsTab application={application} />
-          )}
-          {activeTab === 'documents' && (
-            <DocumentsTab application={application} />
-          )}
-          {activeTab === 'ratios' && (
-            <RatiosTab application={application} />
-          )}
-          {activeTab === 'decision' && (
-            <DecisionTab application={application} />
-          )}
+          <div className="p-6">
+            {activeTab === 'borrower' && (
+              <BorrowerTab application={application} />
+            )}
+            {activeTab === 'income' && (
+              <IncomeTab application={application} />
+            )}
+            {activeTab === 'property' && (
+              <PropertyTab application={application} />
+            )}
+            {activeTab === 'terms' && (
+              <TermsTab application={application} />
+            )}
+            {activeTab === 'documents' && (
+              <DocumentsTab application={application} />
+            )}
+            {activeTab === 'ratios' && (
+              <RatiosTab application={application} />
+            )}
+            {activeTab === 'decision' && (
+              <DecisionTab application={application} />
+            )}
+          </div>
+        </div>
+
+        {/* Notes sidebar — 1/3 on desktop */}
+        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
+          <NotesTimeline applicationId={application.id} />
         </div>
       </div>
     </div>

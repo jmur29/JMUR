@@ -221,3 +221,48 @@ export interface SaveDecisionPayload {
   notes?: string;
   status: ApplicationStatus;
 }
+
+export interface ApplicationNote {
+  id: string;
+  applicationId: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  author?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+}
+
+export interface ApprovalCondition {
+  id: string;
+  applicationId: string;
+  body: string;
+  cleared: boolean;
+  clearedById: string | null;
+  clearedAt: string | null;
+  createdAt: string;
+  clearedBy?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  } | null;
+}
+
+export interface AuditLog {
+  id: string;
+  tenantId: string;
+  userId: string;
+  applicationId: string | null;
+  action: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  user?: {
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+}

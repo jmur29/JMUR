@@ -9,6 +9,8 @@ import underwritingRouter from './underwriting';
 import documentsRouter from './documents';
 import reportsRouter from './reports';
 import adminRouter from './admin';
+import notesRouter from './notes';
+import conditionsRouter from './conditions';
 
 const router = Router();
 
@@ -41,5 +43,15 @@ router.use('/reports', reportsRouter);
 
 // Admin — user management + stats
 router.use('/admin', adminRouter);
+
+// Application notes (timeline)
+router.use('/applications/:id/notes', notesRouter);
+// Standalone note operations (patch/delete by noteId)
+router.use('/notes', notesRouter);
+
+// Approval conditions
+router.use('/applications/:id/conditions', conditionsRouter);
+// Standalone condition operations (patch/delete by conditionId)
+router.use('/conditions', conditionsRouter);
 
 export default router;

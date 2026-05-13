@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { listUsers, updateUserRole, getPipelineStats } from '../services/admin';
+import { listUsers, updateUserRole, getPipelineStats, listAuditLogs, getTenant, updateTenant } from '../services/admin';
 import type { UserRole } from '@prisma/client';
 
 export async function users(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -37,6 +37,49 @@ export async function updateRole(
 export async function stats(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const result = await getPipelineStats(req.user.tenantId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function auditLogs(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { applicationId, userId, action, page, pageSize } = req.query as Record<string, string | undefined>;
+    const result = await listAuditLogs(req.user.tenantId, {
+      applicationId,
+      userId,
+      action,
+      page: page ? parseInt(page, 10) : 1,
+      pageSize: pageSize ? parseInt(pageSize, 10) : 20,
+    });
+    res.json({ data: result.data, total: result.total, page: page ? parseInt(page, 10) : 1, pageSize: pageSize ? parseInt(pageSize, 10) : 20 });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getTenantSettings(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await getTenant(req.user.tenantId);
+    if (!result) {
+      res.status(404).json({ error: 'Tenant not found', code: 'NOT_FOUND' });
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateTenantSettings(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { name, primaryColor, logoUrl } = req.body as {
+      name?: string;
+      primaryColor?: string;
+      logoUrl?: string;
+    };
+    const result = await updateTenant(req.user.tenantId, { name, primaryColor, logoUrl });
     res.json(result);
   } catch (err) {
     next(err);

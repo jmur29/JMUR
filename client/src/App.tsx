@@ -9,6 +9,8 @@ import ApplicationDetail from './pages/ApplicationDetail';
 import ApplicationReport from './pages/ApplicationReport';
 import Admin from './pages/Admin';
 import AdminPipeline from './pages/AdminPipeline';
+import AuditLog from './pages/AuditLog';
+import TenantSettings from './pages/TenantSettings';
 import { useApiAuth } from './lib/api';
 import Spinner from './components/ui/Spinner';
 
@@ -86,6 +88,8 @@ export default function App() {
           <Route path="/applications/:id/report" element={<ApplicationReport />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/pipeline" element={<AdminPipeline />} />
+          <Route path="/admin/audit" element={<AuditLog />} />
+          <Route path="/admin/settings" element={<TenantSettings />} />
         </Route>
 
         {/* Catch-all */}

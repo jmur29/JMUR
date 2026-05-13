@@ -1,6 +1,112 @@
 import { UserRole, Prisma } from '@prisma/client';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 import prisma from '../prisma/client';
 import { logAction } from './audit';
+import { s3Client, S3_BUCKET } from './documents';
+
+// ─── Audit log viewer ─────────────────────────────────────────────────────────
+
+export interface AuditLogWithUser {
+  id: string;
+  tenantId: string;
+  userId: string;
+  applicationId: string | null;
+  action: string;
+  metadata: Prisma.JsonValue;
+  createdAt: Date;
+  user: {
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+}
+
+export async function listAuditLogs(
+  tenantId: string,
+  filters: {
+    applicationId?: string;
+    userId?: string;
+    action?: string;
+    page: number;
+    pageSize: number;
+  }
+): Promise<{ data: AuditLogWithUser[]; total: number }> {
+  const where: Prisma.AuditLogWhereInput = {
+    tenantId,
+    ...(filters.applicationId ? { applicationId: filters.applicationId } : {}),
+    ...(filters.userId ? { userId: filters.userId } : {}),
+    ...(filters.action ? { action: { contains: filters.action, mode: 'insensitive' as const } } : {}),
+  };
+
+  const [data, total] = await Promise.all([
+    prisma.auditLog.findMany({
+      where,
+      include: {
+        user: {
+          select: { firstName: true, lastName: true, email: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: (filters.page - 1) * filters.pageSize,
+      take: filters.pageSize,
+    }),
+    prisma.auditLog.count({ where }),
+  ]);
+
+  return { data: data as AuditLogWithUser[], total };
+}
+
+// ─── Tenant management ────────────────────────────────────────────────────────
+
+export async function getTenant(tenantId: string) {
+  return prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { id: true, name: true, slug: true, logoUrl: true, primaryColor: true, createdAt: true },
+  });
+}
+
+export async function updateTenant(
+  tenantId: string,
+  data: { name?: string; primaryColor?: string; logoUrl?: string }
+) {
+  return prisma.tenant.update({
+    where: { id: tenantId },
+    data,
+    select: { id: true, name: true, slug: true, logoUrl: true, primaryColor: true, createdAt: true },
+  });
+}
+
+export async function uploadTenantLogo(
+  tenantId: string,
+  userId: string,
+  buffer: Buffer,
+  mimeType: string,
+  originalName: string
+): Promise<{ logoUrl: string }> {
+  const ext = originalName.split('.').pop() ?? 'png';
+  const s3Key = `tenants/${tenantId}/logo.${ext}`;
+
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: s3Key,
+      Body: buffer,
+      ContentType: mimeType,
+      CacheControl: 'public, max-age=31536000',
+    })
+  );
+
+  const logoUrl = `https://${S3_BUCKET}.s3.amazonaws.com/${s3Key}`;
+
+  await prisma.tenant.update({
+    where: { id: tenantId },
+    data: { logoUrl },
+  });
+
+  logAction(tenantId, userId, null, 'TENANT_LOGO_UPDATED', { s3Key });
+
+  return { logoUrl };
+}
 
 // ─── User management ──────────────────────────────────────────────────────────
 
