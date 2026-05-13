@@ -2,6 +2,7 @@ import { Prisma, ApplicationStatus } from '@prisma/client';
 import prisma from '../prisma/client';
 import { generateFileNumber } from '../utils/fileNumber';
 import { logAction } from './audit';
+import { sendAssignmentEmail, sendStatusChangeEmail } from './email';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -123,6 +124,52 @@ export async function updateApplication(
     changes: data as unknown as Record<string, unknown>,
     previousStatus: existing.status,
   });
+
+  const appBase = process.env.APP_URL ?? 'http://localhost:3000';
+  const applicationUrl = `${appBase}/applications/${id}`;
+
+  // Assignment email — when assignedToId changes to a new user
+  if (data.assignedToId && data.assignedToId !== existing.assignedToId) {
+    const [newAssignee, borrowers, assigner] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: data.assignedToId },
+        select: { email: true, firstName: true, lastName: true },
+      }),
+      prisma.borrower.findMany({
+        where: { applicationId: id },
+        select: { type: true, firstName: true, lastName: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true, lastName: true },
+      }),
+    ]);
+
+    if (newAssignee && assigner) {
+      const primary = borrowers.find((b) => b.type === 'PRIMARY');
+      const borrowerName = primary ? `${primary.firstName} ${primary.lastName}` : 'Unknown Borrower';
+      sendAssignmentEmail({
+        to: newAssignee.email,
+        recipientName: `${newAssignee.firstName} ${newAssignee.lastName}`,
+        fileNumber: updated.fileNumber,
+        borrowerName,
+        assignedByName: `${assigner.firstName} ${assigner.lastName}`,
+        applicationUrl,
+      }).catch(() => {/* already logged */});
+    }
+  }
+
+  // Status change email — notify assigned underwriter when status changes
+  if (data.status && data.status !== existing.status && updated.assignedTo) {
+    sendStatusChangeEmail({
+      to: updated.assignedTo.email,
+      recipientName: `${updated.assignedTo.firstName} ${updated.assignedTo.lastName}`,
+      fileNumber: updated.fileNumber,
+      fromStatus: existing.status,
+      toStatus: data.status,
+      applicationUrl,
+    }).catch(() => {/* already logged */});
+  }
 
   return updated;
 }

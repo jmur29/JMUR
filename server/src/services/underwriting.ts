@@ -3,6 +3,7 @@ import prisma from '../prisma/client';
 import { underwrite, UWResult } from '../engine/underwrite';
 import type { IncomeInput, BorrowerInput, PropertyInput, TermsInput } from '../engine/underwrite';
 import { logAction } from './audit';
+import { sendDecisionEmail } from './email';
 
 // ─── Load and calculate ───────────────────────────────────────────────────────
 
@@ -156,6 +157,62 @@ export async function saveDecision(
     tds: result.tds,
     ltv: result.ltv,
   });
+
+  // Send email notifications (fire-and-forget)
+  const appBase = process.env.APP_URL ?? 'http://localhost:3000';
+  const applicationUrl = `${appBase}/applications/${applicationId}`;
+
+  // Fetch application with assignedTo user and primary borrower
+  const appForEmail = await prisma.application.findUnique({
+    where: { id: applicationId },
+    include: {
+      assignedTo: { select: { email: true, firstName: true, lastName: true } },
+      borrowers: { select: { type: true, firstName: true, lastName: true, email: true } },
+    },
+  });
+
+  if (appForEmail) {
+    const primary = appForEmail.borrowers.find((b) => b.type === 'PRIMARY');
+    const borrowerName = primary ? `${primary.firstName} ${primary.lastName}` : 'Unknown Borrower';
+    const decidedByName = `${decision.decidedBy.firstName} ${decision.decidedBy.lastName}`;
+    const fileNumber = appForEmail.fileNumber;
+
+    const emailPromises: Promise<void>[] = [];
+
+    // Notify assigned underwriter
+    if (appForEmail.assignedTo) {
+      emailPromises.push(
+        sendDecisionEmail({
+          to: appForEmail.assignedTo.email,
+          recipientName: `${appForEmail.assignedTo.firstName} ${appForEmail.assignedTo.lastName}`,
+          fileNumber,
+          borrowerName,
+          decision: result.decision,
+          decidedByName,
+          notes: notes ?? null,
+          applicationUrl,
+        })
+      );
+    }
+
+    // Notify primary borrower
+    if (primary?.email) {
+      emailPromises.push(
+        sendDecisionEmail({
+          to: primary.email,
+          recipientName: `${primary.firstName} ${primary.lastName}`,
+          fileNumber,
+          borrowerName,
+          decision: result.decision,
+          decidedByName,
+          notes: notes ?? null,
+          applicationUrl,
+        })
+      );
+    }
+
+    Promise.all(emailPromises).catch(() => {/* swallow — already logged inside sendDecisionEmail */});
+  }
 
   return { decision, result };
 }

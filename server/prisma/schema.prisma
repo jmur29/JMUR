@@ -110,6 +110,8 @@ model User {
   decisions            UnderwritingDecision[]
   uploadedDocuments    Document[]
   auditLogs            AuditLog[]
+  applicationNotes     ApplicationNote[]    @relation("NoteAuthor")
+  clearedConditions    ApprovalCondition[]  @relation("ConditionClearer")
 
   @@index([tenantId])
   @@map("users")
@@ -133,6 +135,8 @@ model Application {
   decisions    UnderwritingDecision[]
   documents    Document[]
   auditLogs    AuditLog[]
+  notes        ApplicationNote[]
+  conditions   ApprovalCondition[]
 
   @@index([tenantId])
   @@index([status])
@@ -277,4 +281,35 @@ model AuditLog {
   @@index([applicationId])
   @@index([userId])
   @@map("audit_logs")
+}
+
+model ApplicationNote {
+  id            String   @id @default(uuid())
+  applicationId String
+  authorId      String
+  body          String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id])
+  author      User        @relation("NoteAuthor", fields: [authorId], references: [id])
+
+  @@index([applicationId])
+  @@map("application_notes")
+}
+
+model ApprovalCondition {
+  id            String    @id @default(uuid())
+  applicationId String
+  body          String
+  cleared       Boolean   @default(false)
+  clearedById   String?
+  clearedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id])
+  clearedBy   User?       @relation("ConditionClearer", fields: [clearedById], references: [id])
+
+  @@index([applicationId])
+  @@map("approval_conditions")
 }
