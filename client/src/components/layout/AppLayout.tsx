@@ -3,6 +3,7 @@ import { Outlet, useLocation, NavLink } from 'react-router-dom';
 import { useClerk, useUser } from '@clerk/clerk-react';
 import { Menu, X, LogOut, ChevronRight } from 'lucide-react';
 import Sidebar from './Sidebar';
+import NotificationBell from './NotificationBell';
 import { cn } from '../../lib/utils';
 
 function useBreadcrumbs() {
@@ -106,8 +107,9 @@ export default function AppLayout() {
             ))}
           </nav>
 
-          {/* Right side: user + sign out */}
+          {/* Right side: notifications + user + sign out */}
           <div className="flex items-center gap-3 flex-shrink-0">
+            <NotificationBell />
             {user && (
               <span className="hidden sm:block text-sm text-slate-600">
                 {user.firstName} {user.lastName}

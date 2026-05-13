@@ -11,6 +11,7 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
 import BorrowerForm from '../components/forms/BorrowerForm';
+import Breadcrumb from '../components/ui/Breadcrumb';
 import { cn } from '../lib/utils';
 import type { Application } from '../types';
 
@@ -190,6 +191,12 @@ export default function NewApplication() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      <Breadcrumb
+        items={[
+          { label: 'Applications', href: '/applications' },
+          { label: 'New Application' },
+        ]}
+      />
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">New Application</h1>
         <p className="text-sm text-slate-500 mt-1">

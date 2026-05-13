@@ -17,6 +17,7 @@ import Tabs from '../components/ui/Tabs';
 import StatusBadge from '../components/ui/StatusBadge';
 import Spinner from '../components/ui/Spinner';
 import Button from '../components/ui/Button';
+import Breadcrumb from '../components/ui/Breadcrumb';
 import { formatDate } from '../lib/utils';
 
 import BorrowerTab from '../components/application/BorrowerTab';
@@ -70,6 +71,12 @@ export default function ApplicationDetail() {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb
+        items={[
+          { label: 'Applications', href: '/applications' },
+          { label: application.fileNumber },
+        ]}
+      />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
