@@ -5,13 +5,27 @@ import cors from 'cors';
 
 import logger from './utils/logger';
 import { errorHandler } from './middleware/error';
+import { apiLimiter } from './middleware/rateLimiter';
 import apiRouter from './routes/index';
 
 const app = express();
 
 // ─── Security & parsing ───────────────────────────────────────────────────────
 
-app.use(helmet());
+app.use(helmet({
+  crossOriginEmbedderPolicy: false, // needed for PDF preview iframe
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"], // Clerk requires this
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https://api.clerk.com", "https://*.clerk.accounts.dev"],
+      frameSrc: ["'self'", "https:"],
+    },
+  },
+}));
+
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
@@ -26,9 +40,10 @@ app.use(express.json({ limit: '10mb' }));
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
-app.use('/api', apiRouter);
+// General rate limit applied to all API routes
+app.use('/api', apiLimiter, apiRouter);
 
-// Health check
+// Health check (outside rate limit)
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', ts: new Date().toISOString() });
 });

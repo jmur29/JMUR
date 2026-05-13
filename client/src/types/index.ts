@@ -201,6 +201,12 @@ export interface PipelineStats {
   avgGds: number;
   approvalRate: number;
   volumeByStatus: Record<ApplicationStatus, number>;
+  monthlyTrend?: Array<{
+    month: string;
+    total: number;
+    approved: number;
+    declined: number;
+  }>;
 }
 
 export interface ApplicationListParams {
@@ -251,6 +257,17 @@ export interface ApprovalCondition {
     lastName: string;
   } | null;
 }
+
+export type ApplicationStatusHistory = {
+  id: string;
+  applicationId: string;
+  fromStatus: ApplicationStatus | null;
+  toStatus: ApplicationStatus;
+  changedById: string;
+  note: string | null;
+  createdAt: string;
+  changedBy?: User;
+};
 
 export interface AuditLog {
   id: string;

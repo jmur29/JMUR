@@ -20,8 +20,25 @@ const upload = multer({
 
 const router = Router();
 
-// All admin routes require ADMIN role
+// All admin routes require auth
 router.use(requireAuth);
+
+// GET /admin/export — accessible to ADMIN and UNDERWRITER
+router.get(
+  '/export',
+  requireRole(['ADMIN', 'UNDERWRITER']),
+  validate(
+    z.object({
+      status: z.string().optional(),
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+    }),
+    'query'
+  ),
+  ctrl.exportPipelineCsv
+);
+
+// Remaining admin routes require ADMIN role
 router.use(requireRole(['ADMIN']));
 
 // GET /admin/users

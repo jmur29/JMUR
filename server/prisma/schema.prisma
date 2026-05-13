@@ -112,6 +112,7 @@ model User {
   auditLogs            AuditLog[]
   applicationNotes     ApplicationNote[]    @relation("NoteAuthor")
   clearedConditions    ApprovalCondition[]  @relation("ConditionClearer")
+  statusChanges        StatusHistory[]      @relation("StatusHistoryUser")
 
   @@index([tenantId])
   @@map("users")
@@ -137,6 +138,7 @@ model Application {
   auditLogs    AuditLog[]
   notes        ApplicationNote[]
   conditions   ApprovalCondition[]
+  statusHistory StatusHistory[]
 
   @@index([tenantId])
   @@index([status])
@@ -312,4 +314,20 @@ model ApprovalCondition {
 
   @@index([applicationId])
   @@map("approval_conditions")
+}
+
+model StatusHistory {
+  id            String             @id @default(uuid())
+  applicationId String
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus
+  changedById   String
+  note          String?
+  createdAt     DateTime           @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id])
+  changedBy   User        @relation("StatusHistoryUser", fields: [changedById], references: [id])
+
+  @@index([applicationId])
+  @@map("status_history")
 }

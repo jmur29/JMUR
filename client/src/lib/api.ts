@@ -5,6 +5,7 @@ import type {
   Application,
   ApplicationListParams,
   ApplicationNote,
+  ApplicationStatusHistory,
   ApprovalCondition,
   AuditLog,
   Borrower,
@@ -105,6 +106,12 @@ export const applicationsApi = {
 
   delete(id: string): Promise<void> {
     return apiClient.delete(`/applications/${id}`).then(() => undefined);
+  },
+
+  getHistory(id: string): Promise<ApplicationStatusHistory[]> {
+    return apiClient
+      .get<ApplicationStatusHistory[]>(`/applications/${id}/history`)
+      .then((r) => r.data);
   },
 };
 

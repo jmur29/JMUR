@@ -158,6 +158,94 @@ export async function updateUserRole(
   return updated;
 }
 
+// ─── Pipeline CSV export ──────────────────────────────────────────────────────
+
+export interface PipelineExportRow {
+  fileNumber: string;
+  status: string;
+  createdAt: string;
+  borrowerName: string;
+  borrowerEmail: string;
+  creditScore: number | null;
+  employmentType: string | null;
+  purchasePrice: number | null;
+  downPayment: number | null;
+  mortgageAmount: number | null;
+  ltv: number | null;
+  contractRate: number | null;
+  amortizationYears: number | null;
+  gds: number | null;
+  tds: number | null;
+  decision: string | null;
+  assignedTo: string | null;
+}
+
+export async function exportPipeline(
+  tenantId: string,
+  filters: { status?: string; startDate?: string; endDate?: string }
+): Promise<PipelineExportRow[]> {
+  const where: Prisma.ApplicationWhereInput = {
+    tenantId,
+    deletedAt: null,
+    ...(filters.status ? { status: filters.status as Prisma.EnumApplicationStatusFilter } : {}),
+    ...(filters.startDate || filters.endDate
+      ? {
+          createdAt: {
+            ...(filters.startDate ? { gte: new Date(filters.startDate) } : {}),
+            ...(filters.endDate ? { lte: new Date(filters.endDate) } : {}),
+          },
+        }
+      : {}),
+  };
+
+  const applications = await prisma.application.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    include: {
+      borrowers: true,
+      property: true,
+      mortgageTerms: true,
+      decisions: {
+        orderBy: { decidedAt: 'desc' },
+        take: 1,
+      },
+      assignedTo: {
+        select: { firstName: true, lastName: true },
+      },
+    },
+  });
+
+  const toNum = (d: Prisma.Decimal | null | undefined): number | null =>
+    d != null ? parseFloat(d.toString()) : null;
+
+  return applications.map((app) => {
+    const primary = app.borrowers.find((b) => b.type === 'PRIMARY') ?? app.borrowers[0] ?? null;
+    const latestDecision = app.decisions[0] ?? null;
+
+    return {
+      fileNumber: app.fileNumber,
+      status: app.status,
+      createdAt: app.createdAt.toISOString(),
+      borrowerName: primary ? `${primary.firstName} ${primary.lastName}` : '',
+      borrowerEmail: primary?.email ?? '',
+      creditScore: primary?.creditScore ?? null,
+      employmentType: primary?.employmentType ?? null,
+      purchasePrice: toNum(app.property?.purchasePrice),
+      downPayment: toNum(app.property?.downPayment),
+      mortgageAmount: toNum(app.mortgageTerms?.mortgageAmount),
+      ltv: toNum(latestDecision?.ltv),
+      contractRate: toNum(app.mortgageTerms?.contractRate),
+      amortizationYears: app.mortgageTerms?.amortizationYears ?? null,
+      gds: toNum(latestDecision?.gds),
+      tds: toNum(latestDecision?.tds),
+      decision: latestDecision?.decision ?? null,
+      assignedTo: app.assignedTo
+        ? `${app.assignedTo.firstName} ${app.assignedTo.lastName}`
+        : null,
+    };
+  });
+}
+
 // ─── Pipeline statistics ──────────────────────────────────────────────────────
 
 export interface PipelineStats {

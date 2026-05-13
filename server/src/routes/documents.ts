@@ -4,6 +4,7 @@ import multerS3 from 'multer-s3';
 import { v4 as uuidv4 } from 'uuid';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { validate } from '../middleware/validate';
+import { uploadLimiter } from '../middleware/rateLimiter';
 import {
   UpdateDocumentSchema,
   ApplicationIdParamSchema,
@@ -43,6 +44,7 @@ router.get(
 // POST /documents/:applicationId/upload
 router.post(
   '/:applicationId/upload',
+  uploadLimiter,
   requireRole(['ADMIN', 'UNDERWRITER']),
   validate(ApplicationIdParamSchema, 'params'),
   upload.single('file'),

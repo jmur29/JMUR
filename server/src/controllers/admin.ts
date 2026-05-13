@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { listUsers, updateUserRole, getPipelineStats, listAuditLogs, getTenant, updateTenant, uploadTenantLogo } from '../services/admin';
+import { listUsers, updateUserRole, getPipelineStats, listAuditLogs, getTenant, updateTenant, uploadTenantLogo, exportPipeline } from '../services/admin';
+import { toCsv } from '../utils/csv';
 import type { UserRole } from '@prisma/client';
 
 export async function users(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -81,6 +82,20 @@ export async function updateTenantSettings(req: Request, res: Response, next: Ne
     };
     const result = await updateTenant(req.user.tenantId, { name, primaryColor, logoUrl });
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function exportPipelineCsv(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { status, startDate, endDate } = req.query as Record<string, string | undefined>;
+    const rows = await exportPipeline(req.user.tenantId, { status, startDate, endDate });
+    const csv = toCsv(rows as unknown as Record<string, unknown>[]);
+    const date = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="clearpath-pipeline-${date}.csv"`);
+    res.send(csv);
   } catch (err) {
     next(err);
   }

@@ -1,13 +1,14 @@
 import { useState, useRef, KeyboardEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow, parseISO } from 'date-fns';
-import { Pencil, Trash2, Check, X } from 'lucide-react';
+import { Pencil, Trash2, Check, X, ChevronDown, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useUser } from '@clerk/clerk-react';
 import { notesApi } from '../../lib/api';
 import type { ApplicationNote } from '../../types';
 import { cn } from '../../lib/utils';
 import Button from '../ui/Button';
+import StatusHistory from './StatusHistory';
 
 // ─── Avatar helpers ───────────────────────────────────────────────────────────
 
@@ -201,6 +202,7 @@ interface NotesTimelineProps {
 }
 
 export default function NotesTimeline({ applicationId }: NotesTimelineProps) {
+  const [historyOpen, setHistoryOpen] = useState(false);
   const queryClient = useQueryClient();
   const { user: clerkUser } = useUser();
   const [newBody, setNewBody] = useState('');

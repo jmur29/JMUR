@@ -12,6 +12,7 @@ import {
   Printer,
 } from 'lucide-react';
 import { useApplication } from '../hooks/useApplication';
+import { usePermissions } from '../hooks/usePermissions';
 import Tabs from '../components/ui/Tabs';
 import StatusBadge from '../components/ui/StatusBadge';
 import Spinner from '../components/ui/Spinner';
@@ -26,6 +27,7 @@ import DocumentsTab from '../components/application/DocumentsTab';
 import RatiosTab from '../components/application/RatiosTab';
 import DecisionTab from '../components/application/DecisionTab';
 import NotesTimeline from '../components/application/NotesTimeline';
+import AssignmentSelector from '../components/application/AssignmentSelector';
 
 const TABS = [
   { id: 'borrower', label: 'Borrower', icon: <User size={15} /> },
@@ -41,6 +43,7 @@ export default function ApplicationDetail() {
   const { id } = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState('borrower');
   const { data: application, isLoading, error } = useApplication(id ?? '');
+  const { role } = usePermissions();
 
   if (!id) return null;
 
@@ -76,11 +79,16 @@ export default function ApplicationDetail() {
             </Button>
           </Link>
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-xl font-semibold text-slate-900 font-mono">
                 {application.fileNumber}
               </h1>
               <StatusBadge status={application.status} />
+              <AssignmentSelector
+                applicationId={application.id}
+                assignedTo={application.assignedTo ?? null}
+                currentRole={role}
+              />
             </div>
             <p className="text-sm text-slate-500 mt-0.5">
               {primary
