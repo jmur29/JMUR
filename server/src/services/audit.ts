@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../prisma/client';
 import logger from '../utils/logger';
 
@@ -10,6 +11,7 @@ export function logAction(
   userId: string,
   applicationId: string | null,
   action: string,
+  // Accept a plain object and cast to Prisma's Json-compatible type
   metadata: Record<string, unknown>
 ): void {
   prisma.auditLog
@@ -19,7 +21,7 @@ export function logAction(
         userId,
         applicationId: applicationId ?? undefined,
         action,
-        metadata,
+        metadata: metadata as Prisma.InputJsonObject,
       },
     })
     .catch((err: unknown) => {

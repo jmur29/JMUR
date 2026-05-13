@@ -13,7 +13,8 @@ export function validate(schema: ZodTypeAny, part: RequestPart = 'body') {
       return;
     }
     // Replace the request part with the parsed (coerced) data
-    (req as Record<string, unknown>)[part] = result.data;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (req as any)[part] = result.data;
     next();
   };
 }

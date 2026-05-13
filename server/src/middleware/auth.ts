@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { createClerkClient } from '@clerk/backend';
+import { verifyToken } from '@clerk/backend';
 import prisma from '../prisma/client';
 import logger from '../utils/logger';
 
@@ -25,10 +25,6 @@ declare global {
   }
 }
 
-const clerk = createClerkClient({
-  secretKey: process.env.CLERK_SECRET_KEY ?? '',
-});
-
 /**
  * Verify Clerk session token and populate req.user from the database.
  * The token must carry a public metadata claim `tenantId`.
@@ -48,7 +44,9 @@ export async function requireAuth(
     const token = authHeader.slice(7);
 
     // Verify with Clerk — throws if invalid/expired
-    const payload = await clerk.verifyToken(token);
+    const payload = await verifyToken(token, {
+      secretKey: process.env.CLERK_SECRET_KEY ?? '',
+    });
 
     const clerkUserId = payload.sub;
 

@@ -120,7 +120,7 @@ export async function updateApplication(
   });
 
   logAction(tenantId, userId, id, 'APPLICATION_UPDATED', {
-    changes: data,
+    changes: data as unknown as Record<string, unknown>,
     previousStatus: existing.status,
   });
 
