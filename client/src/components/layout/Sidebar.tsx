@@ -8,6 +8,8 @@ import {
   BarChart2,
   ChevronDown,
   ChevronRight,
+  ClipboardList,
+  Settings,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -46,6 +48,18 @@ const navItems: NavItem[] = [
         label: 'Pipeline',
         to: '/admin/pipeline',
         icon: <BarChart2 size={16} />,
+        adminOnly: true,
+      },
+      {
+        label: 'Audit Log',
+        to: '/admin/audit',
+        icon: <ClipboardList size={16} />,
+        adminOnly: true,
+      },
+      {
+        label: 'Settings',
+        to: '/admin/settings',
+        icon: <Settings size={16} />,
         adminOnly: true,
       },
     ],

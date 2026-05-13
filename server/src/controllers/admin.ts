@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { listUsers, updateUserRole, getPipelineStats, listAuditLogs, getTenant, updateTenant } from '../services/admin';
+import { listUsers, updateUserRole, getPipelineStats, listAuditLogs, getTenant, updateTenant, uploadTenantLogo } from '../services/admin';
 import type { UserRole } from '@prisma/client';
 
 export async function users(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -80,6 +80,27 @@ export async function updateTenantSettings(req: Request, res: Response, next: Ne
       logoUrl?: string;
     };
     const result = await updateTenant(req.user.tenantId, { name, primaryColor, logoUrl });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function uploadLogo(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: 'No file uploaded', code: 'BAD_REQUEST' });
+      return;
+    }
+
+    const result = await uploadTenantLogo(
+      req.user.tenantId,
+      req.user.id,
+      file.buffer,
+      file.mimetype,
+      file.originalname
+    );
     res.json(result);
   } catch (err) {
     next(err);

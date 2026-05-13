@@ -1,9 +1,22 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import multer from 'multer';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { UpdateUserRoleSchema } from '../middleware/validate';
 import * as ctrl from '../controllers/admin';
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  },
+});
 
 const router = Router();
 
@@ -55,6 +68,13 @@ router.patch(
     })
   ),
   ctrl.updateTenantSettings
+);
+
+// POST /admin/tenant/logo
+router.post(
+  '/tenant/logo',
+  upload.single('logo'),
+  ctrl.uploadLogo
 );
 
 export default router;
