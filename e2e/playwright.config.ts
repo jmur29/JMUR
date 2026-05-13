@@ -16,12 +16,9 @@ export default defineConfig({
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
-    },
+    { name: 'Mobile Chrome', use: { ...devices['Pixel 5'] } },
   ],
-  // webServer: uncomment if running locally
+  // Uncomment to auto-start the app for fully local runs:
   // webServer: [
   //   { command: 'cd ../client && npm run dev', url: 'http://localhost:5173', reuseExistingServer: true },
   //   { command: 'cd ../server && npm run dev', url: 'http://localhost:3001/health', reuseExistingServer: true },
