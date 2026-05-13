@@ -43,4 +43,11 @@ router.delete(
   ctrl.remove
 );
 
+// GET /applications/:id/history — returns status history for an application
+router.get(
+  '/:id/history',
+  validate(UuidParamSchema, 'params'),
+  ctrl.getHistory
+);
+
 export default router;

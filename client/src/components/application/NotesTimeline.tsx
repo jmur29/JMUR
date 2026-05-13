@@ -300,6 +300,28 @@ export default function NotesTimeline({ applicationId }: NotesTimelineProps) {
           ))
         )}
       </div>
+
+      {/* Status History collapsible section */}
+      <div className="border-t border-slate-100 pt-4">
+        <button
+          onClick={() => setHistoryOpen((prev) => !prev)}
+          className="flex items-center justify-between w-full text-left group"
+        >
+          <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+            Status History
+          </h3>
+          {historyOpen ? (
+            <ChevronDown size={15} className="text-slate-400 group-hover:text-slate-600 transition-colors" />
+          ) : (
+            <ChevronRight size={15} className="text-slate-400 group-hover:text-slate-600 transition-colors" />
+          )}
+        </button>
+        {historyOpen && (
+          <div className="mt-4">
+            <StatusHistory applicationId={applicationId} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

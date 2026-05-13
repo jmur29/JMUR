@@ -13,6 +13,7 @@ import AuditLog from './pages/AuditLog';
 import TenantSettings from './pages/TenantSettings';
 import { useApiAuth } from './lib/api';
 import Spinner from './components/ui/Spinner';
+import ErrorBoundary from './components/ui/ErrorBoundary';
 
 function AuthSync() {
   useApiAuth();
@@ -52,6 +53,7 @@ export default function App() {
   return (
     <>
       <UnauthorizedListener />
+      <ErrorBoundary>
       <Routes>
         {/* Public auth routes */}
         <Route
@@ -95,6 +97,7 @@ export default function App() {
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
+      </ErrorBoundary>
     </>
   );
 }

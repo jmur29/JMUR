@@ -6,6 +6,7 @@ import {
   updateApplication,
   softDeleteApplication,
 } from '../services/applications';
+import { getStatusHistory } from '../services/statusHistory';
 import type { ApplicationStatus } from '@prisma/client';
 
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -79,6 +80,15 @@ export async function remove(req: Request, res: Response, next: NextFunction): P
       return;
     }
     res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const history = await getStatusHistory(req.params.id);
+    res.json(history);
   } catch (err) {
     next(err);
   }

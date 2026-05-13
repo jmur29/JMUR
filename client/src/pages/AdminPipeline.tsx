@@ -8,6 +8,9 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
+  ComposedChart,
+  Line,
+  Legend,
 } from 'recharts';
 import { BarChart2, TrendingUp, CheckCircle, Clock } from 'lucide-react';
 import { adminApi } from '../lib/api';
@@ -131,6 +134,75 @@ export default function AdminPipeline() {
         ) : (
           <div className="text-center py-16 text-slate-400 text-sm">
             No application data available.
+          </div>
+        )}
+      </div>
+
+      {/* Monthly Volume Trend */}
+      <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+        <h2 className="text-base font-semibold text-slate-900 mb-5">Monthly Volume Trend</h2>
+        {stats?.monthlyTrend && stats.monthlyTrend.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart
+              data={stats.monthlyTrend}
+              margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis
+                dataKey="month"
+                tick={{ fontSize: 12, fill: '#64748b' }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 12, fill: '#64748b' }}
+                axisLine={false}
+                tickLine={false}
+                allowDecimals={false}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1e293b',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#f1f5f9',
+                  fontSize: '13px',
+                }}
+                cursor={{ fill: '#f8fafc' }}
+              />
+              <Legend
+                wrapperStyle={{ fontSize: '12px', paddingTop: '12px' }}
+              />
+              <Bar
+                dataKey="total"
+                name="Total"
+                fill="#94a3b8"
+                radius={[4, 4, 0, 0]}
+                barSize={28}
+              />
+              <Line
+                type="monotone"
+                dataKey="approved"
+                name="Approved"
+                stroke="#22c55e"
+                strokeWidth={2}
+                dot={{ r: 3, fill: '#22c55e' }}
+                activeDot={{ r: 5 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="declined"
+                name="Declined"
+                stroke="#ef4444"
+                strokeWidth={2}
+                dot={{ r: 3, fill: '#ef4444' }}
+                activeDot={{ r: 5 }}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="text-center py-16 text-slate-400 text-sm">
+            No monthly trend data available.
           </div>
         )}
       </div>

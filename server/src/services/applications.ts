@@ -3,6 +3,7 @@ import prisma from '../prisma/client';
 import { generateFileNumber } from '../utils/fileNumber';
 import { logAction } from './audit';
 import { sendAssignmentEmail, sendStatusChangeEmail } from './email';
+import { recordStatusChange } from './statusHistory';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,10 @@ const APPLICATION_FULL_INCLUDE = {
     include: { uploadedBy: { select: { id: true, firstName: true, lastName: true } } },
   },
   assignedTo: { select: { id: true, firstName: true, lastName: true, email: true } },
+  statusHistory: {
+    orderBy: { createdAt: 'asc' as const },
+    include: { changedBy: { select: { id: true, firstName: true, lastName: true, email: true } } },
+  },
 } satisfies Prisma.ApplicationInclude;
 
 // ─── Service functions ────────────────────────────────────────────────────────
@@ -124,6 +129,16 @@ export async function updateApplication(
     changes: data as unknown as Record<string, unknown>,
     previousStatus: existing.status,
   });
+
+  // Record status transition in history when status changes
+  if (data.status && data.status !== existing.status) {
+    recordStatusChange({
+      applicationId: id,
+      fromStatus: existing.status,
+      toStatus: data.status,
+      changedById: userId,
+    });
+  }
 
   const appBase = process.env.APP_URL ?? 'http://localhost:3000';
   const applicationUrl = `${appBase}/applications/${id}`;
