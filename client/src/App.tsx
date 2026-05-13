@@ -1,6 +1,6 @@
+import React, { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { SignIn, SignUp, useAuth } from '@clerk/clerk-react';
-import { useEffect } from 'react';
 import AppLayout from './components/layout/AppLayout';
 import Dashboard from './pages/Dashboard';
 import ApplicationList from './pages/ApplicationList';
