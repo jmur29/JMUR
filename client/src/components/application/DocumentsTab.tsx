@@ -4,10 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Upload, Trash2, FileText, CheckCircle, Clock, XCircle, Eye } from 'lucide-react';
 import { documentsApi, DOCUMENT_TYPE_LABELS } from '../../lib/api';
-import type { Application, DocumentStatus, DocumentType } from '../../types';
+import type { Application, Document, DocumentStatus, DocumentType } from '../../types';
 import { appKeys } from '../../hooks/useApplication';
 import Button from '../ui/Button';
 import Select from '../ui/Select';
+import DocumentViewer from './DocumentViewer';
 import { formatDate, cn } from '../../lib/utils';
 
 const DOC_TYPE_OPTIONS = (
@@ -49,6 +50,7 @@ export default function DocumentsTab({ application }: DocumentsTabProps) {
   const queryClient = useQueryClient();
   const [selectedType, setSelectedType] = useState<DocumentType>('OTHER');
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
 
   const { data: documents = [], isLoading } = useQuery({
     queryKey: ['documents', application.id],
@@ -130,6 +132,7 @@ export default function DocumentsTab({ application }: DocumentsTabProps) {
 
   return (
     <div className="space-y-6">
+      <DocumentViewer document={previewDoc} onClose={() => setPreviewDoc(null)} />
       {/* Upload zone */}
       <div className="space-y-3">
         <div className="flex items-end gap-3">
@@ -263,18 +266,29 @@ export default function DocumentsTab({ application }: DocumentsTabProps) {
                     {formatDate(doc.uploadedAt)}
                   </td>
                   <td className="px-4 py-3">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      leftIcon={<Trash2 size={13} />}
-                      className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                      onClick={() => {
-                        if (confirm('Delete this document?')) deleteMutation.mutate(doc.id);
-                      }}
-                      loading={deleteMutation.isPending}
-                    >
-                      Delete
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        leftIcon={<Eye size={13} />}
+                        onClick={() => setPreviewDoc(doc)}
+                        title="Preview document"
+                      >
+                        Preview
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        leftIcon={<Trash2 size={13} />}
+                        className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                        onClick={() => {
+                          if (confirm('Delete this document?')) deleteMutation.mutate(doc.id);
+                        }}
+                        loading={deleteMutation.isPending}
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

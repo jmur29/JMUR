@@ -132,3 +132,21 @@ export function getPrimaryBorrower(
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
+
+// ---------------------------------------------------------------------------
+// File download
+// ---------------------------------------------------------------------------
+export function downloadFile(
+  data: string | Blob,
+  filename: string,
+  mimeType = 'text/csv'
+): void {
+  const blob =
+    data instanceof Blob ? data : new Blob([data], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

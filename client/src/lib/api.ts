@@ -351,6 +351,12 @@ export const adminApi = {
       .get<PaginatedResponse<AuditLog & { user: { firstName: string; lastName: string; email: string } }>>('/admin/audit', { params })
       .then((r) => r.data);
   },
+
+  exportPipeline(params?: { status?: string }): Promise<string> {
+    return apiClient
+      .get<string>('/admin/export', { params, responseType: 'text' })
+      .then((r) => r.data);
+  },
 };
 
 // ---------------------------------------------------------------------------
