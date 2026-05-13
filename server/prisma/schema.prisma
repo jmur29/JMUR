@@ -1,0 +1,280 @@
+// ClearPath UW — Prisma Schema
+// PostgreSQL + snake_case table names
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  UNDERWRITER
+  VIEWER
+}
+
+enum ApplicationStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  DECLINED
+  CONDITIONALLY_APPROVED
+}
+
+enum BorrowerType {
+  PRIMARY
+  CO_BORROWER
+}
+
+enum EmploymentType {
+  EMPLOYED
+  SELF_EMPLOYED
+  CONTRACT
+  RETIRED
+  OTHER
+}
+
+enum PropertyType {
+  DETACHED
+  SEMI
+  TOWNHOUSE
+  CONDO
+  DUPLEX
+  OTHER
+}
+
+enum OccupancyType {
+  OWNER
+  RENTAL
+  SECONDARY
+}
+
+enum UWDecision {
+  APPROVE
+  DECLINE
+  MANUAL_REVIEW
+}
+
+enum DocumentType {
+  PAYSTUB
+  T4
+  NOA
+  BANK_STATEMENT
+  ID
+  APPRAISAL
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING
+  REVIEWED
+  APPROVED
+  REJECTED
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique
+  logoUrl      String?
+  primaryColor String   @default("#1a56db")
+  createdAt    DateTime @default(now())
+
+  users        User[]
+  applications Application[]
+  auditLogs    AuditLog[]
+
+  @@map("tenants")
+}
+
+model User {
+  id        String    @id @default(uuid())
+  tenantId  String
+  clerkId   String    @unique
+  firstName String
+  lastName  String
+  email     String    @unique
+  role      UserRole  @default(VIEWER)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  tenant               Tenant               @relation(fields: [tenantId], references: [id])
+  assignedApplications Application[]        @relation("AssignedUnderwriter")
+  decisions            UnderwritingDecision[]
+  uploadedDocuments    Document[]
+  auditLogs            AuditLog[]
+
+  @@index([tenantId])
+  @@map("users")
+}
+
+model Application {
+  id           String            @id @default(uuid())
+  tenantId     String
+  fileNumber   String            @unique
+  status       ApplicationStatus @default(DRAFT)
+  assignedToId String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  deletedAt    DateTime?
+
+  tenant       Tenant               @relation(fields: [tenantId], references: [id])
+  assignedTo   User?                @relation("AssignedUnderwriter", fields: [assignedToId], references: [id])
+  borrowers    Borrower[]
+  property     Property?
+  mortgageTerms MortgageTerms?
+  decisions    UnderwritingDecision[]
+  documents    Document[]
+  auditLogs    AuditLog[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([assignedToId])
+  @@map("applications")
+}
+
+model Borrower {
+  id                String         @id @default(uuid())
+  applicationId     String
+  type              BorrowerType
+  firstName         String
+  lastName          String
+  dob               DateTime
+  email             String
+  phone             String
+  sinEncrypted      String
+  employmentType    EmploymentType
+  creditScore       Int
+  bankruptcies      Boolean        @default(false)
+  collections       Boolean        @default(false)
+  existingMortgages Int            @default(0)
+
+  application Application @relation(fields: [applicationId], references: [id])
+  income      Income?
+
+  @@index([applicationId])
+  @@map("borrowers")
+}
+
+model Income {
+  id               String   @id @default(uuid())
+  borrowerId       String   @unique
+  employerName     String?
+  jobTitle         String?
+  yearsEmployed    Decimal? @db.Decimal(5, 2)
+  baseSalary       Decimal  @default(0) @db.Decimal(14, 2)
+  bonus            Decimal  @default(0) @db.Decimal(14, 2)
+  overtime         Decimal  @default(0) @db.Decimal(14, 2)
+  otherIncome      Decimal  @default(0) @db.Decimal(14, 2)
+  selfEmployedAvg  Decimal? @db.Decimal(14, 2)
+  rentalIncome     Decimal  @default(0) @db.Decimal(14, 2)
+  updatedAt        DateTime @updatedAt
+
+  borrower Borrower @relation(fields: [borrowerId], references: [id])
+
+  @@map("incomes")
+}
+
+model Property {
+  id            String        @id @default(uuid())
+  applicationId String        @unique
+  address       String
+  city          String
+  province      String
+  postalCode    String
+  propertyType  PropertyType
+  occupancy     OccupancyType
+  purchasePrice Decimal       @db.Decimal(14, 2)
+  appraisedValue Decimal      @db.Decimal(14, 2)
+  downPayment   Decimal       @db.Decimal(14, 2)
+  annualTax     Decimal       @db.Decimal(10, 2)
+  monthlyHeat   Decimal       @db.Decimal(10, 2)
+  condoFees     Decimal       @default(0) @db.Decimal(10, 2)
+  updatedAt     DateTime      @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id])
+
+  @@map("properties")
+}
+
+model MortgageTerms {
+  id                String   @id @default(uuid())
+  applicationId     String   @unique
+  contractRate      Decimal  @db.Decimal(6, 4)
+  stressRate        Decimal  @db.Decimal(6, 4)
+  amortizationYears Int
+  termYears         Int
+  insured           Boolean  @default(false)
+  monthlyPayment    Decimal  @db.Decimal(12, 2)
+  mortgageAmount    Decimal  @db.Decimal(14, 2)
+  updatedAt         DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id])
+
+  @@map("mortgage_terms")
+}
+
+model UnderwritingDecision {
+  id            String     @id @default(uuid())
+  applicationId String
+  gds           Decimal    @db.Decimal(6, 3)
+  tds           Decimal    @db.Decimal(6, 3)
+  ltv           Decimal    @db.Decimal(6, 3)
+  stressGds     Decimal    @db.Decimal(6, 3)
+  stressTds     Decimal    @db.Decimal(6, 3)
+  decision      UWDecision
+  flags         Json
+  notes         String?
+  decidedById   String
+  decidedAt     DateTime   @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id])
+  decidedBy   User        @relation(fields: [decidedById], references: [id])
+
+  @@index([applicationId])
+  @@map("underwriting_decisions")
+}
+
+model Document {
+  id             String         @id @default(uuid())
+  applicationId  String
+  uploadedById   String
+  name           String
+  type           DocumentType
+  s3Key          String
+  url            String
+  uploadedAt     DateTime       @default(now())
+  status         DocumentStatus @default(PENDING)
+
+  application Application @relation(fields: [applicationId], references: [id])
+  uploadedBy  User        @relation(fields: [uploadedById], references: [id])
+
+  @@index([applicationId])
+  @@map("documents")
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  tenantId      String
+  userId        String
+  applicationId String?
+  action        String
+  metadata      Json
+  createdAt     DateTime @default(now())
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+  application Application? @relation(fields: [applicationId], references: [id])
+
+  @@index([tenantId])
+  @@index([applicationId])
+  @@index([userId])
+  @@map("audit_logs")
+}
