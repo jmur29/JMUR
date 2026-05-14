@@ -3,8 +3,6 @@ import { loginAsAdmin } from './helpers/auth';
 
 test.describe('Admin — User Management', () => {
   test.beforeEach(async ({ page }) => {
-    test.skip(!process.env.CLERK_TEST_ADMIN_TOKEN && !process.env.TEST_ADMIN_EMAIL,
-      'Auth credentials not set');
     await loginAsAdmin(page);
     await page.goto('/admin');
   });
@@ -21,8 +19,6 @@ test.describe('Admin — User Management', () => {
 
 test.describe('Admin — Pipeline Analytics', () => {
   test.beforeEach(async ({ page }) => {
-    test.skip(!process.env.CLERK_TEST_ADMIN_TOKEN && !process.env.TEST_ADMIN_EMAIL,
-      'Auth credentials not set');
     await loginAsAdmin(page);
     await page.goto('/admin/pipeline');
   });
@@ -42,8 +38,6 @@ test.describe('Admin — Pipeline Analytics', () => {
 
 test.describe('Admin — Audit Log', () => {
   test.beforeEach(async ({ page }) => {
-    test.skip(!process.env.CLERK_TEST_ADMIN_TOKEN && !process.env.TEST_ADMIN_EMAIL,
-      'Auth credentials not set');
     await loginAsAdmin(page);
     await page.goto('/admin/audit');
   });

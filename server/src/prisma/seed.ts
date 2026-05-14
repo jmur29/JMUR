@@ -5,6 +5,14 @@ import { generateFileNumber } from '../utils/fileNumber';
 
 const prisma = new PrismaClient();
 
+// Stable IDs used by e2e tests so Playwright can reference known users
+// without querying the database.
+export const SEED_IDS = {
+  TENANT_ID:     '00000000-0000-0000-0000-000000000001',
+  ADMIN_USER_ID: '00000000-0000-0000-0000-000000000002',
+  UW_USER_ID:    '00000000-0000-0000-0000-000000000003',
+} as const;
+
 async function main() {
   console.log('Seeding ClearPath UW database...');
 
@@ -12,6 +20,7 @@ async function main() {
   const tenant = await prisma.tenant.upsert({
     where: { slug: 'demo-cu' },
     create: {
+      id: SEED_IDS.TENANT_ID,
       name: 'Demo Credit Union',
       slug: 'demo-cu',
       primaryColor: '#1a56db',
@@ -27,6 +36,7 @@ async function main() {
   const adminUser = await prisma.user.upsert({
     where: { clerkId: 'user_admin_demo' },
     create: {
+      id: SEED_IDS.ADMIN_USER_ID,
       tenantId: tenant.id,
       clerkId: 'user_admin_demo',
       firstName: 'Admin',
@@ -46,6 +56,7 @@ async function main() {
   const uwUser = await prisma.user.upsert({
     where: { clerkId: 'user_uw_demo' },
     create: {
+      id: SEED_IDS.UW_USER_ID,
       tenantId: tenant.id,
       clerkId: 'user_uw_demo',
       firstName: 'Sarah',

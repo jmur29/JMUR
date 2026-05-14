@@ -35,6 +35,34 @@ export async function requireAuth(
   next: NextFunction
 ): Promise<void> {
   try {
+    // ── Test auth bypass ──────────────────────────────────────────────────────
+    // Only active when NODE_ENV=test AND TEST_AUTH_BYPASS=true.
+    // Playwright e2e tests set x-test-user-id to a seeded user's UUID.
+    if (
+      process.env.NODE_ENV === 'test' &&
+      process.env.TEST_AUTH_BYPASS === 'true'
+    ) {
+      const testUserId = req.headers['x-test-user-id'] as string | undefined;
+      if (testUserId) {
+        const user = await prisma.user.findUnique({
+          where: { id: testUserId },
+          select: { id: true, tenantId: true, clerkId: true, role: true, deletedAt: true },
+        });
+        if (user && !user.deletedAt) {
+          req.user = {
+            id: user.id,
+            tenantId: user.tenantId,
+            clerkId: user.clerkId,
+            role: user.role as 'ADMIN' | 'UNDERWRITER' | 'VIEWER',
+          };
+          return next();
+        }
+      }
+      res.status(401).json({ error: 'Test user not found', code: 'UNAUTHORIZED' });
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       res.status(401).json({ error: 'Missing bearer token', code: 'UNAUTHORIZED' });

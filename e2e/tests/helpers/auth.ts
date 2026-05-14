@@ -1,41 +1,29 @@
 import { Page } from '@playwright/test';
+import { SEED_IDS } from './fixtures';
 
-// Helper to set up a mock auth session via localStorage/cookie
-// In real e2e, this would use Clerk's testing tokens
+// Uses the server-side test auth bypass (x-test-user-id header).
+// The server accepts this when NODE_ENV=test && TEST_AUTH_BYPASS=true.
+// No Clerk tokens needed — works in CI against a seeded local database.
+
+async function setTestUser(page: Page, userId: string): Promise<void> {
+  // Intercept every outbound API call and inject the bypass header.
+  await page.route('**/api/**', async (route) => {
+    await route.continue({
+      headers: { ...route.request().headers(), 'x-test-user-id': userId },
+    });
+  });
+  await page.goto('/dashboard');
+  await page.waitForURL('**/dashboard', { timeout: 10_000 });
+}
+
 export async function loginAsAdmin(page: Page): Promise<void> {
-  // Clerk provides test tokens via CLERK_TEST_USER_TOKEN env var
-  // For CI: use Clerk's API to create a test session token
-  await page.goto('/sign-in');
-  // If CLERK_TEST_ADMIN_TOKEN is set, bypass UI login
-  const token = process.env.CLERK_TEST_ADMIN_TOKEN;
-  if (token) {
-    await page.evaluate((t) => {
-      window.localStorage.setItem('__clerk_test_token', t);
-    }, token);
-    await page.goto('/dashboard');
-  } else {
-    // UI login fallback
-    await page.fill('[name="identifier"]', process.env.TEST_ADMIN_EMAIL ?? 'admin@democu.ca');
-    await page.click('button[type="submit"]');
-    await page.fill('[name="password"]', process.env.TEST_ADMIN_PASSWORD ?? 'TestPass123!');
-    await page.click('button[type="submit"]');
-    await page.waitForURL('**/dashboard');
-  }
+  await setTestUser(page, SEED_IDS.ADMIN_USER_ID);
 }
 
 export async function loginAsUnderwriter(page: Page): Promise<void> {
-  await page.goto('/sign-in');
-  const token = process.env.CLERK_TEST_UW_TOKEN;
-  if (token) {
-    await page.evaluate((t) => {
-      window.localStorage.setItem('__clerk_test_token', t);
-    }, token);
-    await page.goto('/dashboard');
-  } else {
-    await page.fill('[name="identifier"]', process.env.TEST_UW_EMAIL ?? 'uw@democu.ca');
-    await page.click('button[type="submit"]');
-    await page.fill('[name="password"]', process.env.TEST_UW_PASSWORD ?? 'TestPass123!');
-    await page.click('button[type="submit"]');
-    await page.waitForURL('**/dashboard');
-  }
+  await setTestUser(page, SEED_IDS.UW_USER_ID);
+}
+
+export function adminHeaders(): Record<string, string> {
+  return { 'x-test-user-id': SEED_IDS.ADMIN_USER_ID };
 }

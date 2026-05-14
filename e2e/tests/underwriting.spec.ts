@@ -3,8 +3,6 @@ import { loginAsAdmin } from './helpers/auth';
 
 test.describe('Underwriting — Ratios Tab', () => {
   test.beforeEach(async ({ page }) => {
-    test.skip(!process.env.CLERK_TEST_ADMIN_TOKEN && !process.env.TEST_ADMIN_EMAIL,
-      'Auth credentials not set');
     await loginAsAdmin(page);
     // Navigate to a seeded application that has all data filled
     await page.goto('/applications');

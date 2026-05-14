@@ -71,14 +71,33 @@ jobs:
   e2e:
     name: E2E tests (Playwright)
     runs-on: ubuntu-latest
-    # Only run when E2E_ENABLED repo variable is 'true' AND a staging URL is set.
-    # To enable: set Actions variable E2E_ENABLED=true and secret E2E_BASE_URL
-    # in your repository settings.
-    if: vars.E2E_ENABLED == 'true'
-    continue-on-error: true   # never blocks merges — informational until staging is stable
-    defaults:
-      run:
-        working-directory: e2e
+    needs: [server, client]
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: clearpath
+          POSTGRES_PASSWORD: clearpath_test
+          POSTGRES_DB: clearpath_uw_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://clearpath:clearpath_test@localhost:5432/clearpath_uw_test
+      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      NODE_ENV: test
+      TEST_AUTH_BYPASS: "true"
+      CLERK_SECRET_KEY: sk_test_placeholder
+      CLERK_WEBHOOK_SECRET: whsec_placeholder
+      VITE_CLERK_PUBLISHABLE_KEY: pk_test_placeholder
+      VITE_API_URL: http://localhost:3001
+
     steps:
       - uses: actions/checkout@v4
 
@@ -86,20 +105,42 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: e2e/package-lock.json
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+            e2e/package-lock.json
 
-      - name: Install dependencies
+      - name: Install server dependencies
+        working-directory: server
         run: npm ci
 
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Install e2e dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: server
+        run: npx prisma generate
+
+      - name: Run database migrations
+        working-directory: server
+        run: npx prisma migrate deploy
+
+      - name: Seed database
+        working-directory: server
+        run: npm run db:seed
+
       - name: Install Playwright browsers
+        working-directory: e2e
         run: npx playwright install --with-deps chromium
 
       - name: Run Playwright tests
-        run: npm test -- --project=chromium
-        env:
-          BASE_URL: ${{ secrets.E2E_BASE_URL }}
-          CLERK_TEST_ADMIN_TOKEN: ${{ secrets.CLERK_TEST_ADMIN_TOKEN }}
-          CLERK_TEST_UW_TOKEN: ${{ secrets.CLERK_TEST_UW_TOKEN }}
+        working-directory: e2e
+        run: npx playwright test --project=chromium
 
       - uses: actions/upload-artifact@v4
         if: always()
