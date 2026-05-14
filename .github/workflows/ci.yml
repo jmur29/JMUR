@@ -126,9 +126,11 @@ jobs:
         working-directory: server
         run: npx prisma generate
 
-      - name: Run database migrations
+      - name: Push schema to test database
         working-directory: server
-        run: npx prisma migrate deploy
+        # prisma db push applies the schema directly — no migration files needed.
+        # Use this for ephemeral CI databases. Production uses migrate deploy.
+        run: npx prisma db push --accept-data-loss
 
       - name: Seed database
         working-directory: server
