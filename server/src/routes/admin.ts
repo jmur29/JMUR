@@ -94,4 +94,7 @@ router.post(
   ctrl.uploadLogo
 );
 
+// GET /admin/me — returns the currently authenticated user's profile
+router.get('/me', requireAuth, ctrl.getMe);
+
 export default router;

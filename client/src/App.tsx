@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { SignIn, SignUp, useAuth } from '@clerk/clerk-react';
 import AppLayout from './components/layout/AppLayout';
 import Dashboard from './pages/Dashboard';
 import ApplicationList from './pages/ApplicationList';
@@ -11,20 +10,26 @@ import Admin from './pages/Admin';
 import AdminPipeline from './pages/AdminPipeline';
 import AuditLog from './pages/AuditLog';
 import TenantSettings from './pages/TenantSettings';
-import { useApiAuth } from './lib/api';
+import { setTestUserId, useApiAuth } from './lib/api';
 import Spinner from './components/ui/Spinner';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import KeyboardShortcutsModal from './components/ui/KeyboardShortcutsModal';
+import { IS_DEV_AUTH, useDevAuth, DevLoginPage } from './lib/devAuth';
 
-function AuthSync() {
-  useApiAuth();
+// ─── Dev bypass app (no Clerk) ────────────────────────────────────────────────
+
+function DevAuthSync() {
+  const { userId } = useDevAuth();
   useKeyboardShortcuts();
+  useEffect(() => {
+    setTestUserId(userId);
+  }, [userId]);
   return null;
 }
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isLoaded, isSignedIn } = useAuth();
+function DevApp() {
+  const { isLoaded, isSignedIn } = useDevAuth();
 
   if (!isLoaded) {
     return (
@@ -34,56 +39,108 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isSignedIn) {
-    return <Navigate to="/sign-in" replace />;
-  }
+  if (!isSignedIn) return <DevLoginPage />;
 
-  return <>{children}</>;
+  return (
+    <>
+      <DevAuthSync />
+      <KeyboardShortcutsModal />
+      <AppLayout />
+    </>
+  );
 }
 
-function UnauthorizedListener() {
+// ─── Production app (Clerk) ───────────────────────────────────────────────────
+
+function ClerkApp() {
+  // Dynamic import so this file doesn't crash when Clerk isn't in the tree.
+  // These components are only rendered when ClerkProvider is present.
+  const [ClerkComponents, setClerkComponents] = React.useState<{
+    SignIn: React.ComponentType<Record<string, unknown>>;
+    SignUp: React.ComponentType<Record<string, unknown>>;
+    useAuth: () => { isLoaded: boolean; isSignedIn: boolean | undefined; getToken: () => Promise<string | null> };
+  } | null>(null);
+
   useEffect(() => {
-    const handler = () => {
-      window.location.href = '/sign-in';
-    };
-    window.addEventListener('clearpath:unauthorized', handler);
-    return () => window.removeEventListener('clearpath:unauthorized', handler);
+    import('@clerk/clerk-react').then((m) => {
+      setClerkComponents({
+        SignIn: m.SignIn as React.ComponentType<Record<string, unknown>>,
+        SignUp: m.SignUp as React.ComponentType<Record<string, unknown>>,
+        useAuth: m.useAuth as () => { isLoaded: boolean; isSignedIn: boolean | undefined; getToken: () => Promise<string | null> },
+      });
+    });
   }, []);
+
+  if (!ClerkComponents) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  return <ClerkAppInner ClerkComponents={ClerkComponents} />;
+}
+
+function ClerkAuthSync({ getToken }: { getToken: () => Promise<string | null> }) {
+  useApiAuth(getToken);
+  useKeyboardShortcuts();
   return null;
 }
 
-export default function App() {
-  return (
-    <>
-      <UnauthorizedListener />
-      <ErrorBoundary>
-      <Routes>
-        {/* Public auth routes */}
-        <Route
-          path="/sign-in/*"
-          element={
-            <div className="flex items-center justify-center min-h-screen bg-slate-50">
-              <SignIn routing="path" path="/sign-in" afterSignInUrl="/dashboard" />
-            </div>
-          }
-        />
-        <Route
-          path="/sign-up/*"
-          element={
-            <div className="flex items-center justify-center min-h-screen bg-slate-50">
-              <SignUp routing="path" path="/sign-up" afterSignUpUrl="/dashboard" />
-            </div>
-          }
-        />
+// Inner component lives inside ClerkProvider — safe to call useAuth() directly
+function ClerkAppInner({
+  ClerkComponents,
+}: {
+  ClerkComponents: {
+    SignIn: React.ComponentType<Record<string, unknown>>;
+    SignUp: React.ComponentType<Record<string, unknown>>;
+    useAuth: () => { isLoaded: boolean; isSignedIn: boolean | undefined; getToken: () => Promise<string | null> };
+  };
+}) {
+  const { SignIn, SignUp, useAuth } = ClerkComponents;
+  const { isLoaded, isSignedIn, getToken } = useAuth();
 
-        {/* Protected routes */}
+  useEffect(() => {
+    const handler = () => { window.location.href = '/sign-in'; };
+    window.addEventListener('clearpath:unauthorized', handler);
+    return () => window.removeEventListener('clearpath:unauthorized', handler);
+  }, []);
+
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  return (
+    <Routes>
+      <Route
+        path="/sign-in/*"
+        element={
+          <div className="flex items-center justify-center min-h-screen bg-slate-50">
+            <SignIn routing="path" path="/sign-in" afterSignInUrl="/dashboard" />
+          </div>
+        }
+      />
+      <Route
+        path="/sign-up/*"
+        element={
+          <div className="flex items-center justify-center min-h-screen bg-slate-50">
+            <SignUp routing="path" path="/sign-up" afterSignUpUrl="/dashboard" />
+          </div>
+        }
+      />
+      {isSignedIn && (
         <Route
           element={
-            <ProtectedRoute>
-              <AuthSync />
+            <>
+              <ClerkAuthSync getToken={getToken} />
               <KeyboardShortcutsModal />
               <AppLayout />
-            </ProtectedRoute>
+            </>
           }
         >
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -97,11 +154,28 @@ export default function App() {
           <Route path="/admin/audit" element={<AuditLog />} />
           <Route path="/admin/settings" element={<TenantSettings />} />
         </Route>
+      )}
+      <Route path="*" element={<Navigate to={isSignedIn ? '/dashboard' : '/sign-in'} replace />} />
+    </Routes>
+  );
+}
 
-        {/* Catch-all */}
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
+// ─── Root ─────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  if (IS_DEV_AUTH) {
+    return (
+      <ErrorBoundary>
+        <Routes>
+          <Route path="*" element={<DevApp />} />
+        </Routes>
       </ErrorBoundary>
-    </>
+    );
+  }
+
+  return (
+    <ErrorBoundary>
+      <ClerkApp />
+    </ErrorBoundary>
   );
 }

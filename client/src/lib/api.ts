@@ -1,5 +1,4 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
-import { useAuth } from '@clerk/clerk-react';
 import { useRef, useEffect } from 'react';
 import type {
   Application,
@@ -46,13 +45,21 @@ export const apiClient: AxiosInstance = axios.create({
 // The Clerk token is injected per-request via the hook below.
 // For non-hook contexts the token can be set globally.
 let _authToken: string | null = null;
+let _testUserId: string | null = null;
 
 export function setAuthToken(token: string | null) {
   _authToken = token;
 }
 
+// Dev bypass: inject x-test-user-id header instead of Bearer token
+export function setTestUserId(id: string | null) {
+  _testUserId = id;
+}
+
 apiClient.interceptors.request.use((config) => {
-  if (_authToken) {
+  if (_testUserId) {
+    config.headers['x-test-user-id'] = _testUserId;
+  } else if (_authToken) {
     config.headers.Authorization = `Bearer ${_authToken}`;
   }
   return config;
@@ -71,13 +78,15 @@ apiClient.interceptors.response.use(
 );
 
 // ---------------------------------------------------------------------------
-// Hook: keeps the auth token refreshed
+// Hook: keeps the Clerk auth token refreshed (production only — requires ClerkProvider)
 // ---------------------------------------------------------------------------
-export function useApiAuth() {
-  const { getToken } = useAuth();
+// Safe to call only inside a ClerkProvider tree.
+// Accepts getToken from the caller so this file doesn't import Clerk.
+export function useApiAuth(getToken?: () => Promise<string | null>) {
   const interval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    if (!getToken) return;
     const refresh = async () => {
       const token = await getToken();
       setAuthToken(token);

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, useLocation, NavLink } from 'react-router-dom';
-import { useClerk, useUser } from '@clerk/clerk-react';
 import { Menu, X, LogOut, ChevronRight } from 'lucide-react';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import Sidebar from './Sidebar';
 import NotificationBell from './NotificationBell';
 import { cn } from '../../lib/utils';
@@ -41,8 +41,7 @@ function useBreadcrumbs() {
 
 export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { signOut } = useClerk();
-  const { user } = useUser();
+  const { user, signOut } = useCurrentUser();
   const crumbs = useBreadcrumbs();
 
   return (
@@ -116,7 +115,7 @@ export default function AppLayout() {
               </span>
             )}
             <button
-              onClick={() => signOut({ redirectUrl: '/sign-in' })}
+              onClick={() => signOut()}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-600',
                 'hover:bg-slate-100 hover:text-slate-800 transition-colors'

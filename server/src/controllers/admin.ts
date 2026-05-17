@@ -121,3 +121,16 @@ export async function uploadLogo(req: Request, res: Response, next: NextFunction
     next(err);
   }
 }
+
+export async function getMe(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    res.json({
+      id: req.user.id,
+      tenantId: req.user.tenantId,
+      clerkId: req.user.clerkId,
+      role: req.user.role,
+    });
+  } catch (err) {
+    next(err);
+  }
+}

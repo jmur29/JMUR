@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { useUser } from '@clerk/clerk-react';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { usePermissions } from '../../hooks/usePermissions';
 import {
   LayoutDashboard,
   FileText,
@@ -73,13 +74,11 @@ interface SidebarProps {
 
 export default function Sidebar({ collapsed = false, onClose }: SidebarProps) {
   const location = useLocation();
-  const { user } = useUser();
+  const { user } = useCurrentUser();
+  const { role } = usePermissions();
   const [adminOpen, setAdminOpen] = useState(
     location.pathname.startsWith('/admin')
   );
-
-  // Read role from Clerk publicMetadata
-  const role = (user?.publicMetadata?.role as string) ?? 'VIEWER';
   const isAdmin = role === 'ADMIN';
 
   return (
@@ -183,7 +182,7 @@ export default function Sidebar({ collapsed = false, onClose }: SidebarProps) {
                 {user.firstName} {user.lastName}
               </p>
               <p className="text-xs text-slate-400 truncate">
-                {(user.publicMetadata?.role as string) ?? 'VIEWER'}
+                {role}
               </p>
             </div>
           </div>
