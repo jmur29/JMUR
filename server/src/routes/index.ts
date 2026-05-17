@@ -12,6 +12,9 @@ import reportsRouter from './reports';
 import adminRouter from './admin';
 import notesRouter from './notes';
 import conditionsRouter from './conditions';
+import pipelineRouter from './pipeline';
+import aiInsightsRouter from './aiInsights';
+import dashboardsRouter from './dashboards';
 import { openApiSpec } from '../openapi';
 
 const router = Router();
@@ -63,5 +66,14 @@ router.use('/notes', notesRouter);
 router.use('/applications/:id/conditions', conditionsRouter);
 // Standalone condition operations (patch/delete by conditionId)
 router.use('/conditions', conditionsRouter);
+
+// AI pipeline — POST /applications/:id/process, GET /applications/:id/process/status
+router.use('/applications/:id/process', pipelineRouter);
+
+// AI insights (documents, down payment, fraud, credit memo, submission notes, conditions)
+router.use('/applications/:id', aiInsightsRouter);
+
+// Dashboards
+router.use('/dashboard', dashboardsRouter);
 
 export default router;
