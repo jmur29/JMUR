@@ -27,9 +27,12 @@ import { StatCard } from '../components/ui/Card';
 import StatusBadge from '../components/ui/StatusBadge';
 import Spinner from '../components/ui/Spinner';
 import Button from '../components/ui/Button';
+import Tabs from '../components/ui/Tabs';
 import { formatDate, formatPercent, getPrimaryBorrower, cn } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 import type { ApplicationStatus } from '../types';
+import BrokerDashboard from '../components/dashboard/BrokerDashboard';
+import LenderDashboard from '../components/dashboard/LenderDashboard';
 
 // ─── GDS ratio pill ───────────────────────────────────────────────────────────
 
@@ -51,6 +54,8 @@ function GdsPill({ gds }: { gds: number }) {
 
 const STATUS_COLOR: Record<ApplicationStatus, string> = {
   DRAFT: '#94a3b8',
+  READY_TO_SUBMIT: '#6366f1',
+  SUBMITTED: '#8b5cf6',
   IN_REVIEW: '#3b82f6',
   APPROVED: '#22c55e',
   CONDITIONALLY_APPROVED: '#f59e0b',
@@ -59,6 +64,8 @@ const STATUS_COLOR: Record<ApplicationStatus, string> = {
 
 const STATUS_LABEL: Record<ApplicationStatus, string> = {
   DRAFT: 'Draft',
+  READY_TO_SUBMIT: 'Ready',
+  SUBMITTED: 'Submitted',
   IN_REVIEW: 'In Review',
   APPROVED: 'Approved',
   CONDITIONALLY_APPROVED: 'Conditional',
@@ -164,12 +171,15 @@ function QuickActions() {
   );
 }
 
-// ─── Dashboard ────────────────────────────────────────────────────────────────
+// ─── Pipeline view (ADMIN / VIEWER default) ───────────────────────────────────
 
-export default function Dashboard() {
-  const { user } = useUser();
-  const [assignedToMe, setAssignedToMe] = useState(false);
-
+function AdminPipelineView({
+  assignedToMe,
+  setAssignedToMe,
+}: {
+  assignedToMe: boolean;
+  setAssignedToMe: (v: boolean) => void;
+}) {
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['pipeline-stats'],
     queryFn: adminApi.getPipelineStats,
@@ -187,21 +197,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">
-            Welcome back, {user?.firstName ?? 'Underwriter'}
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Here's an overview of your mortgage pipeline.
-          </p>
-        </div>
-        <Link to="/applications/new">
-          <Button leftIcon={<FileText size={16} />}>New Application</Button>
-        </Link>
-      </div>
-
       {/* Stat cards */}
       {statsLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -355,6 +350,100 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
+export default function Dashboard() {
+  const { user } = useUser();
+  const [assignedToMe, setAssignedToMe] = useState(false);
+  const [adminTab, setAdminTab] = useState<'broker' | 'lender' | 'pipeline'>('pipeline');
+  const { role, isAdmin } = usePermissions();
+
+  // Broker persona
+  if (role === 'BROKER') {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">
+            Welcome back, {user?.firstName ?? 'Broker'}
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">Your mortgage pipeline overview.</p>
+        </div>
+        <BrokerDashboard />
+      </div>
+    );
+  }
+
+  // Underwriter persona
+  if (role === 'UNDERWRITER') {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">
+            Welcome back, {user?.firstName ?? 'Underwriter'}
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">Review queue and pipeline overview.</p>
+        </div>
+        <LenderDashboard />
+      </div>
+    );
+  }
+
+  // ADMIN: full multi-persona view
+  if (isAdmin) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">
+              Welcome back, {user?.firstName ?? 'Admin'}
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">Full pipeline & persona overview.</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+          <Tabs
+            tabs={[
+              { id: 'pipeline', label: 'Pipeline' },
+              { id: 'broker', label: 'Broker View' },
+              { id: 'lender', label: 'Lender View' },
+            ]}
+            activeTab={adminTab}
+            onChange={(id) => setAdminTab(id as 'broker' | 'lender' | 'pipeline')}
+            className="px-4"
+          />
+          <div className="p-6">
+            {adminTab === 'broker' && <BrokerDashboard />}
+            {adminTab === 'lender' && <LenderDashboard />}
+            {adminTab === 'pipeline' && (
+              <AdminPipelineView assignedToMe={assignedToMe} setAssignedToMe={setAssignedToMe} />
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // VIEWER: default pipeline view
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">
+            Welcome back, {user?.firstName ?? 'Viewer'}
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Here's an overview of the mortgage pipeline.
+          </p>
+        </div>
+        <Link to="/applications/new">
+          <Button leftIcon={<FileText size={16} />}>New Application</Button>
+        </Link>
+      </div>
+      <AdminPipelineView assignedToMe={assignedToMe} setAssignedToMe={setAssignedToMe} />
     </div>
   );
 }

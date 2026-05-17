@@ -9,15 +9,23 @@ import type {
   ApprovalCondition,
   AuditLog,
   Borrower,
+  BrokerStats,
+  ClassifiedDocument,
+  CreditMemo,
   Document,
   DocumentStatus,
   DocumentType,
+  DownPaymentEntry,
+  FraudSignal,
   Income,
+  LenderStats,
   MortgageTerms,
   PaginatedResponse,
   PipelineStats,
+  PipelineStatus,
   Property,
   SaveDecisionPayload,
+  SubmissionNote,
   Tenant,
   User,
   UserRole,
@@ -356,6 +364,95 @@ export const adminApi = {
     return apiClient
       .get<string>('/admin/export', { params, responseType: 'text' })
       .then((r) => r.data);
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Processing pipeline
+// ---------------------------------------------------------------------------
+export const pipelineApi = {
+  start(appId: string): Promise<{ started: boolean }> {
+    return apiClient
+      .post<{ started: boolean }>(`/applications/${appId}/process`)
+      .then((r) => r.data);
+  },
+
+  getStatus(appId: string): Promise<PipelineStatus> {
+    return apiClient
+      .get<PipelineStatus>(`/applications/${appId}/process/status`)
+      .then((r) => r.data);
+  },
+};
+
+// ---------------------------------------------------------------------------
+// AI Insights
+// ---------------------------------------------------------------------------
+export const aiApi = {
+  getClassifiedDocuments(appId: string): Promise<ClassifiedDocument[]> {
+    return apiClient
+      .get<ClassifiedDocument[]>(`/applications/${appId}/documents/classified`)
+      .then((r) => r.data);
+  },
+
+  getDownPayment(appId: string): Promise<DownPaymentEntry[]> {
+    return apiClient
+      .get<DownPaymentEntry[]>(`/applications/${appId}/down-payment`)
+      .then((r) => r.data);
+  },
+
+  getFraudSignals(appId: string): Promise<FraudSignal[]> {
+    return apiClient
+      .get<FraudSignal[]>(`/applications/${appId}/fraud-signals`)
+      .then((r) => r.data);
+  },
+
+  acknowledgeFraudSignal(appId: string, signalId: string): Promise<FraudSignal> {
+    return apiClient
+      .post<FraudSignal>(`/applications/${appId}/fraud-signals/${signalId}/acknowledge`)
+      .then((r) => r.data);
+  },
+
+  getCreditMemo(appId: string): Promise<CreditMemo | null> {
+    return apiClient
+      .get<CreditMemo | null>(`/applications/${appId}/credit-memo`)
+      .then((r) => r.data);
+  },
+
+  generateCreditMemoPdf(appId: string): Promise<{ url: string }> {
+    return apiClient
+      .post<{ url: string }>(`/applications/${appId}/credit-memo/pdf`)
+      .then((r) => r.data);
+  },
+
+  getSubmissionNotes(appId: string): Promise<SubmissionNote | null> {
+    return apiClient
+      .get<SubmissionNote | null>(`/applications/${appId}/submission-notes`)
+      .then((r) => r.data);
+  },
+
+  generateSubmissionNotes(appId: string, lenderTarget: string): Promise<SubmissionNote> {
+    return apiClient
+      .post<SubmissionNote>(`/applications/${appId}/submission-notes/generate`, { lenderTarget })
+      .then((r) => r.data);
+  },
+
+  finalizeSubmissionNotes(appId: string): Promise<SubmissionNote> {
+    return apiClient
+      .post<SubmissionNote>(`/applications/${appId}/submission-notes/finalize`)
+      .then((r) => r.data);
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Role-based dashboards
+// ---------------------------------------------------------------------------
+export const dashboardApi = {
+  getBrokerStats(): Promise<BrokerStats> {
+    return apiClient.get<BrokerStats>('/dashboard/broker').then((r) => r.data);
+  },
+
+  getLenderStats(): Promise<LenderStats> {
+    return apiClient.get<LenderStats>('/dashboard/lender').then((r) => r.data);
   },
 };
 

@@ -1,6 +1,8 @@
-export type UserRole = 'ADMIN' | 'UNDERWRITER' | 'VIEWER';
+export type UserRole = 'ADMIN' | 'UNDERWRITER' | 'BROKER' | 'VIEWER';
 export type ApplicationStatus =
   | 'DRAFT'
+  | 'READY_TO_SUBMIT'
+  | 'SUBMITTED'
   | 'IN_REVIEW'
   | 'APPROVED'
   | 'DECLINED'
@@ -282,4 +284,115 @@ export interface AuditLog {
     lastName: string;
     email: string;
   };
+}
+
+// ---------------------------------------------------------------------------
+// AI / Pipeline types
+// ---------------------------------------------------------------------------
+
+export type PipelineStage =
+  | 'PENDING'
+  | 'OCR'
+  | 'CLASSIFYING'
+  | 'SOURCING_DOWN_PAYMENT'
+  | 'FRAUD_CHECK'
+  | 'GENERATING_CREDIT_MEMO'
+  | 'COMPLETE'
+  | 'ERROR';
+
+export interface PipelineStatus {
+  applicationId: string;
+  stage: PipelineStage;
+  progress: number;
+  startedAt: string;
+  completedAt?: string;
+  errorMessage?: string;
+}
+
+export interface ClassifiedDocument {
+  id: string;
+  name: string;
+  type: DocumentType;
+  uploadedAt: string;
+  classification: {
+    classifiedType: string;
+    confidence: number;
+    extractedFields: Record<string, string>;
+  } | null;
+}
+
+export type DownPaymentCategory =
+  | 'PAYROLL'
+  | 'ETRANSFER'
+  | 'WIRE'
+  | 'CASH'
+  | 'INVESTMENT'
+  | 'GIFT'
+  | 'GOVERNMENT'
+  | 'UNKNOWN';
+
+export interface DownPaymentEntry {
+  id: string;
+  transactionDate: string;
+  description: string;
+  amount: number;
+  runningBalance: number;
+  category: DownPaymentCategory;
+  isFlagged: boolean;
+  flagReason: string | null;
+  loeRequired: boolean;
+  loeDraftText: string | null;
+}
+
+export type FraudSeverity = 'HIGH' | 'MEDIUM' | 'LOW';
+
+export interface FraudSignal {
+  id: string;
+  documentId: string;
+  documentName: string;
+  signalType: string;
+  severity: FraudSeverity;
+  evidence: string;
+  recommendedAction: string;
+  aiExplanation: string;
+  acknowledgedAt: string | null;
+}
+
+export interface CreditMemo {
+  gds: number;
+  tds: number;
+  qualifyingRate: number;
+  downPaymentTotal: number;
+  downPaymentSourced: boolean;
+  flagCount: number;
+  fraudSignalCount: number;
+  narrative: string;
+  recommendedConditions: string[];
+  pdfS3Key: string | null;
+}
+
+export interface SubmissionNote {
+  draftText: string;
+  lenderTarget: string;
+  anticipatedConditions: string[];
+  isFinalized: boolean;
+  finalizedAt?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard stats
+// ---------------------------------------------------------------------------
+
+export interface BrokerStats {
+  activeFiles: number;
+  submittedThisMonth: number;
+  avgConditionsPerFile: number;
+  filesWithOpenFlags: number;
+}
+
+export interface LenderStats {
+  filesInReview: number;
+  approvedThisMonth: number;
+  manualReviewQueue: number;
+  highSeverityFraudSignals: number;
 }

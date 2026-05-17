@@ -53,10 +53,12 @@ export function formatDateTime(iso: string): string {
 export function getStatusColor(status: ApplicationStatus): string {
   const map: Record<ApplicationStatus, string> = {
     DRAFT: 'bg-slate-100 text-slate-700',
-    IN_REVIEW: 'bg-blue-100 text-blue-700',
+    READY_TO_SUBMIT: 'bg-blue-100 text-blue-700',
+    SUBMITTED: 'bg-indigo-100 text-indigo-700',
+    IN_REVIEW: 'bg-amber-100 text-amber-700',
     APPROVED: 'bg-green-100 text-green-700',
     DECLINED: 'bg-red-100 text-red-700',
-    CONDITIONALLY_APPROVED: 'bg-amber-100 text-amber-700',
+    CONDITIONALLY_APPROVED: 'bg-orange-100 text-orange-700',
   };
   return map[status] ?? 'bg-slate-100 text-slate-700';
 }
@@ -64,6 +66,8 @@ export function getStatusColor(status: ApplicationStatus): string {
 export function getStatusLabel(status: ApplicationStatus): string {
   const map: Record<ApplicationStatus, string> = {
     DRAFT: 'Draft',
+    READY_TO_SUBMIT: 'Ready to Submit',
+    SUBMITTED: 'Submitted',
     IN_REVIEW: 'In Review',
     APPROVED: 'Approved',
     DECLINED: 'Declined',

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   User,
   Home,
@@ -10,14 +11,25 @@ import {
   Files,
   ArrowLeft,
   Printer,
+  Brain,
+  CreditCard,
+  ShieldAlert,
+  Landmark,
+  ScrollText,
+  ClipboardList,
+  Play,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useApplication } from '../hooks/useApplication';
 import { usePermissions } from '../hooks/usePermissions';
+import { pipelineApi } from '../lib/api';
 import Tabs from '../components/ui/Tabs';
 import StatusBadge from '../components/ui/StatusBadge';
 import Spinner from '../components/ui/Spinner';
 import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
 import Breadcrumb from '../components/ui/Breadcrumb';
+import ProcessingPipeline from '../components/ui/ProcessingPipeline';
 import { formatDate } from '../lib/utils';
 
 import BorrowerTab from '../components/application/BorrowerTab';
@@ -29,22 +41,20 @@ import RatiosTab from '../components/application/RatiosTab';
 import DecisionTab from '../components/application/DecisionTab';
 import NotesTimeline from '../components/application/NotesTimeline';
 import AssignmentSelector from '../components/application/AssignmentSelector';
-
-const TABS = [
-  { id: 'borrower', label: 'Borrower', icon: <User size={15} /> },
-  { id: 'income', label: 'Income', icon: <DollarSign size={15} /> },
-  { id: 'property', label: 'Property', icon: <Home size={15} /> },
-  { id: 'terms', label: 'Terms', icon: <FileText size={15} /> },
-  { id: 'documents', label: 'Documents', icon: <Files size={15} /> },
-  { id: 'ratios', label: 'Ratios', icon: <BarChart2 size={15} /> },
-  { id: 'decision', label: 'Decision', icon: <CheckSquare size={15} /> },
-];
+import ClassifiedDocumentsTab from '../components/application/ClassifiedDocumentsTab';
+import DownPaymentTab from '../components/application/DownPaymentTab';
+import FraudSignalsTab from '../components/application/FraudSignalsTab';
+import CreditMemoTab from '../components/application/CreditMemoTab';
+import SubmissionNotesTab from '../components/application/SubmissionNotesTab';
+import AiAuditTab from '../components/application/AiAuditTab';
 
 export default function ApplicationDetail() {
   const { id } = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState('borrower');
+  const [pipelineModalOpen, setPipelineModalOpen] = useState(false);
   const { data: application, isLoading, error } = useApplication(id ?? '');
-  const { role } = usePermissions();
+  const { role, isUnderwriter } = usePermissions();
+  const queryClient = useQueryClient();
 
   if (!id) return null;
 
@@ -68,6 +78,45 @@ export default function ApplicationDetail() {
   }
 
   const primary = application.borrowers.find((b) => b.type === 'PRIMARY');
+  const isBroker = role === 'BROKER';
+
+  const baseTabs = [
+    { id: 'borrower', label: 'Borrower', icon: <User size={15} /> },
+    { id: 'income', label: 'Income', icon: <DollarSign size={15} /> },
+    { id: 'property', label: 'Property', icon: <Home size={15} /> },
+    { id: 'terms', label: 'Terms', icon: <FileText size={15} /> },
+    { id: 'documents', label: 'Documents', icon: <Files size={15} />, badge: application.documents.length > 0 ? application.documents.length : undefined },
+    { id: 'ratios', label: 'Ratios', icon: <BarChart2 size={15} /> },
+    { id: 'decision', label: 'Decision', icon: <CheckSquare size={15} /> },
+    { id: 'classified-documents', label: 'AI Docs', icon: <Brain size={15} /> },
+    { id: 'down-payment', label: 'Down Payment', icon: <Landmark size={15} /> },
+    { id: 'fraud-signals', label: 'Fraud Signals', icon: <ShieldAlert size={15} /> },
+    { id: 'credit-memo', label: 'Credit Memo', icon: <CreditCard size={15} /> },
+    { id: 'ai-audit', label: 'AI Audit', icon: <ClipboardList size={15} /> },
+  ];
+
+  const tabs = isBroker
+    ? [...baseTabs, { id: 'submission-notes', label: 'Submission Notes', icon: <ScrollText size={15} /> }]
+    : baseTabs;
+
+  const handleRunAiReview = async () => {
+    try {
+      await pipelineApi.start(id);
+      setPipelineModalOpen(true);
+    } catch {
+      toast.error('Failed to start AI Review');
+    }
+  };
+
+  const handlePipelineComplete = () => {
+    setPipelineModalOpen(false);
+    toast.success('AI Review complete');
+    void queryClient.invalidateQueries({ queryKey: ['classified-documents', id] });
+    void queryClient.invalidateQueries({ queryKey: ['down-payment', id] });
+    void queryClient.invalidateQueries({ queryKey: ['fraud-signals', id] });
+    void queryClient.invalidateQueries({ queryKey: ['credit-memo', id] });
+    void queryClient.invalidateQueries({ queryKey: ['pipeline-status', id] });
+  };
 
   return (
     <div className="space-y-6">
@@ -106,6 +155,14 @@ export default function ApplicationDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            leftIcon={<Play size={14} />}
+            onClick={() => void handleRunAiReview()}
+          >
+            Run AI Review
+          </Button>
           <Link to={`/applications/${id}/report`}>
             <Button size="sm" variant="secondary" leftIcon={<Printer size={14} />}>
               Report
@@ -114,44 +171,52 @@ export default function ApplicationDetail() {
         </div>
       </div>
 
+      {/* Processing Pipeline Modal */}
+      <Modal
+        isOpen={pipelineModalOpen}
+        onClose={() => setPipelineModalOpen(false)}
+        title="AI Review in Progress"
+        size="md"
+      >
+        <ProcessingPipeline applicationId={id} onComplete={handlePipelineComplete} />
+      </Modal>
+
       {/* Main content + Notes sidebar */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Tabs — takes 2/3 on desktop */}
         <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
           <Tabs
-            tabs={TABS.map((t) => ({
-              ...t,
-              badge:
-                t.id === 'documents' && application.documents.length > 0
-                  ? application.documents.length
-                  : undefined,
-            }))}
+            tabs={tabs}
             activeTab={activeTab}
             onChange={setActiveTab}
             className="px-4"
           />
 
           <div className="p-6">
-            {activeTab === 'borrower' && (
-              <BorrowerTab application={application} />
+            {activeTab === 'borrower' && <BorrowerTab application={application} />}
+            {activeTab === 'income' && <IncomeTab application={application} />}
+            {activeTab === 'property' && <PropertyTab application={application} />}
+            {activeTab === 'terms' && <TermsTab application={application} />}
+            {activeTab === 'documents' && <DocumentsTab application={application} />}
+            {activeTab === 'ratios' && <RatiosTab application={application} />}
+            {activeTab === 'decision' && <DecisionTab application={application} />}
+            {activeTab === 'classified-documents' && (
+              <ClassifiedDocumentsTab applicationId={application.id} />
             )}
-            {activeTab === 'income' && (
-              <IncomeTab application={application} />
+            {activeTab === 'down-payment' && (
+              <DownPaymentTab applicationId={application.id} />
             )}
-            {activeTab === 'property' && (
-              <PropertyTab application={application} />
+            {activeTab === 'fraud-signals' && (
+              <FraudSignalsTab applicationId={application.id} isUnderwriter={isUnderwriter} />
             )}
-            {activeTab === 'terms' && (
-              <TermsTab application={application} />
+            {activeTab === 'credit-memo' && (
+              <CreditMemoTab applicationId={application.id} />
             )}
-            {activeTab === 'documents' && (
-              <DocumentsTab application={application} />
+            {activeTab === 'ai-audit' && (
+              <AiAuditTab applicationId={application.id} />
             )}
-            {activeTab === 'ratios' && (
-              <RatiosTab application={application} />
-            )}
-            {activeTab === 'decision' && (
-              <DecisionTab application={application} />
+            {activeTab === 'submission-notes' && isBroker && (
+              <SubmissionNotesTab applicationId={application.id} />
             )}
           </div>
         </div>

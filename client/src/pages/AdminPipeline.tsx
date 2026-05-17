@@ -22,6 +22,8 @@ import { formatPercent, getStatusLabel } from '../lib/utils';
 
 const STATUS_COLORS: Record<ApplicationStatus, string> = {
   DRAFT: '#94a3b8',
+  READY_TO_SUBMIT: '#6366f1',
+  SUBMITTED: '#8b5cf6',
   IN_REVIEW: '#3b82f6',
   APPROVED: '#22c55e',
   DECLINED: '#ef4444',

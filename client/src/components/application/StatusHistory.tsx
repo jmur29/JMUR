@@ -9,6 +9,8 @@ import { cn, getStatusLabel } from '../../lib/utils';
 
 const STATUS_DOT_COLORS: Record<ApplicationStatus, string> = {
   DRAFT: 'bg-slate-400',
+  READY_TO_SUBMIT: 'bg-blue-400',
+  SUBMITTED: 'bg-indigo-500',
   IN_REVIEW: 'bg-blue-500',
   APPROVED: 'bg-green-500',
   DECLINED: 'bg-red-500',
