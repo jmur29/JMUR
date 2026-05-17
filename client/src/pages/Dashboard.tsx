@@ -1,14 +1,170 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useUser } from '@clerk/clerk-react';
-import { FileText, CheckCircle, Clock, TrendingUp, ExternalLink } from 'lucide-react';
+import {
+  FileText,
+  CheckCircle,
+  Clock,
+  TrendingUp,
+  ExternalLink,
+  Plus,
+  BarChart2,
+  BookOpen,
+} from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts';
+import { formatDistanceToNow, parseISO } from 'date-fns';
 import { applicationsApi, adminApi } from '../lib/api';
 import { StatCard } from '../components/ui/Card';
 import StatusBadge from '../components/ui/StatusBadge';
 import Spinner from '../components/ui/Spinner';
 import Button from '../components/ui/Button';
-import { formatDate, formatPercent, getPrimaryBorrower } from '../lib/utils';
+import { formatDate, formatPercent, getPrimaryBorrower, cn } from '../lib/utils';
+import { usePermissions } from '../hooks/usePermissions';
+import type { ApplicationStatus } from '../types';
+
+// ─── GDS ratio pill ───────────────────────────────────────────────────────────
+
+function GdsPill({ gds }: { gds: number }) {
+  const cls =
+    gds < 35
+      ? 'bg-green-100 text-green-700'
+      : gds <= 39
+      ? 'bg-amber-100 text-amber-700'
+      : 'bg-red-100 text-red-700';
+  return (
+    <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold', cls)}>
+      {gds.toFixed(1)}%
+    </span>
+  );
+}
+
+// ─── Status distribution chart ────────────────────────────────────────────────
+
+const STATUS_COLOR: Record<ApplicationStatus, string> = {
+  DRAFT: '#94a3b8',
+  IN_REVIEW: '#3b82f6',
+  APPROVED: '#22c55e',
+  CONDITIONALLY_APPROVED: '#f59e0b',
+  DECLINED: '#ef4444',
+};
+
+const STATUS_LABEL: Record<ApplicationStatus, string> = {
+  DRAFT: 'Draft',
+  IN_REVIEW: 'In Review',
+  APPROVED: 'Approved',
+  CONDITIONALLY_APPROVED: 'Conditional',
+  DECLINED: 'Declined',
+};
+
+interface ChartDatum {
+  status: ApplicationStatus;
+  label: string;
+  count: number;
+  color: string;
+}
+
+function StatusDistributionChart({
+  volumeByStatus,
+}: {
+  volumeByStatus: Partial<Record<ApplicationStatus, number>>;
+}) {
+  const data: ChartDatum[] = (
+    Object.entries(volumeByStatus) as [ApplicationStatus, number][]
+  )
+    .filter(([, count]) => count > 0)
+    .map(([status, count]) => ({
+      status,
+      label: STATUS_LABEL[status],
+      count,
+      color: STATUS_COLOR[status],
+    }));
+
+  if (!data.length) return null;
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-6 py-4">
+      <h2 className="text-sm font-semibold text-slate-700 mb-3">Volume by Status</h2>
+      <ResponsiveContainer width="100%" height={160}>
+        <BarChart data={data} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 11, fill: '#64748b' }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            formatter={(value: number) => [value, 'Files']}
+            contentStyle={{ fontSize: 12, borderRadius: 6, border: '1px solid #e2e8f0' }}
+          />
+          <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+            {data.map((entry) => (
+              <Cell key={entry.status} fill={entry.color} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ─── Quick Actions bar ────────────────────────────────────────────────────────
+
+function QuickActions() {
+  const navigate = useNavigate();
+  const { isAdmin } = usePermissions();
+
+  const actions: {
+    label: string;
+    icon: ReactNode;
+    onClick: () => void;
+    adminOnly?: boolean;
+  }[] = [
+    {
+      label: 'New Application',
+      icon: <Plus size={18} />,
+      onClick: () => navigate('/applications/new'),
+    },
+    {
+      label: 'Run Report',
+      icon: <BarChart2 size={18} />,
+      onClick: () => navigate('/admin/pipeline'),
+    },
+    {
+      label: 'Audit Log',
+      icon: <BookOpen size={18} />,
+      onClick: () => navigate('/admin/audit'),
+      adminOnly: true,
+    },
+  ];
+
+  const visible = actions.filter((a) => !a.adminOnly || isAdmin);
+
+  return (
+    <div className="flex flex-wrap gap-3">
+      {visible.map((action) => (
+        <button
+          key={action.label}
+          onClick={action.onClick}
+          className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-lg shadow-sm text-sm font-medium text-slate-700 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50 transition-colors"
+        >
+          <span className="text-slate-400 group-hover:text-blue-500">{action.icon}</span>
+          {action.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const { user } = useUser();
@@ -79,6 +235,14 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Quick Actions */}
+      <QuickActions />
+
+      {/* Status distribution chart */}
+      {stats?.volumeByStatus && (
+        <StatusDistributionChart volumeByStatus={stats.volumeByStatus} />
+      )}
+
       {/* Recent applications */}
       <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -128,6 +292,12 @@ export default function Dashboard() {
                   <th className="px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider hidden sm:table-cell">
                     Date
                   </th>
+                  <th className="px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider hidden md:table-cell">
+                    Age
+                  </th>
+                  <th className="px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider hidden lg:table-cell">
+                    GDS
+                  </th>
                   <th className="px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">
                     Action
                   </th>
@@ -138,6 +308,8 @@ export default function Dashboard() {
                   const primary = app.borrowers.length
                     ? getPrimaryBorrower(app.borrowers)
                     : null;
+                  const latestDecision = app.decisions[app.decisions.length - 1];
+                  const age = formatDistanceToNow(parseISO(app.createdAt), { addSuffix: false });
                   return (
                     <tr key={app.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-3.5 font-mono text-xs text-slate-600">
@@ -153,6 +325,16 @@ export default function Dashboard() {
                       </td>
                       <td className="px-6 py-3.5 text-slate-500 hidden sm:table-cell">
                         {formatDate(app.createdAt)}
+                      </td>
+                      <td className="px-6 py-3.5 text-slate-400 text-xs hidden md:table-cell">
+                        {age}
+                      </td>
+                      <td className="px-6 py-3.5 hidden lg:table-cell">
+                        {latestDecision ? (
+                          <GdsPill gds={latestDecision.gds} />
+                        ) : (
+                          <span className="text-slate-300 text-xs">—</span>
+                        )}
                       </td>
                       <td className="px-6 py-3.5">
                         <Link to={`/applications/${app.id}`}>

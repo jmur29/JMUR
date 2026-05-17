@@ -116,6 +116,10 @@ const DECISION_BADGE: Record<'APPROVE' | 'DECLINE' | 'MANUAL_REVIEW', { cls: str
   MANUAL_REVIEW: { cls: 'badge-amber', label: 'Manual Review Required' },
 };
 
+function fmtPct(n: number | undefined): string {
+  return n !== undefined ? `${n.toFixed(2)}%` : '—';
+}
+
 export async function sendDecisionEmail(opts: {
   to: string;
   recipientName: string;
@@ -125,26 +129,68 @@ export async function sendDecisionEmail(opts: {
   decidedByName: string;
   notes: string | null;
   applicationUrl: string;
+  gds?: number;
+  tds?: number;
+  ltv?: number;
 }): Promise<void> {
   const badge = DECISION_BADGE[opts.decision];
+  const decisionDate = new Date().toLocaleDateString('en-CA', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 
   const notesHtml = opts.notes
-    ? `<div class="notes-box"><strong>Underwriter Notes:</strong><br/>${opts.notes}</div>`
+    ? `<div class="notes-box"><strong>Underwriter Notes:</strong><br/>${opts.notes.replace(/\n/g, '<br/>')}</div>`
     : '';
 
+  const showRatios = opts.gds !== undefined || opts.tds !== undefined || opts.ltv !== undefined;
+  const ratiosHtml = showRatios
+    ? `
+    <p style="font-size:13px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin:24px 0 8px 0;">Ratio Summary</p>
+    <div class="card">
+      <div class="card-row"><span class="card-label">GDS (Gross Debt Service)</span><span class="card-value">${fmtPct(opts.gds)}</span></div>
+      <div class="card-row"><span class="card-label">TDS (Total Debt Service)</span><span class="card-value">${fmtPct(opts.tds)}</span></div>
+      <div class="card-row"><span class="card-label">LTV (Loan-to-Value)</span><span class="card-value">${fmtPct(opts.ltv)}</span></div>
+    </div>`
+    : '';
+
+  const decisionStyle = `
+    @media only screen and (max-width:600px) {
+      .wrapper { border-radius: 0 !important; margin: 0 !important; }
+      .body { padding: 20px !important; }
+      .badge-large { font-size: 16px !important; padding: 10px 20px !important; }
+    }
+  `;
+
   const content = `
+    <style>${decisionStyle}</style>
     <p class="greeting">Hi ${opts.recipientName},</p>
-    <p style="font-size:15px;color:#475569;">A decision has been recorded for the following mortgage application:</p>
-    <div style="text-align:center;margin:20px 0;">
-      <span class="badge ${badge.cls}">${badge.label}</span>
+    <p style="font-size:15px;color:#475569;margin:0 0 24px 0;">
+      A decision has been recorded for the following mortgage application.
+    </p>
+
+    <!-- Decision badge -->
+    <div style="text-align:center;margin:24px 0;">
+      <span class="badge ${badge.cls} badge-large"
+            style="font-size:18px;padding:12px 28px;letter-spacing:0.5px;">
+        ${badge.label}
+      </span>
     </div>
+
+    <!-- File summary -->
+    <p style="font-size:13px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin:24px 0 8px 0;">File Summary</p>
     <div class="card">
       <div class="card-row"><span class="card-label">File Number</span><span class="card-value">${opts.fileNumber}</span></div>
       <div class="card-row"><span class="card-label">Borrower</span><span class="card-value">${opts.borrowerName}</span></div>
-      <div class="card-row"><span class="card-label">Decision By</span><span class="card-value">${opts.decidedByName}</span></div>
+      <div class="card-row"><span class="card-label">Decision Date</span><span class="card-value">${decisionDate}</span></div>
+      <div class="card-row"><span class="card-label">Decided By</span><span class="card-value">${opts.decidedByName}</span></div>
     </div>
+
+    ${ratiosHtml}
     ${notesHtml}
-    <div class="cta"><a href="${opts.applicationUrl}">View Application</a></div>
+
+    <div class="cta"><a href="${opts.applicationUrl}">View Full File</a></div>
   `;
 
   await sendEmail({

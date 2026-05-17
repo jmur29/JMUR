@@ -14,9 +14,12 @@ import TenantSettings from './pages/TenantSettings';
 import { useApiAuth } from './lib/api';
 import Spinner from './components/ui/Spinner';
 import ErrorBoundary from './components/ui/ErrorBoundary';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import KeyboardShortcutsModal from './components/ui/KeyboardShortcutsModal';
 
 function AuthSync() {
   useApiAuth();
+  useKeyboardShortcuts();
   return null;
 }
 
@@ -78,6 +81,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <AuthSync />
+              <KeyboardShortcutsModal />
               <AppLayout />
             </ProtectedRoute>
           }

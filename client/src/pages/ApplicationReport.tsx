@@ -2,20 +2,37 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { ArrowLeft, Printer, Download, FileText } from 'lucide-react';
-import { reportsApi } from '../lib/api';
+import { reportsApi, apiClient } from '../lib/api';
 import { useApplication } from '../hooks/useApplication';
 import Button from '../components/ui/Button';
 import Spinner from '../components/ui/Spinner';
+import { downloadFile } from '../lib/utils';
 
 export default function ApplicationReport() {
   const { id } = useParams<{ id: string }>();
   const [reportUrl, setReportUrl] = useState<string | null>(null);
+  const [pdfDownloading, setPdfDownloading] = useState(false);
   const { data: application } = useApplication(id ?? '');
 
   const generateMutation = useMutation({
     mutationFn: () => reportsApi.generate(id ?? ''),
     onSuccess: (data) => setReportUrl(data.url),
   });
+
+  async function handleDownloadPdf() {
+    if (!id) return;
+    setPdfDownloading(true);
+    try {
+      const response = await apiClient.get(`/applications/${id}/report`, {
+        responseType: 'blob',
+      });
+      const blob = response.data as Blob;
+      const filename = `report-${application?.fileNumber ?? id}.pdf`;
+      downloadFile(blob, filename, 'application/pdf');
+    } finally {
+      setPdfDownloading(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -39,11 +56,14 @@ export default function ApplicationReport() {
         <div className="flex items-center gap-2">
           {reportUrl && (
             <>
-              <a href={reportUrl} target="_blank" rel="noopener noreferrer" download>
-                <Button variant="secondary" leftIcon={<Download size={15} />}>
-                  Download PDF
-                </Button>
-              </a>
+              <Button
+                variant="secondary"
+                leftIcon={<Download size={15} />}
+                loading={pdfDownloading}
+                onClick={handleDownloadPdf}
+              >
+                Download PDF
+              </Button>
               <Button
                 variant="secondary"
                 leftIcon={<Printer size={15} />}

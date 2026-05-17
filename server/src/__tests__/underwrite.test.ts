@@ -1,5 +1,6 @@
 import {
   calculateMonthlyPayment,
+  calculateCmhcPremium,
   underwrite,
   IncomeInput,
   PropertyInput,
@@ -697,7 +698,131 @@ describe('co-borrower income', () => {
   });
 });
 
-// ─── 8. Edge cases ────────────────────────────────────────────────────────────
+// ─── 8. CMHC Premium Calculator ──────────────────────────────────────────────
+
+describe('calculateCmhcPremium', () => {
+  it('LTV 82% → rate 2.80%, premium = mortgageAmount * 0.028', () => {
+    const { rate, premium } = calculateCmhcPremium(400000, 82);
+    expect(rate).toBe(2.8);
+    expect(premium).toBeCloseTo(400000 * 0.028, 0);
+  });
+
+  it('LTV 88% → rate 3.10%, premium = mortgageAmount * 0.031', () => {
+    const { rate, premium } = calculateCmhcPremium(400000, 88);
+    expect(rate).toBe(3.1);
+    expect(premium).toBeCloseTo(400000 * 0.031, 0);
+  });
+
+  it('LTV 93% → rate 4.00%, premium = mortgageAmount * 0.040', () => {
+    const { rate, premium } = calculateCmhcPremium(400000, 93);
+    expect(rate).toBe(4.0);
+    expect(premium).toBeCloseTo(400000 * 0.04, 0);
+  });
+
+  it('LTV 79% → rate 0%, premium 0 (conventional, no insurance)', () => {
+    const { rate, premium } = calculateCmhcPremium(400000, 79);
+    expect(rate).toBe(0);
+    expect(premium).toBe(0);
+  });
+
+  it('LTV exactly 80% → rate 0%, premium 0 (boundary: conventional threshold)', () => {
+    const { rate, premium } = calculateCmhcPremium(400000, 80);
+    expect(rate).toBe(0);
+    expect(premium).toBe(0);
+  });
+
+  it('LTV > 95% → rate 0%, premium 0 (not insurable; FAIL flag handles it)', () => {
+    const { rate, premium } = calculateCmhcPremium(490000, 98);
+    expect(rate).toBe(0);
+    expect(premium).toBe(0);
+  });
+});
+
+describe('CMHC premium integration in underwrite()', () => {
+  /**
+   * Insured case: purchase $500k, down $45k (9%) → mortgage $455k → LTV 91%
+   * Rate 4.00%, premium = $455,000 * 0.04 = $18,200
+   * effectiveMortgage = $455,000 + $18,200 = $473,200
+   */
+  it('LTV 91% → cmhcPremiumRate 4.00 and premium set on result', () => {
+    const result = underwrite(
+      baseIncome({ baseSalary: 200000 }),
+      baseProperty({ purchasePrice: 500000, appraisedValue: 500000, downPayment: 45000 }),
+      baseTerms({ contractRate: 5, amortizationYears: 25 }),
+      baseBorrower({ creditScore: 720 })
+    );
+    expect(result.cmhcPremiumRate).toBe(4.0);
+    expect(result.cmhcPremium).toBeCloseTo(455000 * 0.04, 0);
+    expect(result.effectiveMortgage).toBeCloseTo(455000 + 455000 * 0.04, 0);
+  });
+
+  it('effectiveMortgage = mortgageAmount + cmhcPremium', () => {
+    const result = underwrite(
+      baseIncome({ baseSalary: 200000 }),
+      baseProperty({ purchasePrice: 500000, appraisedValue: 500000, downPayment: 45000 }),
+      baseTerms({ contractRate: 5, amortizationYears: 25 }),
+      baseBorrower({ creditScore: 720 })
+    );
+    expect(result.effectiveMortgage).toBeCloseTo(
+      result.mortgageAmount + result.cmhcPremium,
+      2
+    );
+  });
+
+  it('effectiveMonthlyPayment > monthlyPayment when insured (CMHC capitalised)', () => {
+    const result = underwrite(
+      baseIncome({ baseSalary: 200000 }),
+      baseProperty({ purchasePrice: 500000, appraisedValue: 500000, downPayment: 45000 }),
+      baseTerms({ contractRate: 5, amortizationYears: 25 }),
+      baseBorrower({ creditScore: 720 })
+    );
+    expect(result.effectiveMonthlyPayment).toBeGreaterThan(result.monthlyPayment);
+  });
+
+  it('GDS uses effectiveMonthlyPayment when insured', () => {
+    const result = underwrite(
+      baseIncome({ baseSalary: 200000 }),
+      baseProperty({ purchasePrice: 500000, appraisedValue: 500000, downPayment: 45000 }),
+      baseTerms({ contractRate: 5, amortizationYears: 25 }),
+      baseBorrower({ creditScore: 720 })
+    );
+    const monthlyIncome = 200000 / 12;
+    const monthlyTax = 4800 / 12;
+    const monthlyHeat = 150;
+    const expectedGds =
+      ((result.effectiveMonthlyPayment + monthlyTax + monthlyHeat) / monthlyIncome) * 100;
+    expect(Math.abs(result.gds - expectedGds)).toBeLessThan(0.1);
+  });
+
+  it('LTV 79% (conventional) → cmhcPremium 0 and effectiveMortgage = mortgageAmount', () => {
+    // purchase $500k, down $105k (21%) → LTV = 79%
+    const result = underwrite(
+      baseIncome({ baseSalary: 200000 }),
+      baseProperty({ purchasePrice: 500000, appraisedValue: 500000, downPayment: 105000 }),
+      baseTerms({ contractRate: 5, amortizationYears: 25 }),
+      baseBorrower({ creditScore: 720 })
+    );
+    expect(result.cmhcPremium).toBe(0);
+    expect(result.cmhcPremiumRate).toBe(0);
+    expect(result.effectiveMortgage).toBe(result.mortgageAmount);
+    expect(result.effectiveMonthlyPayment).toBe(result.monthlyPayment);
+  });
+
+  it('INFO flag with premium amount is added when LTV > 80%', () => {
+    const result = underwrite(
+      baseIncome({ baseSalary: 200000 }),
+      baseProperty({ purchasePrice: 500000, appraisedValue: 500000, downPayment: 45000 }),
+      baseTerms({ contractRate: 5, amortizationYears: 25 }),
+      baseBorrower({ creditScore: 720 })
+    );
+    const infoFlag = result.flags.find((f) => f.field === 'cmhcPremium' && f.type === 'INFO');
+    expect(infoFlag).toBeDefined();
+    expect(infoFlag!.message.toLowerCase()).toContain('cmhc premium');
+    expect(infoFlag!.message).toContain('4.00%');
+  });
+});
+
+// ─── 9. Edge cases ────────────────────────────────────────────────────────────
 
 describe('edge cases', () => {
   it('monthlyIncome = 0 → GDS and TDS return 0 (no divide-by-zero)', () => {

@@ -5,6 +5,8 @@ import {
   getApplicationById,
   updateApplication,
   softDeleteApplication,
+  searchApplications,
+  duplicateApplication,
 } from '../services/applications';
 import { getStatusHistory } from '../services/statusHistory';
 import type { ApplicationStatus } from '@prisma/client';
@@ -89,6 +91,33 @@ export async function getHistory(req: Request, res: Response, next: NextFunction
   try {
     const history = await getStatusHistory(req.params.id);
     res.json(history);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function search(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    if (!q.trim()) {
+      res.json([]);
+      return;
+    }
+    const results = await searchApplications(req.user.tenantId, q);
+    res.json(results);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function duplicate(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await duplicateApplication(req.params.id, req.user.tenantId, req.user.id);
+    if (!result) {
+      res.status(404).json({ error: 'Application not found', code: 'NOT_FOUND' });
+      return;
+    }
+    res.status(201).json(result);
   } catch (err) {
     next(err);
   }

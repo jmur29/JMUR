@@ -4,11 +4,14 @@ if (process.env.NODE_ENV !== 'test') validateEnv();
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import compression from 'compression';
 
 import logger from './utils/logger';
 import { errorHandler } from './middleware/error';
 import { apiLimiter } from './middleware/rateLimiter';
+import { requestId, requestLogger } from './middleware/requestLogger';
 import apiRouter from './routes/index';
+import prisma from './prisma/client';
 
 const app = express();
 
@@ -35,6 +38,15 @@ app.use(
   })
 );
 
+// ─── Request ID + structured logging ─────────────────────────────────────────
+
+app.use(requestId);
+app.use(requestLogger);
+
+// ─── Response compression ─────────────────────────────────────────────────────
+
+app.use(compression());
+
 // Raw body needed for Clerk webhook signature verification
 app.use('/api/webhooks', express.raw({ type: 'application/json' }));
 
@@ -46,8 +58,19 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/api', apiLimiter, apiRouter);
 
 // Health check (outside rate limit)
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', ts: new Date().toISOString() });
+app.get('/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({
+      status: 'ok',
+      ts: new Date().toISOString(),
+      db: 'ok',
+      version: process.env.npm_package_version ?? '0.0.0',
+      env: process.env.NODE_ENV ?? 'development',
+    });
+  } catch {
+    res.status(503).json({ status: 'error', db: 'unreachable', ts: new Date().toISOString() });
+  }
 });
 
 // ─── Global error handler ────────────────────────────────────────────────────

@@ -102,11 +102,13 @@
 
 /* Print styles for report page */
 @media print {
-  .no-print {
-    display: none !important;
-  }
+  .no-print { display: none !important; }
+  .print-break-before { break-before: page; }
 
-  .print-break-before {
-    break-before: page;
-  }
+  /* Hide app shell for report printing */
+  nav, header, aside, [data-sidebar] { display: none !important; }
+  main { padding: 0 !important; margin: 0 !important; }
+
+  /* Ensure iframe fills the page */
+  iframe { width: 100% !important; height: 100vh !important; border: none !important; }
 }

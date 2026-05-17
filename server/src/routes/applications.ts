@@ -16,10 +16,20 @@ router.use(requireAuth);
 
 router.get('/', validate(ListApplicationsQuerySchema, 'query'), ctrl.list);
 
+// Search — must come before /:id to avoid conflict
+router.get('/search', ctrl.search);
+
 router.post(
   '/',
   requireRole(['ADMIN', 'UNDERWRITER']),
   ctrl.create
+);
+
+router.post(
+  '/:id/duplicate',
+  requireRole(['ADMIN', 'UNDERWRITER']),
+  validate(UuidParamSchema, 'params'),
+  ctrl.duplicate
 );
 
 router.get(

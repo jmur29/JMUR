@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -38,7 +38,6 @@ interface SingleBorrowerFormProps {
 function SingleBorrowerForm({
   borrower,
   applicationId,
-  onDelete,
   canDelete = false,
 }: SingleBorrowerFormProps) {
   const queryClient = useQueryClient();
@@ -79,17 +78,6 @@ function SingleBorrowerForm({
     },
     onError: () => toast.error('Failed to remove co-borrower'),
   });
-
-  const onBlurSave = useCallback(
-    async (field: string, value: unknown) => {
-      setIsDirty(true);
-      const isValid = await methods.trigger();
-      if (!isValid) return;
-      const values = methods.getValues();
-      updateMutation.mutate({ ...values, [field]: value });
-    },
-    [methods, updateMutation]
-  );
 
   const onSubmit = (values: BorrowerFormValues) => {
     updateMutation.mutate(values);

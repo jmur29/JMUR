@@ -76,6 +76,47 @@ export interface UWResult {
     coApplicant: number;
     total: number;
   };
+  cmhcPremium: number;
+  cmhcPremiumRate: number;
+  effectiveMortgage: number;
+  effectiveMonthlyPayment: number;
+}
+
+// ─── CMHC Premium Calculator ─────────────────────────────────────────────────
+
+/**
+ * Calculate CMHC default insurance premium based on LTV ratio.
+ * LTV 80.01–85.00% → 2.80%
+ * LTV 85.01–90.00% → 3.10%
+ * LTV 90.01–95.00% → 4.00%
+ * LTV > 95%         → not insurable (0 returned; caller must have FAIL flag)
+ */
+export function calculateCmhcPremium(
+  mortgageAmount: number,
+  ltv: number
+): { rate: number; premium: number } {
+  let rate = 0;
+
+  if (ltv > 95) {
+    // Not insurable — caller enforces FAIL flag
+    rate = 0;
+  } else if (ltv > 90) {
+    rate = 4.0;
+  } else if (ltv > 85) {
+    rate = 3.1;
+  } else if (ltv > 80) {
+    rate = 2.8;
+  }
+
+  const premium =
+    rate > 0
+      ? new Decimal(mortgageAmount)
+          .mul(new Decimal(rate).div(100))
+          .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+          .toNumber()
+      : 0;
+
+  return { rate, premium };
 }
 
 // ─── Core calculations ────────────────────────────────────────────────────────
@@ -182,7 +223,9 @@ function generateFlags(
   stressGds: number,
   stressTds: number,
   borrower: BorrowerInput,
-  property: PropertyInput
+  property: PropertyInput,
+  cmhcPremium: number,
+  cmhcPremiumRate: number
 ): UWFlag[] {
   const flags: UWFlag[] = [];
 
@@ -191,6 +234,17 @@ function generateFlags(
     flags.push({ type: 'FAIL', message: 'LTV exceeds 95% insured maximum', field: 'ltv' });
   } else if (ltv > 80 && ltv <= 95) {
     flags.push({ type: 'WARN', message: 'CMHC insurance required', field: 'ltv' });
+    if (cmhcPremium > 0) {
+      const premiumFormatted = cmhcPremium.toLocaleString('en-CA', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      });
+      flags.push({
+        type: 'INFO',
+        message: `CMHC premium: $${premiumFormatted} (${cmhcPremiumRate.toFixed(2)}% of mortgage)`,
+        field: 'cmhcPremium',
+      });
+    }
   }
 
   // ── GDS ──────────────────────────────────────────────────────────────────
@@ -332,6 +386,21 @@ export function underwrite(
     .minus(property.downPayment)
     .toDecimalPlaces(2);
 
+  // ── LTV (needed before payment to determine CMHC) ─────────────────────────
+  const valuationBase = Math.min(property.purchasePrice, property.appraisedValue);
+  const ltv = new Decimal(mortgageAmount)
+    .div(valuationBase)
+    .mul(100)
+    .toDecimalPlaces(3)
+    .toNumber();
+
+  // ── CMHC premium (capitalised onto the mortgage when LTV > 80%) ───────────
+  const { rate: cmhcPremiumRate, premium: cmhcPremium } = calculateCmhcPremium(
+    mortgageAmount.toNumber(),
+    ltv
+  );
+  const effectiveMortgage = new Decimal(mortgageAmount).plus(cmhcPremium).toNumber();
+
   // ── Monthly payments ──────────────────────────────────────────────────────
   const monthlyPayment = calculateMonthlyPayment(
     mortgageAmount.toNumber(),
@@ -344,6 +413,12 @@ export function underwrite(
     terms.amortizationYears
   );
 
+  // Effective monthly payment uses the capitalised (insured) mortgage amount
+  const effectiveMonthlyPayment =
+    cmhcPremium > 0
+      ? calculateMonthlyPayment(effectiveMortgage, terms.contractRate, terms.amortizationYears)
+      : monthlyPayment;
+
   // ── Housing costs ─────────────────────────────────────────────────────────
   const monthlyTax = new Decimal(property.annualTax).div(12);
   const monthlyHeat = new Decimal(property.monthlyHeat);
@@ -353,9 +428,10 @@ export function underwrite(
   // ── GDS / TDS ────────────────────────────────────────────────────────────
   // GDS = (P&I + tax/12 + heat + 50% condo) / monthlyIncome * 100
   // TDS = same housing costs (other obligations = 0 for now, structure ready)
+  // When insured, use effectiveMonthlyPayment (capitalised CMHC mortgage)
   const otherMonthlyObligations = new Decimal(0); // placeholder — future: debt payments
 
-  const housingCosts = new Decimal(monthlyPayment)
+  const housingCosts = new Decimal(effectiveMonthlyPayment)
     .plus(monthlyTax)
     .plus(monthlyHeat)
     .plus(monthlyCondoFees);
@@ -388,16 +464,18 @@ export function underwrite(
       .toNumber();
   }
 
-  // ── LTV ───────────────────────────────────────────────────────────────────
-  const valuationBase = Math.min(property.purchasePrice, property.appraisedValue);
-  const ltv = new Decimal(mortgageAmount)
-    .div(valuationBase)
-    .mul(100)
-    .toDecimalPlaces(3)
-    .toNumber();
-
   // ── Flags ─────────────────────────────────────────────────────────────────
-  const flags = generateFlags(gds, tds, ltv, stressGds, stressTds, borrower, property);
+  const flags = generateFlags(
+    gds,
+    tds,
+    ltv,
+    stressGds,
+    stressTds,
+    borrower,
+    property,
+    cmhcPremium,
+    cmhcPremiumRate
+  );
 
   // ── Decision ──────────────────────────────────────────────────────────────
   const failCount = flags.filter((f) => f.type === 'FAIL').length;
@@ -435,5 +513,9 @@ export function underwrite(
       coApplicant: coApplicantTotal.toDecimalPlaces(2).toNumber(),
       total: totalQualifyingIncome.toDecimalPlaces(2).toNumber(),
     },
+    cmhcPremium,
+    cmhcPremiumRate,
+    effectiveMortgage,
+    effectiveMonthlyPayment,
   };
 }

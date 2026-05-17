@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import swaggerUi from 'swagger-ui-express';
 import webhooksRouter from './webhooks';
 import applicationsRouter from './applications';
 import borrowersRouter from './borrowers';
@@ -11,8 +12,17 @@ import reportsRouter from './reports';
 import adminRouter from './admin';
 import notesRouter from './notes';
 import conditionsRouter from './conditions';
+import { openApiSpec } from '../openapi';
 
 const router = Router();
+
+// OpenAPI spec (no auth required)
+router.get('/docs', (_req, res) => {
+  res.json(openApiSpec);
+});
+
+// Swagger UI (no auth required)
+router.use('/docs/ui', swaggerUi.serve, swaggerUi.setup(openApiSpec as Record<string, unknown>));
 
 // Webhooks (no auth — verified via svix signature)
 router.use('/webhooks', webhooksRouter);

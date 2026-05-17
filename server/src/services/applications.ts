@@ -4,6 +4,7 @@ import { generateFileNumber } from '../utils/fileNumber';
 import { logAction } from './audit';
 import { sendAssignmentEmail, sendStatusChangeEmail } from './email';
 import { recordStatusChange } from './statusHistory';
+import { dispatchWebhook } from './webhooks';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,15 @@ export interface ListApplicationsOptions {
 export interface UpdateApplicationInput {
   status?: ApplicationStatus;
   assignedToId?: string | null;
+}
+
+export interface SearchResult {
+  id: string;
+  fileNumber: string;
+  status: ApplicationStatus;
+  borrowerName: string;
+  borrowerEmail: string;
+  createdAt: Date;
 }
 
 // ─── Full include for getById ─────────────────────────────────────────────────
@@ -91,6 +101,15 @@ export async function createApplication(tenantId: string, userId: string) {
 
   logAction(tenantId, userId, application.id, 'APPLICATION_CREATED', { fileNumber });
 
+  dispatchWebhook({
+    event: 'application.created',
+    tenantId,
+    applicationId: application.id,
+    fileNumber: application.fileNumber,
+    timestamp: new Date().toISOString(),
+    data: { status: application.status },
+  }).catch(() => {/* already logged inside dispatchWebhook */});
+
   return application;
 }
 
@@ -138,6 +157,15 @@ export async function updateApplication(
       toStatus: data.status,
       changedById: userId,
     });
+
+    dispatchWebhook({
+      event: 'application.status_changed',
+      tenantId,
+      applicationId: id,
+      fileNumber: updated.fileNumber,
+      timestamp: new Date().toISOString(),
+      data: { fromStatus: existing.status, toStatus: data.status },
+    }).catch(() => {/* already logged inside dispatchWebhook */});
   }
 
   const appBase = process.env.APP_URL ?? 'http://localhost:3000';
@@ -207,4 +235,131 @@ export async function softDeleteApplication(
   logAction(tenantId, userId, id, 'APPLICATION_DELETED', {});
 
   return deleted;
+}
+
+// ─── Search ───────────────────────────────────────────────────────────────────
+
+export async function searchApplications(
+  tenantId: string,
+  q: string
+): Promise<SearchResult[]> {
+  const term = q.trim();
+  const applications = await prisma.application.findMany({
+    where: {
+      tenantId,
+      deletedAt: null,
+      OR: [
+        { fileNumber: { contains: term, mode: 'insensitive' } },
+        {
+          borrowers: {
+            some: {
+              OR: [
+                { firstName: { contains: term, mode: 'insensitive' } },
+                { lastName: { contains: term, mode: 'insensitive' } },
+                { email: { contains: term, mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
+      ],
+    },
+    take: 10,
+    orderBy: { createdAt: 'desc' },
+    include: {
+      borrowers: {
+        where: { type: 'PRIMARY' },
+        select: { firstName: true, lastName: true, email: true },
+      },
+    },
+  });
+
+  return applications.map((app) => {
+    const primary = app.borrowers[0];
+    return {
+      id: app.id,
+      fileNumber: app.fileNumber,
+      status: app.status,
+      borrowerName: primary ? `${primary.firstName} ${primary.lastName}` : '',
+      borrowerEmail: primary?.email ?? '',
+      createdAt: app.createdAt,
+    };
+  });
+}
+
+// ─── Duplicate ────────────────────────────────────────────────────────────────
+
+export async function duplicateApplication(
+  id: string,
+  tenantId: string,
+  requesterId: string
+) {
+  // 1. Load source application
+  const source = await prisma.application.findFirst({
+    where: { id, tenantId, deletedAt: null },
+    include: {
+      borrowers: { include: { income: true } },
+      property: true,
+      mortgageTerms: true,
+    },
+  });
+  if (!source) return null;
+
+  // 2. Generate new file number
+  const newFileNumber = await generateFileNumber(tenantId, prisma);
+
+  // 3. Create new application
+  const newApp = await prisma.application.create({
+    data: {
+      tenantId,
+      fileNumber: newFileNumber,
+      status: 'DRAFT',
+      assignedToId: null,
+    },
+  });
+
+  // 4. Deep copy borrowers + income
+  for (const borrower of source.borrowers) {
+    const { id: _bid, applicationId: _appId, income, ...borrowerData } = borrower;
+    const newBorrower = await prisma.borrower.create({
+      data: { ...borrowerData, applicationId: newApp.id },
+    });
+
+    if (income) {
+      const { id: _iid, borrowerId: _borid, updatedAt: _iat, ...incomeData } = income;
+      await prisma.income.create({
+        data: { ...incomeData, borrowerId: newBorrower.id },
+      });
+    }
+  }
+
+  // 5. Deep copy property
+  if (source.property) {
+    const { id: _pid, applicationId: _appId, updatedAt: _uat, ...propertyData } = source.property;
+    await prisma.property.create({
+      data: { ...propertyData, applicationId: newApp.id },
+    });
+  }
+
+  // 6. Deep copy mortgageTerms (reset to DRAFT-compatible state)
+  if (source.mortgageTerms) {
+    const { id: _mid, applicationId: _appId, updatedAt: _uat, ...termsData } = source.mortgageTerms;
+    await prisma.mortgageTerms.create({
+      data: { ...termsData, applicationId: newApp.id, insured: false },
+    });
+  }
+
+  // 7. Audit log
+  logAction(tenantId, requesterId, newApp.id, 'APPLICATION_DUPLICATED', {
+    sourceId: source.id,
+    sourceFileNumber: source.fileNumber,
+    newFileNumber,
+  });
+
+  // 8. Return full application
+  const result = await prisma.application.findUniqueOrThrow({
+    where: { id: newApp.id },
+    include: APPLICATION_FULL_INCLUDE,
+  });
+
+  return result;
 }

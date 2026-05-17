@@ -47,7 +47,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               Something went wrong
             </h2>
             <p className="text-sm text-slate-500 mb-1">An unexpected error occurred.</p>
-            {process.env.NODE_ENV !== 'production' && this.state.error && (
+            {import.meta.env.DEV && this.state.error && (
               <pre className="mt-3 mb-4 text-left text-xs bg-slate-50 border border-slate-200 rounded p-3 overflow-auto text-red-600 whitespace-pre-wrap">
                 {this.state.error.message}
               </pre>

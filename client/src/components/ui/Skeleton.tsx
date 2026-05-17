@@ -7,14 +7,15 @@ interface SkeletonProps {
   className?: string;
   width?: string;
   height?: string;
+  style?: React.CSSProperties;
 }
 
 // Single skeleton bar
-export function Skeleton({ className, width, height }: SkeletonProps) {
+export function Skeleton({ className, width, height, style }: SkeletonProps) {
   return (
     <div
       className={cn('skeleton', className)}
-      style={{ width, height }}
+      style={{ width, height, ...style }}
     />
   );
 }

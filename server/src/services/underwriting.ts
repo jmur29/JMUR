@@ -4,6 +4,7 @@ import { underwrite, UWResult } from '../engine/underwrite';
 import type { IncomeInput, BorrowerInput, PropertyInput, TermsInput } from '../engine/underwrite';
 import { logAction } from './audit';
 import { sendDecisionEmail } from './email';
+import { dispatchWebhook } from './webhooks';
 
 // ─── Load and calculate ───────────────────────────────────────────────────────
 
@@ -158,6 +159,35 @@ export async function saveDecision(
     ltv: result.ltv,
   });
 
+  // Outbound webhook — dispatch decision event (fire-and-forget)
+  const webhookEventMap: Record<UWResult['decision'], 'decision.approved' | 'decision.declined' | 'decision.manual_review'> = {
+    APPROVE: 'decision.approved',
+    DECLINE: 'decision.declined',
+    MANUAL_REVIEW: 'decision.manual_review',
+  };
+
+  const appForWebhook = await prisma.application.findUnique({
+    where: { id: applicationId },
+    select: { fileNumber: true },
+  });
+
+  if (appForWebhook) {
+    dispatchWebhook({
+      event: webhookEventMap[result.decision],
+      tenantId,
+      applicationId,
+      fileNumber: appForWebhook.fileNumber,
+      timestamp: new Date().toISOString(),
+      data: {
+        decision: result.decision,
+        gds: result.gds,
+        tds: result.tds,
+        ltv: result.ltv,
+        decisionId: decision.id,
+      },
+    }).catch(() => {/* already logged inside dispatchWebhook */});
+  }
+
   // Send email notifications (fire-and-forget)
   const appBase = process.env.APP_URL ?? 'http://localhost:3000';
   const applicationUrl = `${appBase}/applications/${applicationId}`;
@@ -191,6 +221,9 @@ export async function saveDecision(
           decidedByName,
           notes: notes ?? null,
           applicationUrl,
+          gds: result.gds,
+          tds: result.tds,
+          ltv: result.ltv,
         })
       );
     }
@@ -207,6 +240,9 @@ export async function saveDecision(
           decidedByName,
           notes: notes ?? null,
           applicationUrl,
+          gds: result.gds,
+          tds: result.tds,
+          ltv: result.ltv,
         })
       );
     }
