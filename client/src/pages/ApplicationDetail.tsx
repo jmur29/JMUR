@@ -3,14 +3,13 @@ import { useParams, Link } from 'react-router-dom';
 import {
   User, Home, DollarSign, FileText,
   BarChart2, CheckSquare, Files, ArrowLeft,
-  Printer, Sparkles,
+  Printer, Sparkles, Brain, ChevronRight,
 } from 'lucide-react';
 import { useApplication } from '../hooks/useApplication';
 import Tabs from '../components/ui/Tabs';
 import StatusBadge from '../components/ui/StatusBadge';
 import Spinner from '../components/ui/Spinner';
-import Button from '../components/ui/Button';
-import { formatDate } from '../lib/utils';
+import { formatDate, cn } from '../lib/utils';
 import BorrowerTab from '../components/application/BorrowerTab';
 import IncomeTab from '../components/application/IncomeTab';
 import PropertyTab from '../components/application/PropertyTab';
@@ -45,9 +44,9 @@ export default function ApplicationDetail() {
   if (error || !application) {
     return (
       <div className="text-center py-24">
-        <p className="text-red-600 font-medium">Failed to load application.</p>
-        <Link to="/applications" className="mt-3 inline-block text-sm text-blue-600 underline">
-          Back to list
+        <p className="text-[#991B1B] font-medium text-sm">Failed to load application.</p>
+        <Link to="/applications" className="mt-3 inline-flex items-center gap-1 text-sm text-[#1B4332]">
+          <ArrowLeft size={13} /> Back to files
         </Link>
       </div>
     );
@@ -57,31 +56,70 @@ export default function ApplicationDetail() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Link to="/applications">
-            <Button size="sm" variant="ghost" leftIcon={<ArrowLeft size={15} />}>Back</Button>
-          </Link>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-slate-900 font-mono">{application.fileNumber}</h1>
-              <StatusBadge status={application.status} />
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-sm text-[#6B6860]">
+        <Link to="/applications" className="hover:text-[#1B4332] transition-colors">Files</Link>
+        <ChevronRight size={14} />
+        <span className="font-mono text-[#1A1916]">{application.fileNumber}</span>
+      </div>
+
+      {/* Header card */}
+      <div className="card p-5">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl bg-[#D1FAE5] flex items-center justify-center text-[#1B4332] flex-shrink-0">
+              <User size={18} />
             </div>
-            <p className="text-sm text-slate-500 mt-0.5">
-              {primary ? `${primary.firstName} ${primary.lastName}` : 'No borrower yet'} · Created {formatDate(application.createdAt)}
-            </p>
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-lg font-semibold font-mono text-[#1A1916]">{application.fileNumber}</h1>
+                <StatusBadge status={application.status} />
+              </div>
+              <p className="text-sm text-[#6B6860] mt-0.5">
+                {primary ? `${primary.firstName} ${primary.lastName}` : 'No borrower yet'}
+                {' · '}Created {formatDate(application.createdAt)}
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link to={`/applications/${id}/report`}>
-            <Button size="sm" variant="secondary" leftIcon={<Printer size={14} />}>Report</Button>
-          </Link>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Link
+              to={`/applications/${id}/intelligence`}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                'border-[#1B4332] text-[#1B4332] hover:bg-[#D1FAE5]'
+              )}
+            >
+              <Brain size={13} />
+              Deal Intel
+            </Link>
+            <Link
+              to={`/applications/${id}/review`}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                'border-[#E8E6E1] text-[#1A1916] hover:border-[#1B4332] hover:text-[#1B4332]'
+              )}
+            >
+              <BarChart2 size={13} />
+              UW Review
+            </Link>
+            <Link
+              to={`/applications/${id}/report`}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                'border-[#E8E6E1] text-[#1A1916] hover:border-[#1B4332] hover:text-[#1B4332]'
+              )}
+            >
+              <Printer size={13} />
+              Report
+            </Link>
+          </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      {/* Tabs + content */}
+      <div className="card overflow-hidden">
         <Tabs
           tabs={TABS.map((t) => ({
             ...t,

@@ -17,7 +17,7 @@ interface TabsProps {
 
 export default function Tabs({ tabs, activeTab, onChange, className }: TabsProps) {
   return (
-    <div className={cn('border-b border-slate-200', className)}>
+    <div className={cn('border-b border-[#E8E6E1]', className)}>
       <nav className="-mb-px flex space-x-1 overflow-x-auto" aria-label="Tabs">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTab;
@@ -27,10 +27,10 @@ export default function Tabs({ tabs, activeTab, onChange, className }: TabsProps
               onClick={() => onChange(tab.id)}
               className={cn(
                 'flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition-colors duration-150',
-                'focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500',
+                'focus:outline-none',
                 isActive
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                  ? 'border-[#1B4332] text-[#1B4332]'
+                  : 'border-transparent text-[#6B6860] hover:text-[#1A1916]'
               )}
               aria-selected={isActive}
               role="tab"
@@ -41,7 +41,7 @@ export default function Tabs({ tabs, activeTab, onChange, className }: TabsProps
                 <span
                   className={cn(
                     'inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-medium min-w-[18px]',
-                    isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
+                    isActive ? 'bg-[#D1FAE5] text-[#1B4332]' : 'bg-[#F7F6F3] text-[#6B6860]'
                   )}
                 >
                   {tab.badge}

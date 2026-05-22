@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Plus,
   Users,
+  Upload,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -101,6 +102,23 @@ export default function Sidebar({ collapsed = false, onClose }: SidebarProps) {
         >
           <FileText size={18} className="flex-shrink-0" />
           {!collapsed && <span>Files</span>}
+        </NavLink>
+
+        {/* Import */}
+        <NavLink
+          to="/import"
+          onClick={onClose}
+          className={({ isActive }) =>
+            cn(
+              'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors rounded-r-md',
+              isActive
+                ? 'nav-link-active'
+                : 'nav-link-inactive'
+            )
+          }
+        >
+          <Upload size={18} className="flex-shrink-0" />
+          {!collapsed && <span>Import</span>}
         </NavLink>
 
         {/* Admin (expandable, admin only) */}

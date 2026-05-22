@@ -52,13 +52,13 @@ export function formatDateTime(iso: string): string {
 // ---------------------------------------------------------------------------
 export function getStatusColor(status: ApplicationStatus): string {
   const map: Record<ApplicationStatus, string> = {
-    DRAFT: 'bg-slate-100 text-slate-700',
-    IN_REVIEW: 'bg-blue-100 text-blue-700',
-    APPROVED: 'bg-green-100 text-green-700',
-    DECLINED: 'bg-red-100 text-red-700',
-    CONDITIONALLY_APPROVED: 'bg-amber-100 text-amber-700',
+    DRAFT: 'bg-[#F7F6F3] text-[#6B6860]',
+    IN_REVIEW: 'bg-[#DBEAFE] text-[#1E40AF]',
+    APPROVED: 'bg-[#D1FAE5] text-[#1B4332]',
+    DECLINED: 'bg-[#FEE2E2] text-[#991B1B]',
+    CONDITIONALLY_APPROVED: 'bg-[#FEF3C7] text-[#92400E]',
   };
-  return map[status] ?? 'bg-slate-100 text-slate-700';
+  return map[status] ?? 'bg-[#F7F6F3] text-[#6B6860]';
 }
 
 export function getStatusLabel(status: ApplicationStatus): string {
