@@ -108,7 +108,10 @@
     .report-output ul,.report-output ol{padding-left:20px;margin:8px 0}
     .report-output li{margin:4px 0}
     .report-output p{margin:8px 0}
-    .report-actions{display:flex;gap:8px;margin-bottom:16px}
+    .report-actions{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+    .btn-pdf{background:var(--primary)!important;color:#fff!important;border-color:var(--primary)!important;font-weight:600!important}
+    .btn-pdf:hover{background:var(--primary-h)!important;border-color:var(--primary-h)!important}
+    .btn-pdf:disabled{opacity:.5;cursor:not-allowed}
     .placeholder-text{color:var(--dim);font-size:13px;text-align:center;padding:60px 20px}
 
     /* ── Clients tab ── */
@@ -163,6 +166,12 @@
     .j-send{background:var(--primary);border:none;color:#fff;width:42px;height:42px;border-radius:8px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
     .j-send:hover{background:var(--primary-h)}
     .j-send:disabled{opacity:.4;cursor:not-allowed}
+    .attach-btn{background:none;border:1px solid var(--border);color:var(--dim);width:42px;height:42px;border-radius:8px;cursor:pointer;font-size:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s}
+    .attach-btn:hover{border-color:var(--primary);color:var(--primary)}
+    .drag-overlay{display:none;position:absolute;inset:0;background:rgba(59,130,246,.12);border:2px dashed var(--primary);border-radius:inherit;align-items:center;justify-content:center;flex-direction:column;gap:6px;font-size:15px;font-weight:600;color:var(--primary);z-index:10;pointer-events:none}
+    #jarvis-panel.drag-over .drag-overlay{display:flex}
+    .msg.pdf-msg{background:var(--bg3);border:1px solid var(--border);color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px;padding:8px 12px}
+    .msg.pdf-msg .pdf-icon{font-size:18px}
 
     /* ── Modal ── */
     .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;align-items:center;justify-content:center}
@@ -306,7 +315,8 @@
             <h3>Report Output</h3>
             <div class="report-actions" id="report-actions" style="display:none">
               <button class="btn-sm" onclick="copyReport()">Copy</button>
-              <button class="btn-sm" onclick="downloadReport()">Download</button>
+              <button class="btn-sm" onclick="downloadReport()">Download .txt</button>
+              <button class="btn-sm btn-pdf" id="pdf-download-btn" onclick="downloadPdf()">⬇ Download PDF</button>
               <button class="btn-sm" onclick="sendToJarvis()">Send to Jarvis</button>
             </div>
           </div>
@@ -343,6 +353,7 @@
 
 <!-- ── Jarvis Panel ───────────────────────────────────────────────────────────── -->
 <div id="jarvis-panel">
+  <div class="drag-overlay">📄<br>Drop PDF</div>
   <div class="jarvis-header">
     <div>
       <div class="j-title">Jarvis</div>
@@ -359,7 +370,9 @@
     Context: <span class="ctx-label" id="ctx-label">General</span>
   </div>
   <div class="jarvis-input-row">
-    <textarea id="jarvis-input" placeholder="Ask Jarvis…" rows="1"
+    <input type="file" id="pdf-input" accept=".pdf" style="display:none" onchange="handlePdfFile(this.files[0]);this.value=''">
+    <button class="attach-btn" onclick="document.getElementById('pdf-input').click()" title="Attach PDF">📎</button>
+    <textarea id="jarvis-input" placeholder="Ask Jarvis… or drop a PDF deal summary" rows="1"
       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendJarvis()}"
       oninput="this.style.height='42px';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
     <button class="j-send" id="j-send-btn" onclick="sendJarvis()">↑</button>
@@ -456,7 +469,8 @@ const DEL = (p) => api('DELETE', p);
 async function bootApp() {
   document.getElementById('login').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
-  await Promise.all([loadDeals(), loadClients()]);
+  initJarvisDrop();
+  await Promise.all([loadDeals(), loadClients(), loadChatHistory()]);
 }
 
 document.getElementById('pw-input').addEventListener('keydown', e => {
@@ -583,6 +597,37 @@ function downloadReport() {
   const blob = new Blob([S.currentReport], { type: 'text/plain' });
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${client}-report.txt` });
   a.click();
+}
+
+async function downloadPdf() {
+  const btn = document.getElementById('pdf-download-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Generating PDF…';
+  try {
+    const clientName = document.getElementById('r-client').value || 'Client';
+    const dealType   = document.getElementById('r-deal-type')?.value || '';
+    const reportType = document.getElementById('r-report-type')?.value || 'Mortgage Report';
+
+    const res = await fetch('/api/report-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${S.token}` },
+      body: JSON.stringify({ clientName, reportType, dealType, reportText: S.currentReport }),
+    });
+    if (!res.ok) throw new Error(`Server ${res.status}`);
+
+    const blob = await res.blob();
+    const safe = clientName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob),
+      download: `${safe}-mortgage-report.pdf`,
+    });
+    a.click();
+    toast('PDF downloaded');
+  } catch (e) {
+    toast(`PDF failed: ${e.message}`, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = '⬇ Download PDF';
 }
 
 function sendToJarvis() {
@@ -749,24 +794,98 @@ function toggleJarvis() { S.jarvisOpen ? closeJarvis() : openJarvis(); }
 function openJarvis() { S.jarvisOpen = true; document.getElementById('jarvis-panel').classList.add('open'); setTimeout(() => document.getElementById('jarvis-input').focus(), 250); }
 function closeJarvis() { S.jarvisOpen = false; document.getElementById('jarvis-panel').classList.remove('open'); }
 
-function clearChat() {
-  S.jarvisMessages = [];
-  document.getElementById('jarvis-msgs').innerHTML = '<div class="msg assistant">Chat cleared. What would you like to work on?</div>';
+// ─── Chat history persistence ─────────────────────────────────────────────────
+async function loadChatHistory() {
+  try {
+    const data = await GET('/api/chat-session');
+    if (!data?.messages?.length) return;
+    S.jarvisMessages = data.messages;
+    const msgsEl = document.getElementById('jarvis-msgs');
+    msgsEl.innerHTML = '';
+    for (const msg of data.messages.slice(-60)) appendMsg(msg.role, msg.content);
+    scrollJarvis();
+  } catch { /* start fresh */ }
 }
 
-async function sendJarvis() {
+function saveChatHistory() {
+  POST('/api/chat-session', { messages: S.jarvisMessages.slice(-80) }).catch(() => {});
+}
+
+function clearChat() {
+  S.jarvisMessages = [];
+  POST('/api/chat-session', { messages: [] }).catch(() => {});
+  document.getElementById('jarvis-msgs').innerHTML = '<div class="msg assistant">Chat cleared. What can I help with?</div>';
+}
+
+// ── PDF drag-and-drop ──────────────────────────────────────────────────────────
+
+function initJarvisDrop() {
+  const panel = document.getElementById('jarvis-panel');
+  panel.addEventListener('dragover', e => {
+    if ([...e.dataTransfer.items].some(i => i.type === 'application/pdf')) {
+      e.preventDefault();
+      panel.classList.add('drag-over');
+    }
+  });
+  panel.addEventListener('dragleave', e => {
+    if (!panel.contains(e.relatedTarget)) panel.classList.remove('drag-over');
+  });
+  panel.addEventListener('drop', e => {
+    e.preventDefault();
+    panel.classList.remove('drag-over');
+    const file = [...e.dataTransfer.files].find(f => f.type === 'application/pdf');
+    if (file) handlePdfFile(file);
+  });
+}
+
+function handlePdfFile(file) {
+  if (!file || file.type !== 'application/pdf') return;
+  const text = document.getElementById('jarvis-input').value.trim();
+  const prompt = text || 'Please read this mortgage deal PDF and add any funded deal details to the pipeline. Confirm what you recorded.';
+  document.getElementById('jarvis-input').value = '';
+  document.getElementById('jarvis-input').style.height = '42px';
+
+  fileToBase64(file).then(b64 => {
+    const content = [
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+      { type: 'text', text: prompt },
+    ];
+    sendJarvis(content, `📄 ${file.name} — ${prompt}`);
+  }).catch(err => appendMsg('assistant', `⚠️ Could not read PDF: ${err.message}`));
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = () => reject(new Error('FileReader failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function sendJarvis(contentOverride, displayText) {
   const input = document.getElementById('jarvis-input');
-  const text = input.value.trim();
-  if (!text) return;
+  const text = contentOverride ? displayText : input.value.trim();
+  if (!contentOverride && !text) return;
 
   input.value = '';
   input.style.height = '42px';
   document.getElementById('j-send-btn').disabled = true;
 
-  S.jarvisMessages.push({ role: 'user', content: text });
+  // For PDF messages: store text-only in history (avoid bloating Supabase with base64)
+  S.jarvisMessages.push({ role: 'user', content: contentOverride ? displayText : text });
   if (S.jarvisMessages.length > 40) S.jarvisMessages = S.jarvisMessages.slice(-40);
 
-  appendMsg('user', text);
+  if (contentOverride) {
+    // Show a PDF attachment pill in the chat
+    const el = document.createElement('div');
+    el.className = 'msg user pdf-msg';
+    el.innerHTML = `<span class="pdf-icon">📄</span><span>${esc(displayText)}</span>`;
+    document.getElementById('jarvis-msgs').appendChild(el);
+    scrollJarvis();
+  } else {
+    appendMsg('user', text);
+  }
   const typingEl = appendTyping();
 
   // Build context string
@@ -776,15 +895,30 @@ async function sendJarvis() {
     if (c) context = `Currently viewing client: ${JSON.stringify(c)}`;
   }
 
+  // Build messages — for PDF, swap last history entry with the rich content block
+  let messagesToSend = [...S.jarvisMessages];
+  if (contentOverride) {
+    messagesToSend = [
+      ...S.jarvisMessages.slice(0, -1),
+      { role: 'user', content: contentOverride },
+    ];
+  }
+
+  let msgEl = null;
   try {
     const response = await fetch('/api/jarvis/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${S.token}` },
-      body: JSON.stringify({ messages: S.jarvisMessages.slice(0, -0), context }),
+      body: JSON.stringify({ messages: messagesToSend, context }),
     });
 
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Server error ${response.status}: ${errText}`);
+    }
+
     typingEl.remove();
-    const msgEl = appendMsg('assistant', '');
+    msgEl = appendMsg('assistant', '');
     let full = '';
 
     const reader = response.body.getReader();
@@ -801,18 +935,25 @@ async function sendJarvis() {
         if (!line.startsWith('data: ')) continue;
         const payload = line.slice(6);
         if (payload === '[DONE]') break;
-        try {
-          const { text, error } = JSON.parse(payload);
-          if (error) throw new Error(error);
-          full += text;
+        const parsed = JSON.parse(payload);
+        if (parsed.error) throw new Error(parsed.error);
+        if (parsed.reload === 'deals') loadDeals(); // deal was added — refresh table
+        if (parsed.text) {
+          full += parsed.text;
           msgEl.innerHTML = md(full);
           scrollJarvis();
-        } catch {}
+        }
       }
     }
-    S.jarvisMessages.push({ role: 'assistant', content: full });
+    if (full) {
+      S.jarvisMessages.push({ role: 'assistant', content: full });
+      saveChatHistory();
+    }
   } catch (e) {
+    // roll back the user message so history stays valid
+    if (S.jarvisMessages.at(-1)?.role === 'user') S.jarvisMessages.pop();
     typingEl?.remove();
+    if (msgEl) msgEl.remove();
     appendMsg('assistant', `⚠️ ${e.message}`);
   }
 

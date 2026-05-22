@@ -4,12 +4,19 @@ const path = require('path');
 const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const logger = require('./utils/logger');
+const { buildReportPdf } = require('./pdf/builder');
 const { createSheetsClient } = require('./sheets/client');
 const { addFundedDeal } = require('./sheets/addDeal');
 const { streamChat, generateReport, getMortgageSuggestions } = require('./ai/jarvis');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
+
+// Never cache dashboard.html so deploys take effect immediately
+app.get('/dashboard.html', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(__dirname, '../public/dashboard.html'));
+});
 app.use(express.static(path.join(__dirname, '../public')));
 
 // ─── Supabase ─────────────────────────────────────────────────────────────────
@@ -215,14 +222,60 @@ app.post('/api/jarvis/stream', dashboardAuth, async (req, res) => {
   res.flushHeaders();
 
   const { messages, context } = req.body;
-  if (!messages || !Array.isArray(messages)) {
+  logger.info(`Jarvis: received ${Array.isArray(messages) ? messages.length : 'non-array'} messages`);
+
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
     res.write(`data: ${JSON.stringify({ error: 'messages array required' })}\n\n`);
     return res.end();
   }
 
+  const cleanMessages = messages.filter(m => {
+    if (!m.content) return false;
+    if (Array.isArray(m.content)) return m.content.length > 0;
+    return String(m.content).trim().length > 0;
+  });
+  if (!cleanMessages.length) {
+    res.write(`data: ${JSON.stringify({ error: 'all messages have empty content' })}\n\n`);
+    return res.end();
+  }
+
+  // Auto-inject live pipeline into every Jarvis request
+  const { data: deals } = await getSupabase()
+    .from('funded_deals').select('*').order('closing', { ascending: false });
+
+  // Tool executor — runs when Jarvis decides to add a deal
+  async function onTool(name, input) {
+    if (name !== 'add_funded_deal') throw new Error(`Unknown tool: ${name}`);
+
+    const [sheetsResult, supabaseResult] = await Promise.allSettled([
+      (async () => {
+        const sheets = createSheetsClient();
+        return addFundedDeal(sheets, input);
+      })(),
+      insertSupabaseDeal(input),
+    ]);
+
+    if (sheetsResult.status === 'rejected' && supabaseResult.status === 'rejected') {
+      throw new Error(`Save failed: ${sheetsResult.reason?.message}`);
+    }
+
+    logger.info(`Deal added via Jarvis: ${input.borrower} $${input.amt}`);
+    return {
+      success: true,
+      borrower: input.borrower,
+      amount: input.amt,
+      sheets: sheetsResult.status === 'fulfilled' ? 'saved' : 'skipped (no credentials)',
+      supabase: supabaseResult.status === 'fulfilled' ? 'saved' : 'failed',
+    };
+  }
+
   try {
-    for await (const chunk of streamChat(messages, context || '')) {
-      res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+    for await (const chunk of streamChat(cleanMessages, context || '', deals || [], onTool)) {
+      if (chunk.text !== undefined) {
+        res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+      } else if (chunk.action === 'reload') {
+        res.write(`data: ${JSON.stringify({ reload: chunk.target })}\n\n`);
+      }
     }
     res.write('data: [DONE]\n\n');
   } catch (err) {
@@ -230,6 +283,34 @@ app.post('/api/jarvis/stream', dashboardAuth, async (req, res) => {
     res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
   }
   res.end();
+});
+
+// ─── Chat session (persistent memory) ────────────────────────────────────────
+
+app.get('/api/chat-session', dashboardAuth, async (req, res) => {
+  try {
+    const { data, error } = await getSupabase()
+      .from('chat_sessions').select('messages').eq('id', 'main').single();
+    if (error || !data) return res.json({ messages: [] });
+    res.json({ messages: data.messages || [] });
+  } catch {
+    res.json({ messages: [] });
+  }
+});
+
+app.post('/api/chat-session', dashboardAuth, async (req, res) => {
+  try {
+    const { messages } = req.body;
+    const { error } = await getSupabase().from('chat_sessions').upsert({
+      id: 'main',
+      messages: messages || [],
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(error.message);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── Report generation ─────────────────────────────────────────────────────────
@@ -244,6 +325,30 @@ app.post('/api/generate-report', dashboardAuth, async (req, res) => {
     res.json({ report });
   } catch (err) {
     logger.error(`Report gen error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PDF report export ────────────────────────────────────────────────────────
+
+app.post('/api/report-pdf', dashboardAuth, async (req, res) => {
+  try {
+    const { clientName, reportType, dealType, reportText } = req.body;
+    if (!reportText) return res.status(400).json({ error: 'reportText required' });
+
+    const pdf = await buildReportPdf({
+      clientName: clientName || 'Client',
+      reportType: reportType || 'Mortgage Report',
+      dealType: dealType || '',
+      reportText,
+    });
+
+    const safe = (clientName || 'report').replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safe}-mortgage-report.pdf"`);
+    res.send(pdf);
+  } catch (err) {
+    logger.error(`PDF export error: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
 });
