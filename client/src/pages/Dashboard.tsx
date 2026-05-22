@@ -274,7 +274,7 @@ function BrokerView({ stats, statsLoading, apps, appsLoading }: {
                 <tr className="border-b border-[#E8E6E1] bg-[#F7F6F3]">
                   <th className="text-left px-5 py-2.5 text-xs font-medium text-[#6B6860] uppercase tracking-wide">File #</th>
                   <th className="text-left px-3 py-2.5 text-xs font-medium text-[#6B6860] uppercase tracking-wide">Borrower</th>
-                  <th className="text-left px-3 py-2.5 text-xs font-medium text-[#6B6860] uppercase tracking-wide hidden sm:table-cell">Type</th>
+                  <th className="text-left px-3 py-2.5 text-xs font-medium text-[#6B6860] uppercase tracking-wide hidden sm:table-cell">Amount</th>
                   <th className="text-left px-3 py-2.5 text-xs font-medium text-[#6B6860] uppercase tracking-wide hidden md:table-cell">Readiness</th>
                   <th className="text-left px-3 py-2.5 text-xs font-medium text-[#6B6860] uppercase tracking-wide">Status</th>
                   <th className="text-left px-3 py-2.5 text-xs font-medium text-[#6B6860] uppercase tracking-wide hidden lg:table-cell">Date</th>
@@ -292,7 +292,7 @@ function BrokerView({ stats, statsLoading, apps, appsLoading }: {
                         {primary ? `${primary.firstName} ${primary.lastName}` : '—'}
                       </td>
                       <td className="px-3 py-3 text-xs text-[#6B6860] hidden sm:table-cell">
-                        {app.mortgageType ?? '—'}
+                        {app.mortgageTerms ? `$${(app.mortgageTerms.mortgageAmount / 1000).toFixed(0)}K` : '—'}
                       </td>
                       <td className="px-3 py-3 hidden md:table-cell">
                         {score !== null ? (
