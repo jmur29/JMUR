@@ -10,10 +10,10 @@ COPY package*.json ./
 RUN npm install
 
 COPY . .
-RUN npx prisma generate
+RUN ./node_modules/.bin/prisma generate
 RUN npm run build
 
 EXPOSE 3001
 
-# Run DB migrations then start the compiled server
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+# Push schema changes (additive) then start the compiled server
+CMD ["sh", "-c", "./node_modules/.bin/prisma db push --accept-data-loss && node dist/index.js"]

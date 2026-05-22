@@ -1,24 +1,60 @@
+export type UserRole = 'ADMIN' | 'UNDERWRITER' | 'VIEWER';
+export type ApplicationStatus =
+  | 'DRAFT'
+  | 'IN_REVIEW'
+  | 'APPROVED'
+  | 'DECLINED'
+  | 'CONDITIONALLY_APPROVED';
+export type BorrowerType = 'PRIMARY' | 'CO_BORROWER';
+export type EmploymentType =
+  | 'EMPLOYED'
+  | 'SELF_EMPLOYED'
+  | 'CONTRACT'
+  | 'RETIRED'
+  | 'OTHER';
+export type PropertyType =
+  | 'DETACHED'
+  | 'SEMI'
+  | 'TOWNHOUSE'
+  | 'CONDO'
+  | 'DUPLEX'
+  | 'OTHER';
+export type OccupancyType = 'OWNER' | 'RENTAL' | 'SECONDARY';
+export type DocumentType =
+  | 'PAYSTUB'
+  | 'T4'
+  | 'NOA'
+  | 'BANK_STATEMENT'
+  | 'ID'
+  | 'APPRAISAL'
+  | 'OTHER';
+export type DocumentStatus = 'PENDING' | 'REVIEWED' | 'APPROVED' | 'REJECTED';
+export type UWDecision = 'APPROVE' | 'MANUAL_REVIEW' | 'DECLINE';
+export type FlagType = 'PASS' | 'WARN' | 'FAIL' | 'INFO';
+
 export interface ParsedApplication {
-  firstName?: string;
-  lastName?: string;
-  dob?: string;
-  email?: string;
-  phone?: string;
-  employmentType?: 'EMPLOYED' | 'SELF_EMPLOYED' | 'CONTRACT' | 'RETIRED' | 'OTHER';
-  creditScore?: number;
-  baseSalary?: number;
-  employerName?: string;
-  yearsEmployed?: number;
-  address?: string;
-  city?: string;
-  province?: string;
-  postalCode?: string;
-  propertyType?: 'DETACHED' | 'SEMI' | 'TOWNHOUSE' | 'CONDO' | 'DUPLEX' | 'OTHER';
-  purchasePrice?: number;
-  downPayment?: number;
-  contractRate?: number;
-  amortizationYears?: number;
-  termYears?: number;
+  firstName?: string | null;
+  lastName?: string | null;
+  dob?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  employmentType?: EmploymentType | null;
+  creditScore?: number | null;
+  baseSalary?: number | null;
+  employerName?: string | null;
+  yearsEmployed?: number | null;
+  address?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postalCode?: string | null;
+  propertyType?: PropertyType | null;
+  purchasePrice?: number | null;
+  downPayment?: number | null;
+  contractRate?: number | null;
+  amortizationYears?: number | null;
+  termYears?: number | null;
+  mortgageType?: 'PURCHASE' | 'SWITCH' | 'REFINANCE' | 'RENEWAL' | null;
+  existingMortgageBalance?: number | null;
 }
 
 export interface UWReview {
@@ -66,40 +102,6 @@ export interface DealIntelligence {
   strengthSummary: string;
   weaknessSummary: string;
 }
-
-export type UserRole = 'ADMIN' | 'UNDERWRITER' | 'VIEWER';
-export type ApplicationStatus =
-  | 'DRAFT'
-  | 'IN_REVIEW'
-  | 'APPROVED'
-  | 'DECLINED'
-  | 'CONDITIONALLY_APPROVED';
-export type BorrowerType = 'PRIMARY' | 'CO_BORROWER';
-export type EmploymentType =
-  | 'EMPLOYED'
-  | 'SELF_EMPLOYED'
-  | 'CONTRACT'
-  | 'RETIRED'
-  | 'OTHER';
-export type PropertyType =
-  | 'DETACHED'
-  | 'SEMI'
-  | 'TOWNHOUSE'
-  | 'CONDO'
-  | 'DUPLEX'
-  | 'OTHER';
-export type OccupancyType = 'OWNER' | 'RENTAL' | 'SECONDARY';
-export type DocumentType =
-  | 'PAYSTUB'
-  | 'T4'
-  | 'NOA'
-  | 'BANK_STATEMENT'
-  | 'ID'
-  | 'APPRAISAL'
-  | 'OTHER';
-export type DocumentStatus = 'PENDING' | 'REVIEWED' | 'APPROVED' | 'REJECTED';
-export type UWDecision = 'APPROVE' | 'MANUAL_REVIEW' | 'DECLINE';
-export type FlagType = 'PASS' | 'WARN' | 'FAIL' | 'INFO';
 
 export interface Tenant {
   id: string;
@@ -229,6 +231,8 @@ export interface Application {
   mortgageTerms?: MortgageTerms;
   decisions: UnderwritingDecision[];
   documents: Document[];
+  dealIntelligence?: DealIntelligence | null;
+  dealAnalyzedAt?: string | null;
 }
 
 export interface UWResult {
