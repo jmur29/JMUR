@@ -1,11 +1,19 @@
-FROM node:20-alpine AS base
+FROM node:20-alpine
 WORKDIR /app
-RUN apk add --no-cache chromium
+
+# openssl needed by Prisma; chromium needed by Puppeteer (PDF reports)
+RUN apk add --no-cache chromium openssl
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 COPY package*.json ./
 RUN npm ci
+
 COPY . .
 RUN npx prisma generate
+RUN npm run build
+
 EXPOSE 3001
-CMD ["npm", "run", "dev"]
+
+# Run DB migrations then start the compiled server
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
