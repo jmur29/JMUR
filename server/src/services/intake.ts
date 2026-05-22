@@ -189,7 +189,8 @@ export async function processZipUpload(
 
 export async function processFinmoPdf(
   applicationId: string,
-  pdfBuffer: Buffer
+  pdfBuffer: Buffer,
+  tenantId = 'default'
 ): Promise<void> {
   await prisma.application.update({
     where: { id: applicationId },
@@ -334,10 +335,10 @@ export async function processFinmoPdf(
       }
     }
 
-    await prisma.application.update({
-      where: { id: applicationId },
-      data: { processingStatus: 'COMPLETE' },
-    });
+    logger.info(`processFinmoPdf data saved for application ${applicationId}, starting intelligence generation`);
+
+    // Auto-generate deal intelligence after data is parsed
+    await generateDealIntelligenceFromApplication(applicationId, tenantId);
 
     logger.info(`processFinmoPdf complete for application ${applicationId}`);
   } catch (err) {
@@ -354,7 +355,8 @@ export async function processFinmoPdf(
 
 export async function processSubmissionNotes(
   applicationId: string,
-  text: string
+  text: string,
+  tenantId = 'default'
 ): Promise<void> {
   await prisma.application.update({
     where: { id: applicationId },
@@ -493,10 +495,10 @@ export async function processSubmissionNotes(
       }
     }
 
-    await prisma.application.update({
-      where: { id: applicationId },
-      data: { processingStatus: 'COMPLETE' },
-    });
+    logger.info(`processSubmissionNotes data saved for application ${applicationId}, starting intelligence generation`);
+
+    // Auto-generate deal intelligence after data is parsed
+    await generateDealIntelligenceFromApplication(applicationId, tenantId);
 
     logger.info(`processSubmissionNotes complete for application ${applicationId}`);
   } catch (err) {

@@ -27,12 +27,12 @@ function SubmissionNoteZone({ text, onChange, files, onFiles }: {
   return (
     <div className="flex flex-col gap-3 h-full">
       <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center">
-          <FileText size={14} className="text-violet-600" />
+        <div className="w-7 h-7 rounded-lg bg-[#D1FAE5] flex items-center justify-center">
+          <FileText size={14} className="text-[#1B4332]" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-slate-800">Submission Note</p>
-          <p className="text-xs text-slate-500">Paste or upload the broker's deal summary</p>
+          <p className="text-sm font-semibold text-[#1A1916]">Submission Note</p>
+          <p className="text-xs text-[#6B6860]">Paste or upload the broker's deal summary</p>
         </div>
       </div>
 
@@ -40,7 +40,7 @@ function SubmissionNoteZone({ text, onChange, files, onFiles }: {
         value={text}
         onChange={(e) => onChange(e.target.value)}
         placeholder={`Paste broker submission note here…\n\ne.g. Borrower: John Smith, DOB 1985-03-12, employed at Acme Corp, $95,000/yr base salary, credit score 740, purchasing 123 Main St Toronto for $850,000 with $170,000 down, 25yr amort, 5yr term at 5.49%...`}
-        className="flex-1 min-h-[180px] w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 placeholder:text-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition"
+        className="flex-1 min-h-[180px] w-full rounded-xl border border-[#E8E6E1] bg-[#F7F6F3] px-4 py-3 text-sm text-[#1A1916] placeholder:text-[#6B6860] resize-none focus:outline-none focus:border-[#1B4332] transition"
       />
 
       <div
@@ -48,14 +48,14 @@ function SubmissionNoteZone({ text, onChange, files, onFiles }: {
         className={cn(
           'flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed cursor-pointer transition-all text-sm',
           isDragActive
-            ? 'border-violet-400 bg-violet-50 text-violet-600'
-            : 'border-slate-200 text-slate-400 hover:border-violet-300 hover:text-violet-500 hover:bg-violet-50/50'
+            ? 'border-[#1B4332] bg-[#D1FAE5] text-[#1B4332]'
+            : 'border-[#E8E6E1] text-[#6B6860] hover:border-[#1B4332] hover:text-[#1B4332] hover:bg-[#D1FAE5]/50'
         )}
       >
         <input {...getInputProps()} />
         <Upload size={14} />
         {files.length > 0
-          ? <span className="text-violet-600 font-medium">{files[0].name}</span>
+          ? <span className="text-[#1B4332] font-medium">{files[0].name}</span>
           : <span>Or drop a PDF submission note</span>}
       </div>
     </div>
@@ -84,12 +84,12 @@ function IncomeDocsZone({ files, onFiles }: {
   return (
     <div className="flex flex-col gap-3 h-full">
       <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
-          <Upload size={14} className="text-blue-600" />
+        <div className="w-7 h-7 rounded-lg bg-[#D1FAE5] flex items-center justify-center">
+          <Upload size={14} className="text-[#1B4332]" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-slate-800">Income & Supporting Docs</p>
-          <p className="text-xs text-slate-500">T4s, NOAs, paystubs, bank statements</p>
+          <p className="text-sm font-semibold text-[#1A1916]">Income & Supporting Docs</p>
+          <p className="text-xs text-[#6B6860]">T4s, NOAs, paystubs, bank statements</p>
         </div>
       </div>
 
@@ -98,23 +98,23 @@ function IncomeDocsZone({ files, onFiles }: {
         className={cn(
           'flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed cursor-pointer transition-all px-4 py-10',
           isDragActive
-            ? 'border-blue-400 bg-blue-50'
-            : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50/50'
+            ? 'border-[#1B4332] bg-[#D1FAE5]'
+            : 'border-[#E8E6E1] hover:border-[#1B4332] hover:bg-[#D1FAE5]/50'
         )}
       >
         <input {...getInputProps()} />
-        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
-          <Upload size={18} className="text-slate-400" />
+        <div className="w-10 h-10 rounded-xl bg-[#F7F6F3] flex items-center justify-center">
+          <Upload size={18} className="text-[#6B6860]" />
         </div>
         <div className="text-center">
-          <p className="text-sm font-medium text-slate-700">Drop files here</p>
-          <p className="text-xs text-slate-400 mt-0.5">PDF, JPG, PNG supported</p>
+          <p className="text-sm font-medium text-[#1A1916]">Drop files here</p>
+          <p className="text-xs text-[#6B6860] mt-0.5">PDF, JPG, PNG supported</p>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-1.5">
         {['T4', 'NOA', 'Paystub', 'Bank Statement', 'Employment Letter'].map((t) => (
-          <span key={t} className="px-2.5 py-1 rounded-full bg-slate-100 text-xs text-slate-500 font-medium">
+          <span key={t} className="px-2.5 py-1 rounded-full bg-[#F7F6F3] text-xs text-[#6B6860] font-medium">
             {t}
           </span>
         ))}
@@ -123,10 +123,10 @@ function IncomeDocsZone({ files, onFiles }: {
       {files.length > 0 && (
         <div className="space-y-1.5 max-h-36 overflow-y-auto">
           {files.map((f) => (
-            <div key={f.name} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100">
-              <File size={13} className="text-blue-500 flex-shrink-0" />
-              <span className="text-xs text-slate-700 truncate flex-1">{f.name}</span>
-              <button onClick={() => remove(f.name)} className="text-slate-400 hover:text-red-500 transition-colors flex-shrink-0">
+            <div key={f.name} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#D1FAE5] border border-[#1B4332]">
+              <File size={13} className="text-[#1B4332] flex-shrink-0" />
+              <span className="text-xs text-[#1A1916] truncate flex-1">{f.name}</span>
+              <button onClick={() => remove(f.name)} className="text-[#6B6860] hover:text-red-500 transition-colors flex-shrink-0">
                 <X size={13} />
               </button>
             </div>
@@ -141,9 +141,9 @@ function IncomeDocsZone({ files, onFiles }: {
 function ReviewField({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value === undefined || value === null || value === '') return null;
   return (
-    <div className="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
-      <span className="text-xs text-slate-500">{label}</span>
-      <span className="text-xs font-semibold text-slate-800">{String(value)}</span>
+    <div className="flex justify-between items-center py-2 border-b border-[#E8E6E1] last:border-0">
+      <span className="text-xs text-[#6B6860]">{label}</span>
+      <span className="text-xs font-semibold text-[#1A1916]">{String(value)}</span>
     </div>
   );
 }
@@ -253,14 +253,14 @@ export default function NewApplication() {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">New Submission</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-[#1A1916]">New Submission</h1>
+          <p className="text-sm text-[#6B6860] mt-1">
             Drop in a submission note and income docs — ClearPath AI extracts everything automatically.
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <div className="bg-white rounded-xl border border-[#E8E6E1] shadow-sm p-5">
             <SubmissionNoteZone
               text={submissionText}
               onChange={setSubmissionText}
@@ -268,7 +268,7 @@ export default function NewApplication() {
               onFiles={setSubmissionFiles}
             />
           </div>
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <div className="bg-white rounded-xl border border-[#E8E6E1] shadow-sm p-5">
             <IncomeDocsZone files={incomeFiles} onFiles={setIncomeFiles} />
           </div>
         </div>
@@ -276,7 +276,7 @@ export default function NewApplication() {
         <div className="flex items-center justify-between">
           <button
             onClick={() => { setParsed(null); setStage('review'); }}
-            className="text-sm text-slate-500 hover:text-slate-700 underline underline-offset-2 transition-colors"
+            className="text-sm text-[#6B6860] hover:text-[#1A1916] underline underline-offset-2 transition-colors"
           >
             Skip — fill in manually
           </button>
@@ -286,8 +286,8 @@ export default function NewApplication() {
             className={cn(
               'flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all',
               hasInput
-                ? 'bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-md hover:shadow-lg hover:opacity-95'
-                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                ? 'bg-[#1B4332] text-white shadow-md hover:shadow-lg hover:opacity-95'
+                : 'bg-[#F7F6F3] text-[#6B6860] cursor-not-allowed'
             )}
           >
             <Sparkles size={16} />
@@ -303,19 +303,19 @@ export default function NewApplication() {
   if (stage === 'processing') {
     return (
       <div className="max-w-md mx-auto mt-24 text-center space-y-6">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center mx-auto shadow-lg">
+        <div className="w-16 h-16 rounded-xl bg-[#1B4332] flex items-center justify-center mx-auto shadow-lg">
           <Loader2 size={28} className="text-white animate-spin" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Analyzing submission…</h2>
-          <p className="text-sm text-slate-500 mt-2">
+          <h2 className="text-xl font-bold text-[#1A1916]">Analyzing submission…</h2>
+          <p className="text-sm text-[#6B6860] mt-2">
             ClearPath AI is reading the documents and extracting borrower, income, and property details.
           </p>
         </div>
-        <div className="space-y-2.5 text-left bg-slate-50 rounded-xl p-4">
+        <div className="space-y-2.5 text-left bg-[#F7F6F3] rounded-xl p-4">
           {['Reading submission note', 'Extracting borrower details', 'Identifying income sources', 'Parsing property information'].map((step, i) => (
-            <div key={i} className="flex items-center gap-2 text-sm text-slate-500">
-              <Loader2 size={12} className="animate-spin text-violet-500 flex-shrink-0" />
+            <div key={i} className="flex items-center gap-2 text-sm text-[#6B6860]">
+              <Loader2 size={12} className="animate-spin text-[#1B4332] flex-shrink-0" />
               {step}
             </div>
           ))}
@@ -329,8 +329,8 @@ export default function NewApplication() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Review Extracted Data</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-[#1A1916]">Review Extracted Data</h1>
+          <p className="text-sm text-[#6B6860] mt-1">
             {parsed
               ? 'ClearPath AI extracted the following — review before creating the file.'
               : 'AI parsing skipped — the application will be created as a draft for manual entry.'}
@@ -338,7 +338,7 @@ export default function NewApplication() {
         </div>
         <button
           onClick={() => setStage('intake')}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors"
+          className="flex items-center gap-1.5 text-sm text-[#6B6860] hover:text-[#1A1916] transition-colors"
         >
           <X size={14} /> Start over
         </button>
@@ -346,10 +346,10 @@ export default function NewApplication() {
 
       {parsed ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <div className="bg-white rounded-xl border border-[#E8E6E1] shadow-sm p-5">
             <div className="flex items-center gap-2 mb-3">
               <CheckCircle size={15} className="text-green-500" />
-              <span className="text-sm font-semibold text-slate-800">Borrower</span>
+              <span className="text-sm font-semibold text-[#1A1916]">Borrower</span>
             </div>
             <ReviewField label="Name" value={`${parsed.firstName ?? ''} ${parsed.lastName ?? ''}`.trim() || undefined} />
             <ReviewField label="DOB" value={parsed.dob} />
@@ -359,20 +359,20 @@ export default function NewApplication() {
             <ReviewField label="Credit Score" value={parsed.creditScore} />
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <div className="bg-white rounded-xl border border-[#E8E6E1] shadow-sm p-5">
             <div className="flex items-center gap-2 mb-3">
               <CheckCircle size={15} className="text-green-500" />
-              <span className="text-sm font-semibold text-slate-800">Income</span>
+              <span className="text-sm font-semibold text-[#1A1916]">Income</span>
             </div>
             <ReviewField label="Base Salary" value={parsed.baseSalary ? `$${parsed.baseSalary.toLocaleString()}` : undefined} />
             <ReviewField label="Employer" value={parsed.employerName} />
             <ReviewField label="Years Employed" value={parsed.yearsEmployed} />
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <div className="bg-white rounded-xl border border-[#E8E6E1] shadow-sm p-5">
             <div className="flex items-center gap-2 mb-3">
               <CheckCircle size={15} className="text-green-500" />
-              <span className="text-sm font-semibold text-slate-800">Property & Terms</span>
+              <span className="text-sm font-semibold text-[#1A1916]">Property & Terms</span>
             </div>
             <ReviewField label="Address" value={parsed.address} />
             <ReviewField label="City" value={parsed.city} />
@@ -386,7 +386,7 @@ export default function NewApplication() {
           </div>
         </div>
       ) : (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-start gap-3">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-start gap-3">
           <AlertCircle size={18} className="text-amber-500 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-amber-800">No data extracted</p>
@@ -400,14 +400,14 @@ export default function NewApplication() {
       <div className="flex items-center justify-between pt-2">
         <button
           onClick={() => setStage('intake')}
-          className="text-sm text-slate-500 hover:text-slate-700 underline underline-offset-2 transition-colors"
+          className="text-sm text-[#6B6860] hover:text-[#1A1916] underline underline-offset-2 transition-colors"
         >
           Back to intake
         </button>
         <button
           onClick={() => createMutation.mutate()}
           disabled={createMutation.isPending}
-          className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-md hover:shadow-lg hover:opacity-95 transition-all disabled:opacity-60"
+          className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm bg-[#1B4332] text-white shadow-md hover:shadow-lg hover:opacity-95 transition-all disabled:opacity-60"
         >
           {createMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
           Create Application

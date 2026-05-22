@@ -127,7 +127,7 @@ export default function PropertyTab({ application }: PropertyTabProps) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+        <h3 className="text-xs font-medium text-[#6B6860] uppercase tracking-wide">
           Property Details
         </h3>
         <div className="flex items-center gap-2">
@@ -246,8 +246,8 @@ export default function PropertyTab({ application }: PropertyTabProps) {
       </div>
 
       {/* LTV preview */}
-      <div className="bg-slate-50 rounded-lg px-4 py-3 flex justify-between items-center">
-        <span className="text-sm font-medium text-slate-600">LTV Preview</span>
+      <div className="bg-[#F7F6F3] rounded-lg px-4 py-3 flex justify-between items-center">
+        <span className="text-sm font-medium text-[#6B6860]">LTV Preview</span>
         <span
           className={`text-lg font-semibold ${
             ltv > 95

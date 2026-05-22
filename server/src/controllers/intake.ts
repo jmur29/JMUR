@@ -26,7 +26,7 @@ export async function handleFinmoImport(req: Request, res: Response, next: NextF
     const file = req.file;
     if (!file) { res.status(400).json({ error: 'No file uploaded' }); return; }
 
-    processFinmoPdf(app.id, file.buffer).catch(console.error);
+    processFinmoPdf(app.id, file.buffer, req.user.tenantId).catch(console.error);
 
     res.json({ applicationId: app.id });
   } catch (err) { next(err); }
@@ -40,7 +40,7 @@ export async function handleSubmissionNotes(req: Request, res: Response, next: N
       return;
     }
     const app = await createApplication(req.user.tenantId, req.user.id);
-    processSubmissionNotes(app.id, text.trim()).catch(console.error);
+    processSubmissionNotes(app.id, text.trim(), req.user.tenantId).catch(console.error);
 
     res.json({ applicationId: app.id });
   } catch (err) { next(err); }

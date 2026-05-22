@@ -99,7 +99,7 @@ function SingleBorrowerForm({
     <FormProvider {...methods}>
       <form onSubmit={methods.handleSubmit(onSubmit)} className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+          <h3 className="text-xs font-medium text-[#6B6860] uppercase tracking-wide">
             {borrower.type === 'PRIMARY' ? 'Primary Borrower' : 'Co-Borrower'}
           </h3>
           <div className="flex items-center gap-2">
@@ -110,7 +110,7 @@ function SingleBorrowerForm({
               </span>
             )}
             {updateMutation.isPending && (
-              <span className="text-xs text-slate-400">Saving…</span>
+              <span className="text-xs text-[#6B6860]">Saving…</span>
             )}
             {canDelete && (
               <Button
@@ -189,12 +189,12 @@ export default function BorrowerTab({ application }: BorrowerTabProps) {
           applicationId={application.id}
         />
       ) : (
-        <div className="text-center py-8 text-slate-400 text-sm">
+        <div className="text-center py-8 text-[#6B6860] text-sm">
           No primary borrower on file.
         </div>
       )}
 
-      <div className="border-t border-slate-100 pt-6">
+      <div className="border-t border-[#E8E6E1] pt-6">
         {coBorrower ? (
           <SingleBorrowerForm
             borrower={coBorrower}
@@ -204,13 +204,13 @@ export default function BorrowerTab({ application }: BorrowerTabProps) {
         ) : (
           <div
             className={cn(
-              'rounded-lg border-2 border-dashed border-slate-200 p-6 text-center',
-              addingCo && 'border-blue-300 bg-blue-50'
+              'rounded-lg border-2 border-dashed border-[#E8E6E1] p-6 text-center',
+              addingCo && 'border-[#1B4332] bg-[#D1FAE5]'
             )}
           >
             {addingCo ? (
               <div className="space-y-3">
-                <p className="text-sm text-slate-600">
+                <p className="text-sm text-[#1A1916]">
                   Creating co-borrower record…
                 </p>
                 <Button
@@ -230,7 +230,7 @@ export default function BorrowerTab({ application }: BorrowerTabProps) {
               </div>
             ) : (
               <>
-                <p className="text-sm text-slate-400 mb-3">No co-borrower added.</p>
+                <p className="text-sm text-[#6B6860] mb-3">No co-borrower added.</p>
                 <Button
                   size="sm"
                   variant="secondary"

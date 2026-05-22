@@ -23,8 +23,8 @@ const STATUS_OPTIONS: { value: DocumentStatus; label: string }[] = [
 
 function getDocStatusStyle(status: DocumentStatus): string {
   const map: Record<DocumentStatus, string> = {
-    PENDING: 'bg-slate-100 text-slate-600',
-    REVIEWED: 'bg-blue-100 text-blue-700',
+    PENDING: 'bg-[#F7F6F3] text-[#6B6860]',
+    REVIEWED: 'bg-[#D1FAE5] text-[#1B4332]',
     APPROVED: 'bg-green-100 text-green-700',
     REJECTED: 'bg-red-100 text-red-700',
   };
@@ -141,7 +141,7 @@ export default function DocumentsTab({ application }: DocumentsTabProps) {
               onChange={(e) => setSelectedType(e.target.value as DocumentType)}
             />
           </div>
-          <p className="text-xs text-slate-400 pb-2">Select type before dropping files</p>
+          <p className="text-xs text-[#6B6860] pb-2">Select type before dropping files</p>
         </div>
 
         <div
@@ -149,16 +149,16 @@ export default function DocumentsTab({ application }: DocumentsTabProps) {
           className={cn(
             'border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors',
             isDragActive
-              ? 'border-blue-400 bg-blue-50'
-              : 'border-slate-300 hover:border-blue-300 hover:bg-slate-50'
+              ? 'border-[#1B4332] bg-[#D1FAE5]'
+              : 'border-[#E8E6E1] hover:border-[#1B4332] hover:bg-[#F7F6F3]'
           )}
         >
           <input {...getInputProps()} />
-          <Upload size={28} className={cn('mx-auto mb-3', isDragActive ? 'text-blue-500' : 'text-slate-400')} />
-          <p className="text-sm font-medium text-slate-700">
+          <Upload size={28} className={cn('mx-auto mb-3', isDragActive ? 'text-[#1B4332]' : 'text-[#6B6860]')} />
+          <p className="text-sm font-medium text-[#1A1916]">
             {isDragActive ? 'Drop files here…' : 'Drag & drop files, or click to browse'}
           </p>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-[#6B6860] mt-1">
             PDF, JPG, PNG, DOC, DOCX · Max 25 MB each
           </p>
         </div>
@@ -166,67 +166,67 @@ export default function DocumentsTab({ application }: DocumentsTabProps) {
         {/* Upload progress */}
         {pendingUploads.map(([name, pct]) => (
           <div key={name} className="flex items-center gap-3 text-sm">
-            <FileText size={14} className="text-slate-400 flex-shrink-0" />
-            <span className="flex-1 truncate text-slate-600">{name}</span>
-            <div className="w-32 bg-slate-200 rounded-full h-1.5">
+            <FileText size={14} className="text-[#6B6860] flex-shrink-0" />
+            <span className="flex-1 truncate text-[#1A1916]">{name}</span>
+            <div className="w-32 bg-[#E8E6E1] rounded-full h-1.5">
               <div
-                className="bg-blue-500 h-1.5 rounded-full transition-all"
+                className="bg-[#1B4332] h-1.5 rounded-full transition-all"
                 style={{ width: `${pct}%` }}
               />
             </div>
-            <span className="text-slate-400 text-xs w-10 text-right">{pct}%</span>
+            <span className="text-[#6B6860] text-xs w-10 text-right">{pct}%</span>
           </div>
         ))}
       </div>
 
       {/* Documents table */}
       {isLoading ? (
-        <div className="text-center py-8 text-slate-400 text-sm">Loading documents…</div>
+        <div className="text-center py-8 text-[#6B6860] text-sm">Loading documents…</div>
       ) : documents.length === 0 ? (
         <div className="text-center py-8">
-          <FileText size={28} className="mx-auto text-slate-300 mb-2" />
-          <p className="text-slate-400 text-sm">No documents uploaded yet.</p>
+          <FileText size={28} className="mx-auto text-[#E8E6E1] mb-2" />
+          <p className="text-[#6B6860] text-sm">No documents uploaded yet.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto border border-slate-200 rounded-lg">
+        <div className="overflow-x-auto border border-[#E8E6E1] rounded-lg">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50">
+            <thead className="bg-[#F7F6F3]">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-[#6B6860] uppercase tracking-wider">
                   Name
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-[#6B6860] uppercase tracking-wider">
                   Type
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-[#6B6860] uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider hidden sm:table-cell">
+                <th className="px-4 py-3 text-left text-xs font-medium text-[#6B6860] uppercase tracking-wider hidden sm:table-cell">
                   Uploaded
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-[#6B6860] uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-[#E8E6E1]">
               {documents.map((doc) => (
-                <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
+                <tr key={doc.id} className="hover:bg-[#F7F6F3] transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <FileText size={14} className="text-slate-400 flex-shrink-0" />
+                      <FileText size={14} className="text-[#6B6860] flex-shrink-0" />
                       <a
                         href={doc.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline truncate max-w-[200px]"
+                        className="text-[#1B4332] hover:underline truncate max-w-[200px]"
                       >
                         {doc.name}
                       </a>
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#F7F6F3] text-[#1A1916]">
                       {DOCUMENT_TYPE_LABELS[doc.type]}
                     </span>
                   </td>
@@ -243,7 +243,7 @@ export default function DocumentsTab({ application }: DocumentsTabProps) {
                       </span>
                     </div>
                     <select
-                      className="mt-1.5 text-xs border border-slate-200 rounded px-1.5 py-0.5 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      className="mt-1.5 text-xs border border-[#E8E6E1] rounded px-1.5 py-0.5 text-[#1A1916] bg-white focus:outline-none focus:ring-1 focus:ring-[#1B4332]"
                       value={doc.status}
                       onChange={(e) =>
                         updateStatusMutation.mutate({
@@ -259,7 +259,7 @@ export default function DocumentsTab({ application }: DocumentsTabProps) {
                       ))}
                     </select>
                   </td>
-                  <td className="px-4 py-3 hidden sm:table-cell text-slate-500">
+                  <td className="px-4 py-3 hidden sm:table-cell text-[#6B6860]">
                     {formatDate(doc.uploadedAt)}
                   </td>
                   <td className="px-4 py-3">

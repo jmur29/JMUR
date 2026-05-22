@@ -107,7 +107,7 @@ function IncomeSection({ borrower, applicationId }: IncomeSectionProps) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+        <h3 className="text-xs font-medium text-[#6B6860] uppercase tracking-wide">
           {borrower.type === 'PRIMARY' ? 'Primary Borrower' : 'Co-Borrower'} — {borrower.firstName} {borrower.lastName}
         </h3>
         <div className="flex items-center gap-2">
@@ -227,9 +227,9 @@ function IncomeSection({ borrower, applicationId }: IncomeSectionProps) {
       />
 
       {/* Total */}
-      <div className="bg-slate-50 rounded-lg px-4 py-3 flex justify-between items-center">
-        <span className="text-sm font-medium text-slate-600">Qualifying Annual Income</span>
-        <span className="text-lg font-semibold text-slate-900">{formatCurrency(annualTotal)}</span>
+      <div className="bg-[#F7F6F3] rounded-lg px-4 py-3 flex justify-between items-center">
+        <span className="text-sm font-medium text-[#6B6860]">Qualifying Annual Income</span>
+        <span className="text-lg font-semibold text-[#1A1916]">{formatCurrency(annualTotal)}</span>
       </div>
     </form>
   );
@@ -248,14 +248,14 @@ export default function IncomeTab({ application }: IncomeTabProps) {
       {primaryBorrower ? (
         <IncomeSection borrower={primaryBorrower} applicationId={application.id} />
       ) : (
-        <div className="text-center py-8 text-slate-400 text-sm">
+        <div className="text-center py-8 text-[#6B6860] text-sm">
           Add a primary borrower first.
         </div>
       )}
 
       {coBorrower && (
         <>
-          <div className="border-t border-slate-100" />
+          <div className="border-t border-[#E8E6E1]" />
           <IncomeSection borrower={coBorrower} applicationId={application.id} />
         </>
       )}

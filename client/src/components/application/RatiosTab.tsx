@@ -29,7 +29,7 @@ export default function RatiosTab({ application }: RatiosTabProps) {
     <div className="space-y-8">
       {/* Action bar */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+        <h3 className="text-xs font-medium text-[#6B6860] uppercase tracking-wide">
           Underwriting Ratios
         </h3>
         <Button
@@ -42,7 +42,7 @@ export default function RatiosTab({ application }: RatiosTabProps) {
       </div>
 
       {!display && !calculateMutation.isPending && (
-        <div className="text-center py-16 text-slate-400">
+        <div className="text-center py-16 text-[#6B6860]">
           <Calculator size={36} className="mx-auto mb-3 opacity-40" />
           <p className="text-sm">Click "Run Calculation" to analyze this application.</p>
         </div>
@@ -60,7 +60,7 @@ export default function RatiosTab({ application }: RatiosTabProps) {
             >
               {getDecisionLabel(display.decision)}
             </span>
-            <span className="text-sm text-slate-500">
+            <span className="text-sm text-[#6B6860]">
               Stress rate: {formatPercent(display.stressRate)}
             </span>
           </div>
@@ -74,7 +74,7 @@ export default function RatiosTab({ application }: RatiosTabProps) {
                 label="GDS"
                 format={(v) => `${v.toFixed(1)}%`}
               />
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-[#6B6860] mt-1">
                 Stress: {formatPercent(display.stressGds)}
               </p>
             </div>
@@ -85,7 +85,7 @@ export default function RatiosTab({ application }: RatiosTabProps) {
                 label="TDS"
                 format={(v) => `${v.toFixed(1)}%`}
               />
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-[#6B6860] mt-1">
                 Stress: {formatPercent(display.stressTds)}
               </p>
             </div>
@@ -101,21 +101,21 @@ export default function RatiosTab({ application }: RatiosTabProps) {
 
           {/* Key metrics */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-slate-50 rounded-lg p-4">
-              <p className="text-xs text-slate-500 mb-1">Monthly Income</p>
-              <p className="text-sm font-semibold text-slate-900">
+            <div className="bg-[#F7F6F3] rounded-lg p-4">
+              <p className="text-xs text-[#6B6860] mb-1">Monthly Income</p>
+              <p className="text-sm font-semibold text-[#1A1916]">
                 {formatCurrency(display.monthlyIncome)}
               </p>
             </div>
-            <div className="bg-slate-50 rounded-lg p-4">
-              <p className="text-xs text-slate-500 mb-1">Mortgage Amount</p>
-              <p className="text-sm font-semibold text-slate-900">
+            <div className="bg-[#F7F6F3] rounded-lg p-4">
+              <p className="text-xs text-[#6B6860] mb-1">Mortgage Amount</p>
+              <p className="text-sm font-semibold text-[#1A1916]">
                 {formatCurrency(display.mortgageAmount)}
               </p>
             </div>
-            <div className="bg-slate-50 rounded-lg p-4">
-              <p className="text-xs text-slate-500 mb-1">Monthly Payment</p>
-              <p className="text-sm font-semibold text-slate-900">
+            <div className="bg-[#F7F6F3] rounded-lg p-4">
+              <p className="text-xs text-[#6B6860] mb-1">Monthly Payment</p>
+              <p className="text-sm font-semibold text-[#1A1916]">
                 {formatCurrency(display.monthlyPayment)}
               </p>
             </div>
@@ -128,15 +128,15 @@ export default function RatiosTab({ application }: RatiosTabProps) {
           </div>
 
           {/* Stress test panel */}
-          <div className="bg-slate-50 rounded-lg p-5">
-            <h4 className="text-sm font-semibold text-slate-700 mb-3">Stress Test Results</h4>
+          <div className="bg-[#F7F6F3] rounded-lg p-5">
+            <h4 className="text-sm font-semibold text-[#1A1916] mb-3">Stress Test Results</h4>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
               <div>
-                <p className="text-xs text-slate-500 mb-1">Stress Rate</p>
+                <p className="text-xs text-[#6B6860] mb-1">Stress Rate</p>
                 <p className="font-semibold">{formatPercent(display.stressRate)}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 mb-1">Stress GDS</p>
+                <p className="text-xs text-[#6B6860] mb-1">Stress GDS</p>
                 <p
                   className={cn(
                     'font-semibold',
@@ -144,11 +144,11 @@ export default function RatiosTab({ application }: RatiosTabProps) {
                   )}
                 >
                   {formatPercent(display.stressGds)}
-                  <span className="text-xs font-normal text-slate-400 ml-1">/ 32%</span>
+                  <span className="text-xs font-normal text-[#6B6860] ml-1">/ 32%</span>
                 </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 mb-1">Stress TDS</p>
+                <p className="text-xs text-[#6B6860] mb-1">Stress TDS</p>
                 <p
                   className={cn(
                     'font-semibold',
@@ -156,11 +156,11 @@ export default function RatiosTab({ application }: RatiosTabProps) {
                   )}
                 >
                   {formatPercent(display.stressTds)}
-                  <span className="text-xs font-normal text-slate-400 ml-1">/ 44%</span>
+                  <span className="text-xs font-normal text-[#6B6860] ml-1">/ 44%</span>
                 </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 mb-1">Stress Payment</p>
+                <p className="text-xs text-[#6B6860] mb-1">Stress Payment</p>
                 <p className="font-semibold text-amber-700">
                   {formatCurrency(display.stressPayment)}
                 </p>
@@ -170,23 +170,23 @@ export default function RatiosTab({ application }: RatiosTabProps) {
 
           {/* Qualifying income breakdown */}
           <div>
-            <h4 className="text-sm font-semibold text-slate-700 mb-3">Qualifying Income Breakdown</h4>
-            <div className="overflow-x-auto border border-slate-200 rounded-lg">
+            <h4 className="text-sm font-semibold text-[#1A1916] mb-3">Qualifying Income Breakdown</h4>
+            <div className="overflow-x-auto border border-[#E8E6E1] rounded-lg">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50">
+                <thead className="bg-[#F7F6F3]">
                   <tr>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6B6860] uppercase">
                       Source
                     </th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">
+                    <th className="px-4 py-2.5 text-right text-xs font-medium text-[#6B6860] uppercase">
                       Annual
                     </th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">
+                    <th className="px-4 py-2.5 text-right text-xs font-medium text-[#6B6860] uppercase">
                       Monthly
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-[#E8E6E1]">
                   {[
                     { label: 'Base Salary', value: display.qualifyingIncome.baseSalary },
                     { label: 'Bonus (50%)', value: display.qualifyingIncome.bonus },
@@ -198,22 +198,22 @@ export default function RatiosTab({ application }: RatiosTabProps) {
                   ]
                     .filter((row) => row.value > 0)
                     .map((row) => (
-                      <tr key={row.label} className="hover:bg-slate-50">
-                        <td className="px-4 py-2.5 text-slate-600">{row.label}</td>
-                        <td className="px-4 py-2.5 text-right text-slate-900">
+                      <tr key={row.label} className="hover:bg-[#F7F6F3]">
+                        <td className="px-4 py-2.5 text-[#1A1916]">{row.label}</td>
+                        <td className="px-4 py-2.5 text-right text-[#1A1916]">
                           {formatCurrency(row.value)}
                         </td>
-                        <td className="px-4 py-2.5 text-right text-slate-500">
+                        <td className="px-4 py-2.5 text-right text-[#6B6860]">
                           {formatCurrency(row.value / 12)}
                         </td>
                       </tr>
                     ))}
-                  <tr className="bg-slate-50 font-semibold">
-                    <td className="px-4 py-2.5 text-slate-900">Total Qualifying</td>
-                    <td className="px-4 py-2.5 text-right text-slate-900">
+                  <tr className="bg-[#F7F6F3] font-semibold">
+                    <td className="px-4 py-2.5 text-[#1A1916]">Total Qualifying</td>
+                    <td className="px-4 py-2.5 text-right text-[#1A1916]">
                       {formatCurrency(display.qualifyingIncome.total)}
                     </td>
-                    <td className="px-4 py-2.5 text-right text-slate-900">
+                    <td className="px-4 py-2.5 text-right text-[#1A1916]">
                       {formatCurrency(display.qualifyingIncome.total / 12)}
                     </td>
                   </tr>
@@ -225,7 +225,7 @@ export default function RatiosTab({ application }: RatiosTabProps) {
           {/* Flags */}
           {display.flags.length > 0 && (
             <div>
-              <h4 className="text-sm font-semibold text-slate-700 mb-3">
+              <h4 className="text-sm font-semibold text-[#1A1916] mb-3">
                 Underwriting Flags ({display.flags.length})
               </h4>
               <div className="space-y-2">

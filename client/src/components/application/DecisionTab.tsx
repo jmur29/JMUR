@@ -58,7 +58,7 @@ export default function DecisionTab({ application }: DecisionTabProps) {
     <div className="space-y-8">
       {/* Current calculation result */}
       {calculateMutation.isPending && !uwResult && (
-        <div className="flex items-center gap-3 text-sm text-slate-500">
+        <div className="flex items-center gap-3 text-sm text-[#6B6860]">
           <Spinner size="sm" />
           Running underwriting calculation…
         </div>
@@ -67,7 +67,7 @@ export default function DecisionTab({ application }: DecisionTabProps) {
       {uwResult && (
         <div>
           <div className="flex items-center gap-3 mb-4">
-            <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+            <h3 className="text-xs font-medium text-[#6B6860] uppercase tracking-wide">
               System Recommendation
             </h3>
             <span
@@ -88,8 +88,8 @@ export default function DecisionTab({ application }: DecisionTabProps) {
               { label: 'LTV', value: formatPercent(uwResult.ltv), threshold: 80, v: uwResult.ltv },
               { label: 'Stress GDS', value: formatPercent(uwResult.stressGds), threshold: 32, v: uwResult.stressGds },
             ].map((item) => (
-              <div key={item.label} className="bg-slate-50 rounded-lg p-3">
-                <p className="text-xs text-slate-500 mb-1">{item.label}</p>
+              <div key={item.label} className="bg-[#F7F6F3] rounded-lg p-3">
+                <p className="text-xs text-[#6B6860] mb-1">{item.label}</p>
                 <p
                   className={cn(
                     'text-sm font-semibold',
@@ -97,7 +97,7 @@ export default function DecisionTab({ application }: DecisionTabProps) {
                   )}
                 >
                   {item.value}
-                  <span className="text-xs font-normal text-slate-400 ml-1">
+                  <span className="text-xs font-normal text-[#6B6860] ml-1">
                     / {item.threshold}%
                   </span>
                 </p>
@@ -118,7 +118,7 @@ export default function DecisionTab({ application }: DecisionTabProps) {
 
       {/* Underwriter notes */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">
+        <label className="block text-sm font-medium text-[#1A1916] mb-2">
           Underwriter Notes
         </label>
         <textarea
@@ -126,13 +126,13 @@ export default function DecisionTab({ application }: DecisionTabProps) {
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Add conditions, observations, or rationale for decision…"
           rows={4}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+          className="w-full border border-[#E8E6E1] rounded-lg px-3 py-2 text-sm text-[#1A1916] placeholder:text-[#6B6860] focus:outline-none focus:border-[#1B4332] resize-y"
         />
       </div>
 
       {/* Decision buttons */}
       <div className="space-y-3">
-        <p className="text-sm font-medium text-slate-700">Record Decision</p>
+        <p className="text-sm font-medium text-[#1A1916]">Record Decision</p>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="primary"
@@ -197,12 +197,12 @@ export default function DecisionTab({ application }: DecisionTabProps) {
       {/* Decision history */}
       {latestHistory.length > 0 && (
         <div>
-          <h4 className="text-sm font-semibold text-slate-700 mb-3">Decision History</h4>
+          <h4 className="text-sm font-semibold text-[#1A1916] mb-3">Decision History</h4>
           <div className="space-y-3">
             {latestHistory.map((decision) => (
               <div
                 key={decision.id}
-                className="border border-slate-200 rounded-lg p-4 space-y-2"
+                className="border border-[#E8E6E1] rounded-lg p-4 space-y-2"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -225,23 +225,23 @@ export default function DecisionTab({ application }: DecisionTabProps) {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <div className="flex items-center gap-1.5 text-xs text-[#6B6860]">
                     <Clock size={12} />
                     {formatDate(decision.decidedAt)}
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-xs text-slate-600">
+                <div className="grid grid-cols-3 gap-2 text-xs text-[#1A1916]">
                   <span>GDS: {formatPercent(decision.gds)}</span>
                   <span>TDS: {formatPercent(decision.tds)}</span>
                   <span>LTV: {formatPercent(decision.ltv)}</span>
                 </div>
                 {decision.notes && (
-                  <p className="text-sm text-slate-600 border-t border-slate-100 pt-2">
+                  <p className="text-sm text-[#1A1916] border-t border-[#E8E6E1] pt-2">
                     {decision.notes}
                   </p>
                 )}
                 {decision.decidedBy && (
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-[#6B6860]">
                     By {decision.decidedBy.firstName} {decision.decidedBy.lastName}
                   </p>
                 )}

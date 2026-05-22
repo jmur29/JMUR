@@ -109,7 +109,7 @@ export default function TermsTab({ application }: TermsTabProps) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+        <h3 className="text-xs font-medium text-[#6B6860] uppercase tracking-wide">
           Mortgage Terms
         </h3>
         <div className="flex items-center gap-2">
@@ -152,35 +152,35 @@ export default function TermsTab({ application }: TermsTabProps) {
         />
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+      <label className="flex items-center gap-2 text-sm text-[#1A1916] cursor-pointer">
         <input
           type="checkbox"
-          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          className="rounded border-[#E8E6E1] text-[#1B4332] focus:ring-[#1B4332]"
           {...register('insured')}
         />
         CMHC Insured Mortgage
       </label>
 
       {/* Computed preview */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-50 rounded-lg p-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-[#F7F6F3] rounded-lg p-4">
         <div>
-          <p className="text-xs text-slate-500 mb-1">Mortgage Amount</p>
-          <p className="text-sm font-semibold text-slate-900">{formatCurrency(mortgageAmount)}</p>
+          <p className="text-xs text-[#6B6860] mb-1">Mortgage Amount</p>
+          <p className="text-sm font-semibold text-[#1A1916]">{formatCurrency(mortgageAmount)}</p>
         </div>
         <div>
-          <p className="text-xs text-slate-500 mb-1">Stress Rate</p>
-          <p className="text-sm font-semibold text-slate-900">
-            {formatPercent(stressRate)} <span className="text-xs font-normal text-slate-400">(min 5.25%)</span>
+          <p className="text-xs text-[#6B6860] mb-1">Stress Rate</p>
+          <p className="text-sm font-semibold text-[#1A1916]">
+            {formatPercent(stressRate)} <span className="text-xs font-normal text-[#E8E6E1]">(min 5.25%)</span>
           </p>
         </div>
         <div>
-          <p className="text-xs text-slate-500 mb-1">Monthly Payment</p>
-          <p className="text-sm font-semibold text-slate-900">
+          <p className="text-xs text-[#6B6860] mb-1">Monthly Payment</p>
+          <p className="text-sm font-semibold text-[#1A1916]">
             {monthlyPayment > 0 ? formatCurrency(monthlyPayment) : '—'}
           </p>
         </div>
         <div>
-          <p className="text-xs text-slate-500 mb-1">Stress Payment</p>
+          <p className="text-xs text-[#6B6860] mb-1">Stress Payment</p>
           <p className="text-sm font-semibold text-amber-700">
             {stressPayment > 0 ? formatCurrency(stressPayment) : '—'}
           </p>
