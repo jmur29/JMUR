@@ -3,10 +3,11 @@ import { useMutation } from '@tanstack/react-query';
 import {
   Sparkles, Loader2, Shield, TrendingUp, AlertTriangle,
   CheckCircle, XCircle, Info, ChevronRight, Lightbulb,
-  Building2, AlertOctagon, Zap, Target,
+  Building2, AlertOctagon, Zap, Target, RefreshCw, Clock,
 } from 'lucide-react';
 import { aiApi } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { formatDate } from '../../lib/utils';
 import type { Application } from '../../types';
 import type { DealIntelligence, LenderMatch, RiskFlag } from '../../types';
 
@@ -16,25 +17,25 @@ function ScoreRing({ score, grade }: { score: number; grade: string }) {
   const circumference = 2 * Math.PI * r;
   const progress = (score / 100) * circumference;
   const color =
-    score >= 80 ? '#22c55e' :
-    score >= 65 ? '#3b82f6' :
-    score >= 50 ? '#f59e0b' :
-    score >= 35 ? '#f97316' : '#ef4444';
+    score >= 85 ? '#22c55e' :
+    score >= 70 ? '#3b82f6' :
+    score >= 55 ? '#f59e0b' :
+    score >= 40 ? '#f97316' : '#ef4444';
 
   return (
     <div className="relative w-36 h-36 flex-shrink-0">
       <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-        <circle cx="60" cy="60" r={r} fill="none" stroke="#e2e8f0" strokeWidth="8" />
+        <circle cx="60" cy="60" r={r} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
         <circle
           cx="60" cy="60" r={r} fill="none"
           stroke={color} strokeWidth="8"
           strokeDasharray={`${progress} ${circumference}`}
           strokeLinecap="round"
-          style={{ transition: 'stroke-dasharray 1s ease' }}
+          style={{ transition: 'stroke-dasharray 1.2s ease' }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-4xl font-black text-slate-900">{score}</span>
+        <span className="text-4xl font-black text-white">{score}</span>
         <span className="text-sm font-bold" style={{ color }}>{grade}</span>
       </div>
     </div>
@@ -51,6 +52,7 @@ function LenderCard({ match }: { match: LenderMatch }) {
   }[match.verdict];
 
   const barColor = match.fitScore >= 70 ? 'bg-green-500' : match.fitScore >= 50 ? 'bg-blue-500' : 'bg-red-400';
+  const tierColor = match.tier === 'A' ? 'bg-emerald-100 text-emerald-700' : match.tier === 'B' ? 'bg-amber-100 text-amber-700' : 'bg-purple-100 text-purple-700';
 
   return (
     <button
@@ -64,16 +66,18 @@ function LenderCard({ match }: { match: LenderMatch }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-slate-800 truncate">{match.lender}</span>
-            <span className={cn('px-2 py-0.5 rounded-full text-xs font-semibold border flex-shrink-0', verdictStyle)}>
-              {match.verdict}
-            </span>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <span className={cn('px-1.5 py-0.5 rounded text-xs font-semibold', tierColor)}>{match.tier}</span>
+              <span className={cn('px-2 py-0.5 rounded-full text-xs font-semibold border', verdictStyle)}>
+                {match.verdict}
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-2 mt-1.5">
             <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-              <div className={cn('h-full rounded-full transition-all', barColor)} style={{ width: `${match.fitScore}%` }} />
+              <div className={cn('h-full rounded-full transition-all duration-700', barColor)} style={{ width: `${match.fitScore}%` }} />
             </div>
             <span className="text-xs font-bold text-slate-600 flex-shrink-0">{match.fitScore}%</span>
-            <span className="text-xs text-slate-400 flex-shrink-0">{match.tier} Lender</span>
           </div>
         </div>
         <ChevronRight size={14} className={cn('text-slate-400 transition-transform flex-shrink-0', open && 'rotate-90')} />
@@ -112,10 +116,10 @@ function RiskFlagRow({ flag }: { flag: RiskFlag }) {
     <div className={cn('flex items-start gap-3 px-4 py-3 rounded-xl border', styles.bg)}>
       <div className="flex-shrink-0 mt-0.5">{styles.icon}</div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={cn('text-xs font-semibold', styles.text)}>{flag.message}</span>
+        <span className={cn('text-xs font-semibold', styles.text)}>{flag.message}</span>
+        <div className="mt-1">
+          <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', styles.badge)}>{flag.category}</span>
         </div>
-        <span className={cn('text-xs mt-0.5 inline-block px-1.5 py-0.5 rounded font-medium', styles.badge)}>{flag.category}</span>
       </div>
     </div>
   );
@@ -127,7 +131,9 @@ interface Props {
 }
 
 export default function AIAnalysisTab({ application }: Props) {
-  const [intel, setIntel] = useState<DealIntelligence | null>(null);
+  const [intel, setIntel] = useState<DealIntelligence | null>(
+    application.dealIntelligence ?? null
+  );
 
   const analyzeMutation = useMutation({
     mutationFn: () => aiApi.reviewFile(application.id),
@@ -135,9 +141,11 @@ export default function AIAnalysisTab({ application }: Props) {
   });
 
   const recColor =
-    intel?.recommendation === 'APPROVE' ? 'text-green-600 bg-green-50 border-green-200' :
-    intel?.recommendation === 'DECLINE' ? 'text-red-600 bg-red-50 border-red-200' :
-    'text-amber-600 bg-amber-50 border-amber-200';
+    intel?.recommendation === 'APPROVE' ? 'text-green-400 bg-green-500/20 border-green-500/30' :
+    intel?.recommendation === 'DECLINE' ? 'text-red-400 bg-red-500/20 border-red-500/30' :
+    'text-amber-400 bg-amber-500/20 border-amber-500/30';
+
+  const hasData = application.borrowers.length > 0 || application.property || application.mortgageTerms;
 
   // ── Empty state ────────────────────────────────────────────────────────────
   if (!intel) {
@@ -149,7 +157,7 @@ export default function AIAnalysisTab({ application }: Props) {
         <div className="text-center max-w-sm">
           <h3 className="text-xl font-bold text-slate-900">AI Deal Intelligence</h3>
           <p className="text-sm text-slate-500 mt-2">
-            Get an instant deal score, lender match analysis, risk flags, and deal coaching from a senior underwriter AI.
+            Instant deal score, Canadian lender match analysis, risk flags, and broker coaching from a senior underwriter AI.
           </p>
         </div>
 
@@ -167,20 +175,29 @@ export default function AIAnalysisTab({ application }: Props) {
           ))}
         </div>
 
+        {!hasData && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 max-w-sm text-center">
+            <p className="text-xs text-amber-700 font-medium">Add borrower, property, and mortgage terms first for the most accurate analysis.</p>
+          </div>
+        )}
+
         <button
           onClick={() => analyzeMutation.mutate()}
           disabled={analyzeMutation.isPending}
           className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 text-white font-semibold shadow-lg hover:shadow-xl hover:opacity-95 transition-all disabled:opacity-60"
         >
           {analyzeMutation.isPending ? (
-            <><Loader2 size={18} className="animate-spin" /> Analyzing deal…</>
+            <><Loader2 size={18} className="animate-spin" /> Analyzing with AI…</>
           ) : (
             <><Sparkles size={18} /> Run AI Analysis</>
           )}
         </button>
 
         {analyzeMutation.isError && (
-          <p className="text-sm text-red-500">Analysis failed. Make sure ANTHROPIC_API_KEY is set in Railway.</p>
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 max-w-sm text-center">
+            <p className="text-sm text-red-600 font-medium">Analysis failed.</p>
+            <p className="text-xs text-red-500 mt-1">Check that ANTHROPIC_API_KEY is set in Railway environment variables.</p>
+          </div>
         )}
       </div>
     );
@@ -189,7 +206,7 @@ export default function AIAnalysisTab({ application }: Props) {
   // ── Results ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* Hero score bar */}
+      {/* Hero score card */}
       <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 text-white">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
           <ScoreRing score={intel.dealScore} grade={intel.grade} />
@@ -213,6 +230,12 @@ export default function AIAnalysisTab({ application }: Props) {
             </div>
           </div>
         </div>
+        {application.dealAnalyzedAt && (
+          <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-white/10">
+            <Clock size={11} className="text-slate-500" />
+            <span className="text-xs text-slate-500">Last analyzed {formatDate(application.dealAnalyzedAt)}</span>
+          </div>
+        )}
       </div>
 
       {/* Ratio commentary */}
@@ -316,13 +339,15 @@ export default function AIAnalysisTab({ application }: Props) {
         </div>
       </div>
 
-      {/* Re-run button */}
+      {/* Re-run */}
       <div className="flex justify-end pt-2">
         <button
-          onClick={() => { setIntel(null); analyzeMutation.reset(); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:text-violet-600 hover:bg-violet-50 transition-all border border-slate-200 hover:border-violet-200"
+          onClick={() => analyzeMutation.mutate()}
+          disabled={analyzeMutation.isPending}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:text-violet-600 hover:bg-violet-50 transition-all border border-slate-200 hover:border-violet-200 disabled:opacity-50"
         >
-          <Sparkles size={13} /> Re-run Analysis
+          {analyzeMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+          {analyzeMutation.isPending ? 'Re-analyzing…' : 'Re-run Analysis'}
         </button>
       </div>
     </div>

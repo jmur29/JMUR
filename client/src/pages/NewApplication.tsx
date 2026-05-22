@@ -7,7 +7,7 @@ import {
   FileText, Upload, Sparkles, ChevronRight, X,
   CheckCircle, AlertCircle, Loader2, File,
 } from 'lucide-react';
-import { applicationsApi, borrowersApi, propertyApi, termsApi, aiApi } from '../lib/api';
+import { applicationsApi, borrowersApi, incomeApi, propertyApi, termsApi, aiApi } from '../lib/api';
 import { cn } from '../lib/utils';
 import type { ParsedApplication } from '../types';
 
@@ -182,7 +182,7 @@ export default function NewApplication() {
       const p = parsed;
       const app = await applicationsApi.create({});
 
-      await borrowersApi.create(app.id, {
+      const borrower = await borrowersApi.create(app.id, {
         type: 'PRIMARY',
         firstName: p?.firstName ?? '',
         lastName: p?.lastName ?? '',
@@ -196,6 +196,19 @@ export default function NewApplication() {
         collections: false,
         existingMortgages: 0,
       });
+
+      // Save parsed income data so AI analysis has salary context
+      if (p?.baseSalary || p?.employerName) {
+        await incomeApi.create(borrower.id, {
+          baseSalary: p?.baseSalary ?? 0,
+          employerName: p?.employerName ?? null,
+          yearsEmployed: p?.yearsEmployed ?? null,
+          bonus: 0,
+          overtime: 0,
+          otherIncome: 0,
+          rentalIncome: 0,
+        });
+      }
 
       if (p?.address) {
         await propertyApi.create(app.id, {
@@ -366,8 +379,10 @@ export default function NewApplication() {
             <ReviewField label="Province" value={parsed.province} />
             <ReviewField label="Purchase Price" value={parsed.purchasePrice ? `$${parsed.purchasePrice.toLocaleString()}` : undefined} />
             <ReviewField label="Down Payment" value={parsed.downPayment ? `$${parsed.downPayment.toLocaleString()}` : undefined} />
+            <ReviewField label="Mortgage Type" value={parsed.mortgageType} />
             <ReviewField label="Rate" value={parsed.contractRate ? `${parsed.contractRate}%` : undefined} />
             <ReviewField label="Amortization" value={parsed.amortizationYears ? `${parsed.amortizationYears} yrs` : undefined} />
+            {parsed.existingMortgageBalance ? <ReviewField label="Existing Balance" value={`$${parsed.existingMortgageBalance.toLocaleString()}`} /> : null}
           </div>
         </div>
       ) : (

@@ -12,9 +12,26 @@ const app = express();
 // ─── Security & parsing ───────────────────────────────────────────────────────
 
 app.use(helmet());
+const _corsOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
+    origin: (origin, cb) => {
+      // Allow server-to-server (no origin) and localhost in dev
+      if (!origin) return cb(null, true);
+      // Allow any Vercel preview/prod deployment plus explicitly configured origins
+      if (
+        _corsOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app') ||
+        origin.startsWith('http://localhost')
+      ) {
+        return cb(null, true);
+      }
+      cb(new Error('Not allowed by CORS'));
+    },
     credentials: true,
   })
 );
