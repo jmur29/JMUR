@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, Link } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
 import {
   LayoutDashboard,
@@ -8,6 +8,7 @@ import {
   BarChart2,
   ChevronDown,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -72,7 +73,7 @@ export default function Sidebar({ collapsed = false, onClose }: SidebarProps) {
     <nav className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 h-16 border-b border-slate-800 flex-shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
           CP
         </div>
         {!collapsed && (
@@ -82,8 +83,22 @@ export default function Sidebar({ collapsed = false, onClose }: SidebarProps) {
         )}
       </div>
 
+      {/* New submission CTA */}
+      {!collapsed && (
+        <div className="px-3 pt-4 pb-1">
+          <Link
+            to="/applications/new"
+            onClick={onClose}
+            className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 text-white text-sm font-semibold hover:opacity-90 transition-all shadow-md"
+          >
+            <Sparkles size={14} />
+            New Submission
+          </Link>
+        </div>
+      )}
+
       {/* Nav items */}
-      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1 scrollbar-thin">
+      <div className="flex-1 overflow-y-auto py-3 px-3 space-y-1 scrollbar-thin">
         {navItems.map((item) => {
           if (item.adminOnly && !isAdmin) return null;
 

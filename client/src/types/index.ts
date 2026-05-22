@@ -1,3 +1,34 @@
+export interface ParsedApplication {
+  firstName?: string;
+  lastName?: string;
+  dob?: string;
+  email?: string;
+  phone?: string;
+  employmentType?: 'EMPLOYED' | 'SELF_EMPLOYED' | 'CONTRACT' | 'RETIRED' | 'OTHER';
+  creditScore?: number;
+  baseSalary?: number;
+  employerName?: string;
+  yearsEmployed?: number;
+  address?: string;
+  city?: string;
+  province?: string;
+  postalCode?: string;
+  propertyType?: 'DETACHED' | 'SEMI' | 'TOWNHOUSE' | 'CONDO' | 'DUPLEX' | 'OTHER';
+  purchasePrice?: number;
+  downPayment?: number;
+  contractRate?: number;
+  amortizationYears?: number;
+  termYears?: number;
+}
+
+export interface UWReview {
+  recommendation: 'APPROVE' | 'DECLINE' | 'MANUAL_REVIEW';
+  summary: string;
+  risk_flags: string[];
+  conditions: string[];
+  reasoning: string;
+}
+
 export type UserRole = 'ADMIN' | 'UNDERWRITER' | 'VIEWER';
 export type ApplicationStatus =
   | 'DRAFT'
