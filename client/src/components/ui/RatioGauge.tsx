@@ -67,14 +67,14 @@ export default function RatioGauge({
         </ResponsiveContainer>
         {/* Center text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-xl font-bold text-slate-900" style={{ color }}>
+          <span className="text-xl font-bold text-[#1A1916]" style={{ color }}>
             {displayValue}
           </span>
-          <span className="text-xs text-slate-400">/ {threshold}%</span>
+          <span className="text-xs text-[#6B6860]">/ {threshold}%</span>
         </div>
       </div>
-      <p className="text-sm font-medium text-slate-700 mt-1">{label}</p>
-      <p className="text-xs text-slate-400">Threshold: {threshold}%</p>
+      <p className="text-sm font-medium text-[#1A1916] mt-1">{label}</p>
+      <p className="text-xs text-[#6B6860]">Threshold: {threshold}%</p>
     </div>
   );
 }

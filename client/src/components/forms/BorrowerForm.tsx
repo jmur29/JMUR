@@ -115,18 +115,18 @@ export default function BorrowerForm({ prefix = '', showSin = false }: BorrowerF
       </div>
 
       <div className="flex gap-6">
-        <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+        <label className="flex items-center gap-2 text-sm text-[#1A1916] cursor-pointer">
           <input
             type="checkbox"
-            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            className="rounded border-[#E8E6E1] text-[#1B4332] focus:ring-[#1B4332]"
             {...register(field('bankruptcies'))}
           />
           Prior bankruptcy
         </label>
-        <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+        <label className="flex items-center gap-2 text-sm text-[#1A1916] cursor-pointer">
           <input
             type="checkbox"
-            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            className="rounded border-[#E8E6E1] text-[#1B4332] focus:ring-[#1B4332]"
             {...register(field('collections'))}
           />
           Collections on file

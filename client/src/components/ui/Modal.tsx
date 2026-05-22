@@ -108,13 +108,13 @@ export default function Modal({
       >
         {/* Header */}
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-            <h2 id="modal-title" className="text-lg font-semibold text-slate-900">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#E8E6E1]">
+            <h2 id="modal-title" className="text-lg font-semibold text-[#1A1916]">
               {title}
             </h2>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              className="p-1.5 rounded-md text-[#6B6860] hover:text-[#6B6860] hover:bg-[#F7F6F3] transition-colors"
               aria-label="Close"
             >
               <X size={18} />
@@ -126,7 +126,7 @@ export default function Modal({
         {!title && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            className="absolute top-4 right-4 p-1.5 rounded-md text-[#6B6860] hover:text-[#6B6860] hover:bg-[#F7F6F3] transition-colors"
             aria-label="Close"
           >
             <X size={18} />
