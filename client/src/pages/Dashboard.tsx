@@ -112,10 +112,10 @@ function ZipDropZone() {
 
     try {
       const formData = new FormData();
-      files.forEach((f) => formData.append('files', f));
+      files.forEach((f) => formData.append('file', f));
       const result = await intakeApi.uploadZip(formData, setProgress);
       if (stepIntervalRef.current) clearInterval(stepIntervalRef.current);
-      navigate(`/applications/${result.applicationId}`);
+      navigate(`/applications/${result.applicationId}/intelligence`);
     } catch (err: unknown) {
       if (stepIntervalRef.current) clearInterval(stepIntervalRef.current);
       setUploading(false);

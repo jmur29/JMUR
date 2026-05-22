@@ -14,7 +14,7 @@ export async function handleZipUpload(req: Request, res: Response, next: NextFun
     if (!file) { res.status(400).json({ error: 'No file uploaded' }); return; }
 
     // Start processing async (return immediately with applicationId)
-    processZipUpload(app.id, file.buffer, req.user.tenantId).catch(console.error);
+    processZipUpload(app.id, file.buffer, req.user.tenantId, file.originalname).catch(console.error);
 
     res.json({ applicationId: app.id, documentCount: 0, status: 'PROCESSING' });
   } catch (err) { next(err); }

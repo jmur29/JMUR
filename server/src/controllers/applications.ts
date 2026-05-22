@@ -98,7 +98,11 @@ export async function getDealIntelligence(req: Request, res: Response, next: Nex
     }
 
     if (!application.dealIntelligenceReport) {
-      res.status(404).json({ error: 'Report not yet generated', code: 'NOT_READY' });
+      res.status(404).json({
+        error: 'Report not yet generated',
+        code: 'NOT_READY',
+        processingStatus: application.processingStatus,
+      });
       return;
     }
 
@@ -121,7 +125,11 @@ export async function getDealReview(req: Request, res: Response, next: NextFunct
     }
 
     if (!application.dealReviewReport) {
-      res.status(404).json({ error: 'Report not yet generated', code: 'NOT_READY' });
+      res.status(404).json({
+        error: 'Report not yet generated',
+        code: 'NOT_READY',
+        processingStatus: application.processingStatus,
+      });
       return;
     }
 

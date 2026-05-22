@@ -146,7 +146,14 @@ export default function DealIntelligenceReport() {
       const status = (err as { response?: { status: number } })?.response?.status;
       return status !== 404;
     },
+    refetchInterval: (query) => {
+      const d = (query.state.error as { response?: { data?: { processingStatus?: string } } })?.response?.data;
+      return d?.processingStatus === 'PROCESSING' ? 2500 : false;
+    },
   });
+
+  const errData = (error as { response?: { data?: { code?: string; processingStatus?: string } } })?.response?.data;
+  const isProcessing = errData?.processingStatus === 'PROCESSING';
 
   const generateMutation = useMutation({
     mutationFn: () =>
@@ -159,6 +166,20 @@ export default function DealIntelligenceReport() {
   if (isLoading) return <ReportSkeleton />;
 
   if (is404 || (!report && !isLoading)) {
+    if (isProcessing) {
+      return (
+        <div className="max-w-xl mx-auto card p-8 text-center space-y-4 mt-8">
+          <Spinner size="lg" className="mx-auto" />
+          <h2 className="text-lg font-semibold text-[#1A1916]">Processing Documents</h2>
+          <p className="text-sm text-[#6B6860]">
+            The AI is classifying and extracting data from your uploaded documents.
+            This usually takes 15–60 seconds.
+          </p>
+          <p className="text-xs text-[#6B6860] font-mono">Auto-refreshing every 2.5s…</p>
+        </div>
+      );
+    }
+
     return (
       <div className="max-w-xl mx-auto card p-8 text-center space-y-4 mt-8">
         <div className="w-12 h-12 rounded-2xl bg-[#D1FAE5] flex items-center justify-center mx-auto">

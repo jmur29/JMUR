@@ -77,10 +77,16 @@ export async function assembleDealIntelligence(
 
 // ─── Process zip upload ───────────────────────────────────────────────────────
 
+function isZipBuffer(buf: Buffer): boolean {
+  // ZIP magic bytes: PK\x03\x04
+  return buf.length >= 4 && buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04;
+}
+
 export async function processZipUpload(
   applicationId: string,
   zipBuffer: Buffer,
-  tenantId: string
+  tenantId: string,
+  originalFilename = 'upload'
 ): Promise<DealIntelligenceReport> {
   // Mark as PROCESSING
   await prisma.application.update({
@@ -89,6 +95,25 @@ export async function processZipUpload(
   });
 
   try {
+    // If not a ZIP, treat as a single document file
+    if (!isZipBuffer(zipBuffer)) {
+      const doc = await classifyAndExtract(
+        originalFilename,
+        isPdf(originalFilename) ? (await pdfParse(zipBuffer)).text : zipBuffer,
+        !!getImageMime(originalFilename)
+      );
+      const report = await assembleDealIntelligence([doc], applicationId);
+      await prisma.application.update({
+        where: { id: applicationId },
+        data: {
+          processingStatus: 'COMPLETE',
+          dealIntelligenceReport: report as unknown as Record<string, unknown>,
+          dealAnalyzedAt: new Date(),
+        },
+      });
+      return report;
+    }
+
     const zip = new AdmZip(zipBuffer);
     const entries = zip.getEntries();
 
