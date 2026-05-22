@@ -29,6 +29,44 @@ export interface UWReview {
   reasoning: string;
 }
 
+export interface LenderMatch {
+  lender: string;
+  tier: 'A' | 'B' | 'MIC';
+  fitScore: number;
+  verdict: 'STRONG' | 'POSSIBLE' | 'UNLIKELY';
+  reasons: string[];
+  concerns: string[];
+}
+
+export interface RiskFlag {
+  severity: 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+  category: string;
+  message: string;
+}
+
+export interface DealCoach {
+  tip: string;
+  impact: string;
+}
+
+export interface DealIntelligence {
+  dealScore: number;
+  grade: 'A' | 'B' | 'C' | 'D' | 'F';
+  recommendation: 'APPROVE' | 'DECLINE' | 'MANUAL_REVIEW';
+  headline: string;
+  summary: string;
+  gdsComment: string;
+  tdsComment: string;
+  ltvComment: string;
+  lenderMatches: LenderMatch[];
+  riskFlags: RiskFlag[];
+  conditions: string[];
+  dealCoaching: DealCoach[];
+  fraudAlerts: string[];
+  strengthSummary: string;
+  weaknessSummary: string;
+}
+
 export type UserRole = 'ADMIN' | 'UNDERWRITER' | 'VIEWER';
 export type ApplicationStatus =
   | 'DRAFT'
