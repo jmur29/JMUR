@@ -9,6 +9,7 @@ import underwritingRouter from './underwriting';
 import documentsRouter from './documents';
 import reportsRouter from './reports';
 import adminRouter from './admin';
+import aiRouter from './ai';
 
 const router = Router();
 
@@ -41,5 +42,8 @@ router.use('/reports', reportsRouter);
 
 // Admin — user management + stats
 router.use('/admin', adminRouter);
+
+// AI — document parsing + underwriting review
+router.use('/ai', aiRouter);
 
 export default router;

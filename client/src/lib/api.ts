@@ -254,6 +254,19 @@ export const adminApi = {
 };
 
 // ---------------------------------------------------------------------------
+// AI
+// ---------------------------------------------------------------------------
+export const aiApi = {
+  parseSubmission(text: string): Promise<import('../types').ParsedApplication> {
+    return apiClient.post('/ai/parse', { text }).then((r) => r.data);
+  },
+
+  reviewFile(applicationId: string): Promise<import('../types').UWReview> {
+    return apiClient.post('/ai/review', { applicationId }).then((r) => r.data);
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Document type helper
 // ---------------------------------------------------------------------------
 export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
