@@ -154,7 +154,10 @@ const derekAishaDealIntelligence = {
   },
   liabilities: [],
   ratios: { gds: 35.8, tds: 38.2, ltv: 85.0, qualifyingRate: 7.74 },
-  missingItems: ['Gift letter required for $22,000 deposit', '3 additional days of bank history needed for 90-day rule'],
+  missingItems: [
+    { severity: 'REQUIRED', description: 'Gift letter required for $22,000 unexplained deposit' },
+    { severity: 'REQUIRED', description: '3 additional days of bank history needed to meet 90-day rule (currently 87 days)' },
+  ],
   aiAdvisory:
     'Strong dual-income file with good employment stability but two outstanding documentation issues. Combined income of $173,000 is solid and both T4s confirm employment. The main risk item is the $22,000 unexplained deposit — a gift letter is mandatory before submission.\n\nThe bank statement is 87 days — falling 3 days short of the 90-day requirement. Request updated statement immediately as this is easily resolved.\n\nOnce these two items are resolved this is a straightforward A-lender approval at the 85% LTV insured tier.',
   recommendedLenders: ['First National', 'MCAP', 'TD', 'RBC'],
@@ -249,70 +252,208 @@ const marcusWebbDealIntelligence = {
 
 const okonkwoDealReview = {
   applicationId: 'SEED_APP_4',
-  dealQualityScore: 91,
+  dealQualityScore: {
+    total: 91,
+    ratioHealth: 28,
+    documentCompleteness: 24,
+    incomeVerification: 20,
+    downPaymentSourcing: 13,
+    fraudSignalClean: 6,
+  },
   riskLevel: 'LOW',
-  decision: 'APPROVE',
+  engineOutput: {
+    gds: 28.4,
+    tds: 28.4,
+    ltv: 67.0,
+    stressGds: 33.8,
+    stressTds: 33.8,
+    qualifyingRate: 7.59,
+    cmhcRequired: false,
+    cmhcPremium: 0,
+    decision: 'APPROVE',
+    flags: [
+      { type: 'PASS', message: '774 beacon — top-tier credit profile', field: 'creditScore' },
+      { type: 'PASS', message: 'GDS 28.4% — well within 39% limit', field: 'gds' },
+      { type: 'PASS', message: 'TDS 28.4% — well within 44% limit', field: 'tds' },
+      { type: 'PASS', message: 'LTV 67.0% — conventional, no CMHC required', field: 'ltv' },
+      { type: 'PASS', message: 'Stress TDS 33.8% — passes stress test comfortably', field: 'stressTds' },
+    ],
+  },
+  incomeVerification: [
+    { label: 'T4 Income (2023)', value: '$131,000', status: 'PASS' },
+    { label: 'Employer', value: 'TD Bank', status: 'PASS' },
+    { label: 'Employment Length', value: '6 years', status: 'PASS' },
+    { label: 'NOA Confirmation', value: 'Confirmed $131,000', status: 'PASS' },
+    { label: 'Employment Letter', value: 'Received — within 30 days', status: 'PASS' },
+  ],
+  downPaymentVerification: {
+    totalSubmitted: 203000,
+    sourced: 203000,
+    unexplained: 0,
+    required: 30750,
+  },
+  documents: [
+    {
+      filename: 'T4 2023 — TD Bank',
+      detectedType: 'T4',
+      status: 'GOOD',
+      confidence: 0.97,
+      keyDataExtracted: 'T4 2023 — TD Bank — $131,000 employment income',
+      extractedData: { year: 2023, employer: 'TD Bank', employmentIncome: 131000 },
+      issues: [],
+    },
+    {
+      filename: 'Notice of Assessment 2023',
+      detectedType: 'NOA',
+      status: 'GOOD',
+      confidence: 0.95,
+      keyDataExtracted: 'NOA 2023 — total income $131,000 — assessed, balance owing $0',
+      extractedData: { year: 2023, totalIncome: 131000, balanceOwing: 0 },
+      issues: [],
+    },
+    {
+      filename: 'Bank Statement — 90 Days',
+      detectedType: 'BANK_STATEMENT',
+      status: 'GOOD',
+      confidence: 0.94,
+      keyDataExtracted: '90-day statement — TD Bank — closing balance $215,000 — no unexplained deposits',
+      extractedData: { bank: 'TD Bank', daysOfHistory: 90, closingBalance: 215000, unexplainedDeposits: 0 },
+      issues: [],
+    },
+    {
+      filename: 'Government Photo ID',
+      detectedType: 'PHOTO_ID',
+      status: 'GOOD',
+      confidence: 0.92,
+      keyDataExtracted: "Ontario driver's licence — Jerome Okonkwo — valid",
+      extractedData: { idType: "Driver's Licence", province: 'ON', name: 'Jerome Okonkwo' },
+      issues: [],
+    },
+    {
+      filename: 'Employment Letter — TD Bank',
+      detectedType: 'EMPLOYMENT_LETTER',
+      status: 'GOOD',
+      confidence: 0.96,
+      keyDataExtracted: 'Employment letter — TD Bank — Full-time, 6 years — $131,000/yr',
+      extractedData: { employer: 'TD Bank', employmentType: 'Full-time', yearsEmployed: 6, salary: 131000 },
+      issues: [],
+    },
+  ],
   fraudSignals: [],
-  conditions: [
+  aiAdvisory:
+    "Jerome Okonkwo presents one of the cleanest A-lender files in this cohort. The 774 beacon score places him in the top tier for available rates at any major lender. Six years with TD Bank demonstrates exceptional employment stability — a factor that will satisfy any lender's employment confirmation requirement without exceptions.\n\nThe 33% down payment at 67% LTV eliminates CMHC insurance entirely and gives substantial equity protection. GDS of 28.4% and TDS of 28.4% are well within the 39%/44% guidelines, and the stress test at 33.8% TDS passes comfortably with room to spare.\n\nThis file is ready for immediate submission to First National or TD. Expected conditions: standard documentation confirmation only. No exceptions required. Target approval timeline: 24 hours.",
+  recommendedDecision: 'APPROVE',
+  recommendedConditions: [
     'Confirm employment letter dated within 30 days of funding',
     'Confirm closing costs of minimum $18,450 available',
-    'Final MLS listing confirmation',
+    'Final MLS listing confirmation at agreed purchase price of $615,000',
   ],
-  summary:
-    'Jerome Okonkwo presents a clean, well-documented A-lender file with strong credit at 774 beacon and stable 6-year employment at TD Bank. GDS of 28.4% and TDS of 28.4% are well within guidelines. No fraud signals detected. Recommended for immediate approval.',
-  strengths: [
-    '774 beacon score — top-tier credit profile',
-    'Stable 6-year employment at major Canadian bank',
-    'All 5 required documents received and verified',
-    'GDS 28.4% — excellent, well below 39% limit',
-    '33% down payment — no CMHC insurance required',
-  ],
-  weaknesses: [
-    'Condo property type introduces strata risk',
-    'Toronto market concentration risk',
-  ],
-  lenderRecommendation:
-    'Recommend First National or TD — both have excellent fit with this profile. 774 beacon qualifies for best available rates. Expected approval timeline: 24 hours.',
+  creditMemoHtml:
+    '<h2>Credit Memo — Jerome Okonkwo</h2><p><strong>File:</strong> CL-0004 | <strong>Date:</strong> 2026-05-18 | <strong>Decision:</strong> APPROVE</p><h3>Borrower</h3><p>Jerome Okonkwo — employed at TD Bank, 6 years. Credit: 774. Income: $131,000 T4.</p><h3>Property</h3><p>88 Lakeview Avenue, Toronto ON — Semi-Detached — Purchase Price $615,000 — Down Payment $203,000 (33%).</p><h3>Ratios</h3><p>GDS: 28.4% | TDS: 28.4% | LTV: 67.0% | Stress TDS: 33.8% — All within guidelines.</p><h3>Recommendation</h3><p>Approve. Clean A-lender file. No exceptions required. Submit to First National or TD Bank.</p>',
 };
 
 const fontaineDealReview = {
   applicationId: 'SEED_APP_5',
-  dealQualityScore: 67,
+  dealQualityScore: {
+    total: 67,
+    ratioHealth: 18,
+    documentCompleteness: 20,
+    incomeVerification: 15,
+    downPaymentSourcing: 9,
+    fraudSignalClean: 5,
+  },
   riskLevel: 'MEDIUM',
-  decision: 'MANUAL_REVIEW',
-  fraudSignals: [
+  engineOutput: {
+    gds: 36.2,
+    tds: 39.8,
+    ltv: 78.0,
+    stressGds: 42.1,
+    stressTds: 46.3,
+    qualifyingRate: 7.84,
+    cmhcRequired: false,
+    cmhcPremium: 0,
+    decision: 'MANUAL_REVIEW',
+    flags: [
+      { type: 'WARN', message: "Employer name mismatch — T4 'Accenture Canada Inc' vs letter 'Accenture Inc'", field: 'employment' },
+      { type: 'WARN', message: '641 beacon — borderline A-lender threshold of 660', field: 'creditScore' },
+      { type: 'WARN', message: 'Stress TDS 46.3% exceeds 44% stress test guideline', field: 'stressTds' },
+      { type: 'INFO', message: 'Condo fees $650/month included at 50% in GDS/TDS calculation', field: 'condoFees' },
+    ],
+  },
+  incomeVerification: [
+    { label: 'T4 Income (2023)', value: '$118,000', status: 'PASS' },
+    { label: 'Employer (T4)', value: 'Accenture Canada Inc', status: 'PASS' },
+    { label: 'Employer (Letter)', value: 'Accenture Inc — name mismatch', status: 'FAIL' },
+    { label: 'Employment Length', value: '2 years', status: 'PASS' },
+    { label: 'NOA Confirmation', value: 'Confirmed $118,000', status: 'PASS' },
+  ],
+  downPaymentVerification: {
+    totalSubmitted: 174000,
+    sourced: 174000,
+    unexplained: 0,
+    required: 53900,
+  },
+  documents: [
     {
-      severity: 'MEDIUM',
-      type: 'EMPLOYER_NAME_MISMATCH',
-      evidence:
-        "T4 shows 'Accenture Canada Inc' but employment letter shows 'Accenture Inc' — discrepancy requires clarification",
-      aiExplanation:
-        'Minor employer name variation may indicate different legal entity or data entry error. Verify with original documentation.',
-      recommendation:
-        'Request current employment letter matching T4 employer name exactly',
+      filename: 'T4 2023 — Accenture Canada Inc',
+      detectedType: 'T4',
+      status: 'GOOD',
+      confidence: 0.95,
+      keyDataExtracted: 'T4 2023 — Accenture Canada Inc — $118,000 employment income',
+      extractedData: { year: 2023, employer: 'Accenture Canada Inc', employmentIncome: 118000 },
+      issues: [],
+    },
+    {
+      filename: 'Notice of Assessment 2023',
+      detectedType: 'NOA',
+      status: 'GOOD',
+      confidence: 0.93,
+      keyDataExtracted: 'NOA 2023 — total income $118,000 — assessed',
+      extractedData: { year: 2023, totalIncome: 118000, balanceOwing: 0 },
+      issues: [],
+    },
+    {
+      filename: 'Bank Statement — 90 Days',
+      detectedType: 'BANK_STATEMENT',
+      status: 'GOOD',
+      confidence: 0.92,
+      keyDataExtracted: '90-day statement — closing balance $186,000 — no unexplained deposits',
+      extractedData: { daysOfHistory: 90, closingBalance: 186000, unexplainedDeposits: 0 },
+      issues: [],
+    },
+    {
+      filename: 'Employment Letter — Accenture Inc (name mismatch)',
+      detectedType: 'EMPLOYMENT_LETTER',
+      status: 'REVIEW',
+      confidence: 0.78,
+      keyDataExtracted: "Employment letter — 'Accenture Inc' — does not match T4 employer name",
+      extractedData: { employer: 'Accenture Inc', salary: 118000 },
+      issues: ["Employer name 'Accenture Inc' does not match T4 entity 'Accenture Canada Inc' — clarification required"],
     },
   ],
-  conditions: [
-    'Resolve employer name discrepancy — obtain updated employment letter matching T4 entity name exactly',
+  fraudSignals: [
+    {
+      id: 'FS-1',
+      severity: 'MEDIUM',
+      type: 'EMPLOYER_NAME_MISMATCH',
+      evidence: "T4 shows 'Accenture Canada Inc' but employment letter shows 'Accenture Inc' — possible different legal entity",
+      aiExplanation:
+        'Minor employer name variation could indicate a different legal entity, subsidiary, or simple data entry error on the employment letter. The income amounts match across documents, which reduces fraud risk, but the entity name discrepancy must be resolved to satisfy lender requirements.',
+      recommendation: 'Request updated employment letter on Accenture Canada Inc letterhead, matching the T4 employer entity name exactly',
+      acknowledged: false,
+    },
+  ],
+  aiAdvisory:
+    "Benjamin Fontaine's file has one blocking issue and two risk factors that require resolution before submission. The employer name mismatch between the T4 ('Accenture Canada Inc') and employment letter ('Accenture Inc') is a medium-severity fraud signal — while likely innocent, no A-lender will accept this discrepancy. The fix is simple: request an updated employment letter on the correct entity letterhead.\n\nThe 641 beacon is borderline for A-lender approval. TD and Scotiabank both have discretionary approval pathways for beacons of 641-660, but this file will require strong compensating factors. The 22% down payment (78% LTV) and stable Ottawa market help, but stress TDS of 46.3% exceeding the 44% guideline is a material concern.\n\nOnce the employer letter is corrected: attempt TD or Scotiabank first at discretionary. If declined on beacon, pivot immediately to Home Trust B-lender — they accept 620+ beacon with higher TDS ratios.",
+  recommendedDecision: 'MANUAL_REVIEW',
+  recommendedConditions: [
+    'Resolve employer name discrepancy — obtain updated employment letter on Accenture Canada Inc letterhead',
     'Provide 2 years T4 and NOA confirming $118,000 income',
-    'Confirm closing costs available',
-    'Provide mortgage statement for existing liabilities (if any)',
+    'Confirm closing costs of minimum $23,670 available',
+    'Confirm no other monthly debt obligations not reflected in TDS',
   ],
-  summary:
-    "Benjamin Fontaine's file has a medium-severity employer name mismatch that requires resolution before submission. Credit at 641 is borderline A-lender. Income of $118,000 is sufficient for the purchase price. Once the employer discrepancy is resolved this is a viable A or strong B-lender file.",
-  strengths: [
-    'Income of $118,000 sufficient for qualifying',
-    '22% down payment reduces LTV risk',
-    'Ottawa market — stable values',
-  ],
-  weaknesses: [
-    'Employer name mismatch — potential fraud signal',
-    '641 beacon — below optimal A-lender threshold of 660',
-    'Only 2 years employment — limited history',
-    'Condo with $650/month fees increases TDS pressure',
-  ],
-  lenderRecommendation:
-    'If employer discrepancy resolved: consider TD or Scotiabank at discretionary approval. Alternative: Home Trust B-lender if beacon concern persists. Do not submit to A-lender until documentation discrepancy cleared.',
+  creditMemoHtml:
+    '<h2>Credit Memo — Benjamin Fontaine</h2><p><strong>File:</strong> CL-0005 | <strong>Date:</strong> 2026-05-22 | <strong>Decision:</strong> MANUAL REVIEW</p><h3>Borrower</h3><p>Benjamin Fontaine — employed at Accenture Canada, 2 years. Credit: 641. Income: $118,000 T4.</p><h3>Property</h3><p>330 Wellington Street West, Ottawa ON — Condo — Purchase Price $789,000 — Down Payment $174,000 (22%) — Condo Fees $650/month.</p><h3>Ratios</h3><p>GDS: 36.2% | TDS: 39.8% | LTV: 78.0% | Stress TDS: 46.3% — Stress test exceeds 44% guideline.</p><h3>Fraud Signals</h3><p>1x MEDIUM — Employer name mismatch between T4 and employment letter.</p><h3>Recommendation</h3><p>Manual review required. Resolve employer name discrepancy before submission. Consider TD/Scotiabank discretionary or Home Trust B-lender.</p>',
 };
 
 // ─── Main seed function ───────────────────────────────────────────────────────

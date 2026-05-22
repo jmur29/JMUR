@@ -147,31 +147,58 @@ export interface DealIntelligenceReport {
   downPayment: DownPaymentSummary;
   liabilities: unknown[];
   ratios: RatiosSummary;
-  missingItems: string[];
+  missingItems: { severity: 'REQUIRED' | 'RECOMMENDED'; description: string }[];
   aiAdvisory: string;
   recommendedLenders: string[];
   primaryLenderFit: string;
 }
 
 export interface FraudSignal {
+  id: string;
   severity: 'HIGH' | 'MEDIUM' | 'LOW';
   type: string;
   evidence: string;
   aiExplanation: string;
   recommendation: string;
+  acknowledged: boolean;
 }
 
 export interface DealReviewReport {
   applicationId: string;
-  dealQualityScore: number;
-  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  decision: 'APPROVE' | 'DECLINE' | 'MANUAL_REVIEW';
+  dealQualityScore: {
+    total: number;
+    ratioHealth: number;
+    documentCompleteness: number;
+    incomeVerification: number;
+    downPaymentSourcing: number;
+    fraudSignalClean: number;
+  };
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  engineOutput: {
+    gds: number;
+    tds: number;
+    ltv: number;
+    stressGds: number;
+    stressTds: number;
+    qualifyingRate: number;
+    cmhcRequired: boolean;
+    cmhcPremium: number;
+    decision: 'APPROVE' | 'MANUAL_REVIEW' | 'DECLINE';
+    flags: { type: 'PASS' | 'WARN' | 'FAIL' | 'INFO'; message: string; field?: string }[];
+  };
+  incomeVerification: { label: string; value: string; status: 'PASS' | 'FAIL' | 'MISSING' }[];
+  downPaymentVerification: {
+    totalSubmitted: number;
+    sourced: number;
+    unexplained: number;
+    required: number;
+  };
+  documents: ClassifiedDocument[];
   fraudSignals: FraudSignal[];
-  conditions: string[];
-  summary: string;
-  strengths: string[];
-  weaknesses: string[];
-  lenderRecommendation: string;
+  aiAdvisory: string;
+  recommendedDecision: 'APPROVE' | 'MANUAL_REVIEW' | 'DECLINE';
+  recommendedConditions: string[];
+  creditMemoHtml: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -451,7 +478,7 @@ Return JSON with exactly this structure:
   },
   "liabilities": [],
   "ratios": { "gds": <number>, "tds": <number>, "ltv": <number>, "qualifyingRate": <number> },
-  "missingItems": [<list of missing/required items>],
+  "missingItems": [{ "severity": "REQUIRED"|"RECOMMENDED", "description": "<what is missing and why>" }],
   "aiAdvisory": "<2-3 paragraph expert advisory for the broker>",
   "recommendedLenders": [<list of lender names>],
   "primaryLenderFit": "<single best lender>"
@@ -528,39 +555,80 @@ export async function buildDealReview(
 ): Promise<DealReviewReport> {
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
-    system: `You are Canada's most experienced senior mortgage underwriter — 25 years across TD, RBC, First National, Home Trust, and Equitable Bank. You produce objective, rigorous deal review reports for underwriters. Respond with valid JSON only — no markdown, no explanation.`,
+    max_tokens: 6000,
+    system: `You are Canada's most experienced senior mortgage underwriter — 25 years across TD, RBC, First National, Home Trust, and Equitable Bank. You produce rigorous deal review reports for underwriting teams. Respond with valid JSON only — no markdown, no explanation.`,
     messages: [
       {
         role: 'user',
-        content: `Produce a comprehensive DealReviewReport for this mortgage application. Include all fraud signals provided.
+        content: `Produce a comprehensive DealReviewReport for this mortgage application.
 
-Application data:
+Application data (includes borrowers, income, property, mortgageTerms, documents, decisions):
 ${JSON.stringify(applicationData, null, 2)}
 
-Known fraud signals:
+Known fraud signals (may be empty):
 ${JSON.stringify(fraudSignals, null, 2)}
 
-Return JSON with exactly this structure:
+IMPORTANT: If the application has a decisions array with entries, use the GDS/TDS/LTV/stressGds/stressTds values from decisions[0] as exact values in engineOutput. If no decisions, compute best estimates from income/property/terms data.
+
+Return JSON with EXACTLY this structure (no extra fields, no missing fields):
 {
   "applicationId": "UNKNOWN",
-  "dealQualityScore": <0-100>,
-  "riskLevel": "LOW"|"MEDIUM"|"HIGH"|"CRITICAL",
-  "decision": "APPROVE"|"DECLINE"|"MANUAL_REVIEW",
-  "fraudSignals": <the fraud signals array, enhanced with aiExplanation>,
-  "conditions": [<list of underwriting conditions>],
-  "summary": "<2-3 sentence expert summary>",
-  "strengths": [<deal strengths>],
-  "weaknesses": [<deal weaknesses>],
-  "lenderRecommendation": "<specific lender recommendation with rationale>"
+  "dealQualityScore": {
+    "total": <0-100, sum of sub-scores>,
+    "ratioHealth": <0-30, high if GDS<32 TDS<38>,
+    "documentCompleteness": <0-25, based on documents present>,
+    "incomeVerification": <0-20, based on T4/NOA/employment letter alignment>,
+    "downPaymentSourcing": <0-15, based on sourced vs unexplained>,
+    "fraudSignalClean": <0-10, 10 if no signals, reduce per severity>
+  },
+  "riskLevel": "LOW"|"MEDIUM"|"HIGH",
+  "engineOutput": {
+    "gds": <number — use decisions[0].gds if present, else compute>,
+    "tds": <number — use decisions[0].tds if present, else compute>,
+    "ltv": <number — use decisions[0].ltv if present, else compute>,
+    "stressGds": <number — use decisions[0].stressGds if present, else compute>,
+    "stressTds": <number — use decisions[0].stressTds if present, else compute>,
+    "qualifyingRate": <number — contractRate + 2, minimum 5.25>,
+    "cmhcRequired": <boolean — true if LTV > 80%>,
+    "cmhcPremium": <number — CMHC premium amount or 0>,
+    "decision": "APPROVE"|"MANUAL_REVIEW"|"DECLINE",
+    "flags": [
+      { "type": "PASS"|"WARN"|"FAIL"|"INFO", "message": "<specific flag message with numbers>", "field": "<optional field name>" }
+    ]
+  },
+  "incomeVerification": [
+    { "label": "<item label>", "value": "<formatted value>", "status": "PASS"|"FAIL"|"MISSING" }
+  ],
+  "downPaymentVerification": {
+    "totalSubmitted": <number — property.downPayment>,
+    "sourced": <number — amount verifiable from bank statements>,
+    "unexplained": <number — unverified portion>,
+    "required": <number — minimum required down payment>
+  },
+  "documents": <array of document objects with filename, detectedType, status, confidence, keyDataExtracted, extractedData, issues — derive from application documents list>,
+  "fraudSignals": [
+    {
+      "id": "FS-<n>",
+      "severity": "HIGH"|"MEDIUM"|"LOW",
+      "type": "<signal type string>",
+      "evidence": "<specific evidence>",
+      "aiExplanation": "<detailed AI explanation>",
+      "recommendation": "<specific action to resolve>",
+      "acknowledged": false
+    }
+  ],
+  "aiAdvisory": "<2-3 paragraph expert advisory for the underwriter, specific to this deal>",
+  "recommendedDecision": "APPROVE"|"MANUAL_REVIEW"|"DECLINE",
+  "recommendedConditions": ["<condition 1>", "<condition 2>"],
+  "creditMemoHtml": "<html><h2>Credit Memo</h2><p>Borrower: ...</p><p>Deal summary in HTML format with key facts, ratios, and recommendation.</p></html>"
 }
 
 Deal quality score guide:
-- 85-100 = Clean A-lender approval with minimal conditions
-- 70-84 = A-lender with standard conditions, or strong B-lender
-- 55-69 = B-lender or A-lender with heavy conditions
-- 40-54 = B-lender with conditions or MIC
-- 0-39 = Decline or critical issues`,
+- ratioHealth (0-30): GDS<29 TDS<35 = 28-30; GDS<33 TDS<40 = 20-27; GDS<39 TDS<44 = 10-19; over limit = 0-9
+- documentCompleteness (0-25): T4+NOA+bank stmt+ID = 20+; missing key docs reduce score
+- incomeVerification (0-20): T4 matches NOA, employment letter matches, 2+ years history = 18-20
+- downPaymentSourcing (0-15): fully sourced no unexplained = 13-15; unexplained deposits reduce
+- fraudSignalClean (0-10): no signals = 10; LOW = 8; MEDIUM = 5; HIGH = 2; CRITICAL = 0`,
       },
     ],
   });

@@ -57,6 +57,8 @@ export async function updateUserRole(
 export interface PipelineStats {
   totalApplications: number;
   byStatus: Record<string, number>;
+  volumeByStatus: Record<string, number>;
+  inReview: number;
   approvedThisMonth: number;
   avgGds: number | null;
   avgTds: number | null;
@@ -127,6 +129,8 @@ export async function getPipelineStats(tenantId: string): Promise<PipelineStats>
   return {
     totalApplications,
     byStatus,
+    volumeByStatus: byStatus,
+    inReview: byStatus['IN_REVIEW'] ?? 0,
     approvedThisMonth,
     avgGds: toAvgNum(decisionAggregates._avg.gds),
     avgTds: toAvgNum(decisionAggregates._avg.tds),
