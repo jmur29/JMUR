@@ -8,6 +8,7 @@ import {
 } from '../services/applications';
 import { generateDealIntelligenceFromApplication } from '../services/intake';
 import { buildDealReview } from '../services/ai';
+import { Prisma } from '@prisma/client';
 import prisma from '../prisma/client';
 import type { ApplicationStatus } from '@prisma/client';
 
@@ -207,7 +208,7 @@ export async function generateDealReview(req: Request, res: Response, next: Next
         property: true,
         mortgageTerms: true,
         documents: true,
-        decisions: { orderBy: { createdAt: 'desc' }, take: 1 },
+        decisions: { orderBy: { decidedAt: 'desc' }, take: 1 },
       },
     });
 
@@ -229,7 +230,7 @@ export async function generateDealReview(req: Request, res: Response, next: Next
           where: { id: application.id },
           data: {
             processingStatus: 'COMPLETE',
-            dealReviewReport: report as unknown as Record<string, unknown>,
+            dealReviewReport: report as unknown as Prisma.InputJsonValue,
           },
         });
       } catch (err) {

@@ -1,5 +1,6 @@
 import AdmZip from 'adm-zip';
 import pdfParse from 'pdf-parse';
+import { Prisma } from '@prisma/client';
 import prisma from '../prisma/client';
 import logger from '../utils/logger';
 import {
@@ -107,7 +108,7 @@ export async function processZipUpload(
         where: { id: applicationId },
         data: {
           processingStatus: 'COMPLETE',
-          dealIntelligenceReport: report as unknown as Record<string, unknown>,
+          dealIntelligenceReport: report as unknown as Prisma.InputJsonValue,
           dealAnalyzedAt: new Date(),
         },
       });
@@ -164,7 +165,7 @@ export async function processZipUpload(
       where: { id: applicationId },
       data: {
         processingStatus: 'COMPLETE',
-        dealIntelligenceReport: report as unknown as Record<string, unknown>,
+        dealIntelligenceReport: report as unknown as Prisma.InputJsonValue,
         dealAnalyzedAt: new Date(),
       },
     });
@@ -537,13 +538,13 @@ export async function generateDealIntelligenceFromApplication(
 
     // Build synthetic ClassifiedDocuments from stored documents + application data
     const docs: ClassifiedDocument[] = app.documents.map((d) => ({
-      filename: d.filename,
+      filename: d.name,
       s3Key: d.s3Key ?? undefined,
       url: d.url ?? undefined,
-      detectedType: (d.docType as ClassifiedDocument['detectedType']) ?? 'UNKNOWN',
-      status: (d.status === 'APPROVED' ? 'GOOD' : d.status === 'NEEDS_REVIEW' ? 'REVIEW' : 'REVIEW') as 'GOOD' | 'REVIEW' | 'MISSING',
+      detectedType: (d.type as ClassifiedDocument['detectedType']) ?? 'UNKNOWN',
+      status: (d.status === 'REVIEWED' ? 'GOOD' : 'REVIEW') as 'GOOD' | 'REVIEW' | 'MISSING',
       confidence: 0.8,
-      keyDataExtracted: `${d.docType} — ${d.filename}`,
+      keyDataExtracted: `${d.type} — ${d.name}`,
       extractedData: {},
       issues: [],
     }));
@@ -553,8 +554,8 @@ export async function generateDealIntelligenceFromApplication(
       const primary = app.borrowers.find((b) => b.type === 'PRIMARY') ?? app.borrowers[0];
       const summaryText = [
         primary ? `Borrower: ${primary.firstName} ${primary.lastName}` : '',
-        app.property ? `Property: ${app.property.address}, value ${app.property.estimatedValue}` : '',
-        app.mortgageTerms ? `Mortgage: ${app.mortgageTerms.mortgageAmount} at ${app.mortgageTerms.interestRate}%` : '',
+        app.property ? `Property: ${app.property.address}, value ${Number(app.property.appraisedValue)}` : '',
+        app.mortgageTerms ? `Mortgage: ${Number(app.mortgageTerms.mortgageAmount)} at ${Number(app.mortgageTerms.contractRate)}%` : '',
       ].filter(Boolean).join('\n');
 
       if (summaryText) {
@@ -569,7 +570,7 @@ export async function generateDealIntelligenceFromApplication(
       where: { id: applicationId },
       data: {
         processingStatus: 'COMPLETE',
-        dealIntelligenceReport: report as unknown as Record<string, unknown>,
+        dealIntelligenceReport: report as unknown as Prisma.InputJsonValue,
         dealAnalyzedAt: new Date(),
       },
     });
