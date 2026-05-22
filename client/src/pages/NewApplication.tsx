@@ -138,7 +138,7 @@ function IncomeDocsZone({ files, onFiles }: {
 }
 
 // ── Review field ────────────────────────────────────────────────────────────
-function ReviewField({ label, value }: { label: string; value: string | number | undefined }) {
+function ReviewField({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value === undefined || value === null || value === '') return null;
   return (
     <div className="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
