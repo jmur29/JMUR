@@ -1,12 +1,40 @@
+# Dependencies
 node_modules/
+*/node_modules/
 
-# Local environment — never commit real credentials
+# Build outputs
+dist/
+build/
+*/dist/
+*/build/
+
+# Environment
 .env
-credentials.json
-token.json
+.env.local
+.env.*.local
+!.env.example
 
-# OS / editor noise
-.DS_Store
+# Logs
 *.log
+logs/
+*/logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+
+# Prisma
+server/prisma/migrations/
+
+# Uploads (local dev)
+uploads/
+*.pdf
+
+# TypeScript
+*.tsbuildinfo
