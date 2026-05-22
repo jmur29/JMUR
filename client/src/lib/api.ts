@@ -261,7 +261,7 @@ export const aiApi = {
     return apiClient.post('/ai/parse', { text }).then((r) => r.data);
   },
 
-  reviewFile(applicationId: string): Promise<import('../types').UWReview> {
+  reviewFile(applicationId: string): Promise<import('../types').DealIntelligence> {
     return apiClient.post('/ai/review', { applicationId }).then((r) => r.data);
   },
 };
