@@ -508,3 +508,77 @@ export async function processSubmissionNotes(
     throw err;
   }
 }
+
+// ─── Generate deal intelligence from existing application data ────────────────
+
+export async function generateDealIntelligenceFromApplication(
+  applicationId: string,
+  tenantId: string
+): Promise<void> {
+  await prisma.application.update({
+    where: { id: applicationId },
+    data: { processingStatus: 'PROCESSING' },
+  });
+
+  try {
+    const app = await prisma.application.findFirst({
+      where: { id: applicationId, tenantId, deletedAt: null },
+      include: {
+        borrowers: { include: { income: true } },
+        property: true,
+        mortgageTerms: true,
+        documents: true,
+      },
+    });
+
+    if (!app) throw new Error('Application not found');
+
+    // Build synthetic ClassifiedDocuments from stored documents + application data
+    const docs: ClassifiedDocument[] = app.documents.map((d) => ({
+      filename: d.filename,
+      s3Key: d.s3Key ?? undefined,
+      url: d.url ?? undefined,
+      detectedType: (d.docType as ClassifiedDocument['detectedType']) ?? 'UNKNOWN',
+      status: (d.status === 'APPROVED' ? 'GOOD' : d.status === 'NEEDS_REVIEW' ? 'REVIEW' : 'REVIEW') as 'GOOD' | 'REVIEW' | 'MISSING',
+      confidence: 0.8,
+      keyDataExtracted: `${d.docType} — ${d.filename}`,
+      extractedData: {},
+      issues: [],
+    }));
+
+    // If no documents, create a summary document from application data
+    if (docs.length === 0) {
+      const primary = app.borrowers.find((b) => b.type === 'PRIMARY') ?? app.borrowers[0];
+      const summaryText = [
+        primary ? `Borrower: ${primary.firstName} ${primary.lastName}` : '',
+        app.property ? `Property: ${app.property.address}, value ${app.property.estimatedValue}` : '',
+        app.mortgageTerms ? `Mortgage: ${app.mortgageTerms.mortgageAmount} at ${app.mortgageTerms.interestRate}%` : '',
+      ].filter(Boolean).join('\n');
+
+      if (summaryText) {
+        const doc = await classifyAndExtract('application-data.txt', summaryText, false);
+        docs.push(doc);
+      }
+    }
+
+    const report = await assembleDealIntelligence(docs, applicationId);
+
+    await prisma.application.update({
+      where: { id: applicationId },
+      data: {
+        processingStatus: 'COMPLETE',
+        dealIntelligenceReport: report as unknown as Record<string, unknown>,
+        dealAnalyzedAt: new Date(),
+      },
+    });
+
+    logger.info(`generateDealIntelligenceFromApplication complete for ${applicationId}`);
+  } catch (err) {
+    logger.error(`generateDealIntelligenceFromApplication failed for ${applicationId}`, { err });
+    await prisma.application.update({
+      where: { id: applicationId },
+      data: { processingStatus: 'FAILED' },
+    });
+    throw err;
+  }
+}

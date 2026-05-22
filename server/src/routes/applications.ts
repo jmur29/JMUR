@@ -55,4 +55,16 @@ router.get(
   ctrl.getDealReview
 );
 
+router.post(
+  '/:id/deal-intelligence',
+  validate(UuidParamSchema, 'params'),
+  ctrl.generateDealIntelligence
+);
+
+router.post(
+  '/:id/deal-review',
+  validate(UuidParamSchema, 'params'),
+  ctrl.generateDealReview
+);
+
 export default router;

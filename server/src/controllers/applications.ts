@@ -6,6 +6,8 @@ import {
   updateApplication,
   softDeleteApplication,
 } from '../services/applications';
+import { generateDealIntelligenceFromApplication } from '../services/intake';
+import { buildDealReview } from '../services/ai';
 import prisma from '../prisma/client';
 import type { ApplicationStatus } from '@prisma/client';
 
@@ -134,6 +136,81 @@ export async function getDealReview(req: Request, res: Response, next: NextFunct
     }
 
     res.json(application.dealReviewReport);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function generateDealIntelligence(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const application = await prisma.application.findFirst({
+      where: { id: req.params.id, tenantId: req.user.tenantId, deletedAt: null },
+      select: { id: true, processingStatus: true },
+    });
+
+    if (!application) {
+      res.status(404).json({ error: 'Application not found' });
+      return;
+    }
+
+    if (application.processingStatus === 'PROCESSING') {
+      res.status(409).json({ error: 'Already processing', code: 'ALREADY_PROCESSING' });
+      return;
+    }
+
+    // Kick off async generation from existing application data
+    generateDealIntelligenceFromApplication(application.id, req.user.tenantId).catch(console.error);
+
+    res.json({ status: 'PROCESSING', applicationId: application.id });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function generateDealReview(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const application = await prisma.application.findFirst({
+      where: { id: req.params.id, tenantId: req.user.tenantId, deletedAt: null },
+      include: {
+        borrowers: { include: { income: true } },
+        property: true,
+        mortgageTerms: true,
+        documents: true,
+        decisions: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+    });
+
+    if (!application) {
+      res.status(404).json({ error: 'Application not found' });
+      return;
+    }
+
+    // Build deal review async
+    (async () => {
+      try {
+        await prisma.application.update({
+          where: { id: application.id },
+          data: { processingStatus: 'PROCESSING' },
+        });
+
+        const report = await buildDealReview(application, []);
+        await prisma.application.update({
+          where: { id: application.id },
+          data: {
+            processingStatus: 'COMPLETE',
+            dealReviewReport: report as unknown as Record<string, unknown>,
+          },
+        });
+      } catch (err) {
+        await prisma.application.update({
+          where: { id: application.id },
+          data: { processingStatus: 'FAILED' },
+        });
+        console.error('generateDealReview failed', err);
+      }
+    })();
+
+    res.json({ status: 'PROCESSING', applicationId: application.id });
   } catch (err) {
     next(err);
   }

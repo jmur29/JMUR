@@ -29,7 +29,7 @@ function FinmoTab() {
 
   const mutation = useMutation({
     mutationFn: (formData: FormData) => intakeApi.importFinmo(formData, setProgress),
-    onSuccess: (data) => navigate(`/applications/${data.applicationId}`),
+    onSuccess: (data) => navigate(`/applications/${data.applicationId}/intelligence`),
   });
 
   const handleFile = useCallback((f: File) => {
@@ -132,7 +132,7 @@ function NotesTab() {
 
   const mutation = useMutation({
     mutationFn: (t: string) => intakeApi.importSubmissionNotes(t),
-    onSuccess: (data) => navigate(`/applications/${data.applicationId}`),
+    onSuccess: (data) => navigate(`/applications/${data.applicationId}/intelligence`),
   });
 
   const submit = () => {
