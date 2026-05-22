@@ -45,9 +45,9 @@ export default function AppLayout() {
   const crumbs = useBreadcrumbs();
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-[#F7F6F3]">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:flex-shrink-0 bg-slate-900">
+      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:flex-shrink-0 bg-white border-r border-[#E8E6E1]">
         <Sidebar />
       </aside>
 
@@ -59,7 +59,7 @@ export default function AppLayout() {
             onClick={() => setMobileOpen(false)}
             aria-hidden="true"
           />
-          <aside className="relative z-10 flex flex-col w-64 h-full bg-slate-900">
+          <aside className="relative z-10 flex flex-col w-64 h-full bg-white border-r border-[#E8E6E1]">
             <div className="absolute top-4 right-4">
               <button
                 onClick={() => setMobileOpen(false)}
@@ -77,7 +77,7 @@ export default function AppLayout() {
       {/* Main area */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex-shrink-0 h-16 bg-white border-b border-slate-200 flex items-center px-4 lg:px-6 gap-4">
+        <header className="flex-shrink-0 h-16 bg-white border-b border-[#E8E6E1] flex items-center px-4 lg:px-6 gap-4">
           {/* Mobile hamburger */}
           <button
             className="lg:hidden p-2 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100"

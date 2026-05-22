@@ -5,6 +5,8 @@ import type {
   Application,
   ApplicationListParams,
   Borrower,
+  DealIntelligenceReport,
+  DealReviewReport,
   Document,
   DocumentStatus,
   DocumentType,
@@ -263,6 +265,63 @@ export const aiApi = {
 
   reviewFile(applicationId: string): Promise<import('../types').DealIntelligence> {
     return apiClient.post('/ai/review', { applicationId }).then((r) => r.data);
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Intake
+// ---------------------------------------------------------------------------
+export const intakeApi = {
+  uploadZip(
+    formData: FormData,
+    onProgress?: (pct: number) => void
+  ): Promise<{ applicationId: string; documentCount: number }> {
+    return apiClient
+      .post('/intake/zip', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (evt) => {
+          if (onProgress && evt.total) {
+            onProgress(Math.round((evt.loaded * 100) / evt.total));
+          }
+        },
+        timeout: 120_000,
+      })
+      .then((r) => r.data);
+  },
+
+  importFinmo(
+    formData: FormData,
+    onProgress?: (pct: number) => void
+  ): Promise<{ applicationId: string }> {
+    return apiClient
+      .post('/intake/finmo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (evt) => {
+          if (onProgress && evt.total) {
+            onProgress(Math.round((evt.loaded * 100) / evt.total));
+          }
+        },
+        timeout: 120_000,
+      })
+      .then((r) => r.data);
+  },
+
+  importSubmissionNotes(text: string): Promise<{ applicationId: string }> {
+    return apiClient
+      .post('/intake/submission-notes', { text }, { timeout: 60_000 })
+      .then((r) => r.data);
+  },
+
+  getDealIntelligence(appId: string): Promise<DealIntelligenceReport> {
+    return apiClient
+      .get(`/applications/${appId}/deal-intelligence`)
+      .then((r) => r.data);
+  },
+
+  getDealReview(appId: string): Promise<DealReviewReport> {
+    return apiClient
+      .get(`/applications/${appId}/deal-review`)
+      .then((r) => r.data);
   },
 };
 

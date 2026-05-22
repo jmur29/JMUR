@@ -233,6 +233,9 @@ export interface Application {
   documents: Document[];
   dealIntelligence?: DealIntelligence | null;
   dealAnalyzedAt?: string | null;
+  processingStatus?: 'IDLE' | 'PROCESSING' | 'COMPLETE' | 'FAILED';
+  dealIntelligenceReport?: DealIntelligenceReport;
+  dealReviewReport?: DealReviewReport;
 }
 
 export interface UWResult {
@@ -293,4 +296,126 @@ export interface CreateApplicationPayload {
 export interface SaveDecisionPayload {
   notes?: string;
   status: ApplicationStatus;
+}
+
+// ---------------------------------------------------------------------------
+// Extended document types
+// ---------------------------------------------------------------------------
+export type ExtendedDocumentType =
+  | 'T4' | 'NOA' | 'PAY_STUB' | 'BANK_STATEMENT' | 'EMPLOYMENT_LETTER'
+  | 'PURCHASE_AGREEMENT' | 'GIFT_LETTER' | 'MORTGAGE_STATEMENT' | 'PHOTO_ID'
+  | 'UTILITY_BILL' | 'APPRAISAL' | 'OTHER' | 'UNKNOWN';
+
+export interface ClassifiedDocument {
+  filename: string;
+  s3Key?: string;
+  url?: string;
+  detectedType: ExtendedDocumentType;
+  status: 'GOOD' | 'REVIEW' | 'MISSING';
+  confidence: number;
+  keyDataExtracted: string;
+  extractedData: Record<string, unknown>;
+  issues: string[];
+}
+
+export interface ReadinessScore {
+  total: number; // 0-100
+  documentsComplete: number; // 0-40
+  incomeVerifiable: number; // 0-20
+  downPaymentSourced: number; // 0-20
+  liabilitiesComplete: number; // 0-10
+  identityVerified: number; // 0-10
+}
+
+export interface DealQualityScore {
+  total: number; // 0-100
+  ratioHealth: number; // 0-30
+  documentCompleteness: number; // 0-25
+  incomeVerification: number; // 0-20
+  downPaymentSourcing: number; // 0-15
+  fraudSignalClean: number; // 0-10
+}
+
+export interface FraudSignal {
+  id: string;
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  type: string;
+  evidence: string;
+  aiExplanation: string;
+  recommendation: string;
+  acknowledged: boolean;
+}
+
+export interface AssembledIncome {
+  t4_2023?: number;
+  t4_2022?: number;
+  noaConfirmed?: number;
+  twoYearAverage?: number;
+  monthlyQualifying: number;
+  employmentVerified: boolean;
+}
+
+export interface AssembledDownPayment {
+  totalSourced: number;
+  required: number;
+  unexplainedDeposits: number;
+  daysOfHistory: number;
+  giftLetterRequired: boolean;
+}
+
+export interface DealIntelligenceReport {
+  applicationId: string;
+  readinessScore: ReadinessScore;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  dealType: string;
+  lenderTier: 'A' | 'B' | 'PRIVATE';
+  documents: ClassifiedDocument[];
+  income: AssembledIncome;
+  downPayment: AssembledDownPayment;
+  liabilities: { description: string; monthly: number }[];
+  ratios: {
+    gds: number | null;
+    tds: number | null;
+    ltv: number | null;
+    qualifyingRate: number;
+  };
+  missingItems: { severity: 'REQUIRED' | 'RECOMMENDED'; description: string }[];
+  aiAdvisory: string;
+  recommendedLenders: string[];
+  primaryLenderFit: string;
+}
+
+export interface DealReviewReport {
+  applicationId: string;
+  dealQualityScore: DealQualityScore;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  engineOutput: {
+    gds: number;
+    tds: number;
+    ltv: number;
+    stressGds: number;
+    stressTds: number;
+    qualifyingRate: number;
+    cmhcRequired: boolean;
+    cmhcPremium: number;
+    decision: UWDecision;
+    flags: UWFlag[];
+  };
+  incomeVerification: {
+    label: string;
+    value: string;
+    status: 'PASS' | 'FAIL' | 'MISSING';
+  }[];
+  downPaymentVerification: {
+    totalSubmitted: number;
+    sourced: number;
+    unexplained: number;
+    required: number;
+  };
+  documents: ClassifiedDocument[];
+  fraudSignals: FraudSignal[];
+  aiAdvisory: string;
+  recommendedDecision: UWDecision;
+  recommendedConditions: string[];
+  creditMemoHtml: string;
 }
