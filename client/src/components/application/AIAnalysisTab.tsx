@@ -131,7 +131,7 @@ export default function AIAnalysisTab({ application }: Props) {
 
   const analyzeMutation = useMutation({
     mutationFn: () => aiApi.reviewFile(application.id),
-    onSuccess: (data) => setIntel(data as DealIntelligence),
+    onSuccess: (data) => setIntel(data),
   });
 
   const recColor =
