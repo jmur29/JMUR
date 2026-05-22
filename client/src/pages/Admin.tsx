@@ -4,14 +4,13 @@ import toast from 'react-hot-toast';
 import { Shield, ChevronLeft, ChevronRight } from 'lucide-react';
 import { adminApi } from '../lib/api';
 import type { UserRole } from '../types';
-import Button from '../components/ui/Button';
 import Spinner from '../components/ui/Spinner';
 import { cn } from '../lib/utils';
 
 const ROLE_OPTIONS: { value: UserRole; label: string; color: string }[] = [
-  { value: 'ADMIN', label: 'Admin', color: 'bg-purple-100 text-purple-700' },
-  { value: 'UNDERWRITER', label: 'Underwriter', color: 'bg-blue-100 text-blue-700' },
-  { value: 'VIEWER', label: 'Viewer', color: 'bg-slate-100 text-slate-600' },
+  { value: 'ADMIN', label: 'Admin', color: 'bg-[#FEF3C7] text-[#92400E]' },
+  { value: 'UNDERWRITER', label: 'Underwriter', color: 'bg-[#DBEAFE] text-[#1E40AF]' },
+  { value: 'VIEWER', label: 'Viewer', color: 'bg-[#F7F6F3] text-[#6B6860]' },
 ];
 
 const PAGE_SIZE = 20;
@@ -39,87 +38,66 @@ export default function Admin() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-purple-50 rounded-lg">
-          <Shield size={20} className="text-purple-600" />
+        <div className="w-9 h-9 rounded-xl bg-[#D1FAE5] flex items-center justify-center">
+          <Shield size={18} className="text-[#1B4332]" />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">User Management</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <h1 className="text-xl font-semibold text-[#1A1916]">User Management</h1>
+          <p className="text-sm text-[#6B6860] mt-0.5">
             {data ? `${data.total} users` : 'Manage user roles and access levels'}
           </p>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <div className="card overflow-hidden">
         {isLoading ? (
-          <div className="flex justify-center py-16">
-            <Spinner size="lg" />
-          </div>
+          <div className="flex justify-center py-16"><Spinner size="lg" /></div>
         ) : !data?.data.length ? (
-          <div className="text-center py-16 text-slate-400 text-sm">No users found.</div>
+          <div className="text-center py-16 text-sm text-[#6B6860]">No users found.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left">
-                <tr>
-                  <th className="px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    User
-                  </th>
-                  <th className="px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider hidden sm:table-cell">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    Role
-                  </th>
+              <thead>
+                <tr className="border-b border-[#E8E6E1]">
+                  <th className="px-5 py-3 text-left text-xs font-medium text-[#6B6860] uppercase tracking-wide">User</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-[#6B6860] uppercase tracking-wide hidden sm:table-cell">Email</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-[#6B6860] uppercase tracking-wide">Role</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {data.data.map((user) => {
                   const roleInfo = ROLE_OPTIONS.find((r) => r.value === user.role);
                   return (
-                    <tr key={user.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4">
+                    <tr key={user.id} className="border-b border-[#E8E6E1] last:border-0 hover:bg-[#F7F6F3] transition-colors">
+                      <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 text-sm font-medium flex-shrink-0">
-                            {user.firstName.charAt(0)}
-                            {user.lastName.charAt(0)}
+                          <div className="w-8 h-8 rounded-full bg-[#D1FAE5] flex items-center justify-center text-[#1B4332] text-xs font-semibold flex-shrink-0 select-none">
+                            {user.firstName.charAt(0)}{user.lastName.charAt(0)}
                           </div>
                           <div>
-                            <p className="font-medium text-slate-900">
-                              {user.firstName} {user.lastName}
-                            </p>
-                            <p className="text-xs text-slate-400 sm:hidden">{user.email}</p>
+                            <p className="font-medium text-[#1A1916]">{user.firstName} {user.lastName}</p>
+                            <p className="text-xs text-[#6B6860] sm:hidden">{user.email}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 hidden sm:table-cell text-slate-600">
-                        {user.email}
-                      </td>
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-3.5 hidden sm:table-cell text-[#6B6860]">{user.email}</td>
+                      <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2">
-                          <span
-                            className={cn(
-                              'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                              roleInfo?.color ?? 'bg-slate-100 text-slate-600'
-                            )}
-                          >
+                          <span className={cn(
+                            'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+                            roleInfo?.color ?? 'bg-[#F7F6F3] text-[#6B6860]'
+                          )}>
                             {roleInfo?.label ?? user.role}
                           </span>
                           <select
                             value={user.role}
-                            onChange={(e) =>
-                              updateRoleMutation.mutate({
-                                id: user.id,
-                                role: e.target.value as UserRole,
-                              })
-                            }
-                            className="text-xs border border-slate-200 rounded px-2 py-1 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            onChange={(e) => updateRoleMutation.mutate({ id: user.id, role: e.target.value as UserRole })}
+                            className="text-xs border border-[#E8E6E1] rounded-lg px-2 py-1 text-[#1A1916] bg-white focus:outline-none focus:border-[#1B4332]"
                           >
                             {ROLE_OPTIONS.map((r) => (
-                              <option key={r.value} value={r.value}>
-                                {r.label}
-                              </option>
+                              <option key={r.value} value={r.value}>{r.label}</option>
                             ))}
                           </select>
                         </div>
@@ -134,33 +112,26 @@ export default function Admin() {
 
         {/* Pagination */}
         {data && totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100">
-            <p className="text-sm text-slate-500">
-              Showing {(page - 1) * PAGE_SIZE + 1}–
-              {Math.min(page * PAGE_SIZE, data.total)} of {data.total}
+          <div className="flex items-center justify-between px-5 py-3 border-t border-[#E8E6E1]">
+            <p className="text-xs text-[#6B6860]">
+              Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, data.total)} of {data.total}
             </p>
             <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                leftIcon={<ChevronLeft size={14} />}
-                disabled={page <= 1}
+              <button
                 onClick={() => setPage((p) => p - 1)}
+                disabled={page <= 1}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#E8E6E1] text-xs font-medium text-[#1A1916] hover:border-[#1B4332] disabled:opacity-40 transition-colors"
               >
-                Prev
-              </Button>
-              <span className="text-sm text-slate-600">
-                {page} / {totalPages}
-              </span>
-              <Button
-                size="sm"
-                variant="secondary"
-                rightIcon={<ChevronRight size={14} />}
-                disabled={page >= totalPages}
+                <ChevronLeft size={12} /> Prev
+              </button>
+              <span className="text-xs font-mono text-[#6B6860]">{page} / {totalPages}</span>
+              <button
                 onClick={() => setPage((p) => p + 1)}
+                disabled={page >= totalPages}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#E8E6E1] text-xs font-medium text-[#1A1916] hover:border-[#1B4332] disabled:opacity-40 transition-colors"
               >
-                Next
-              </Button>
+                Next <ChevronRight size={12} />
+              </button>
             </div>
           </div>
         )}
