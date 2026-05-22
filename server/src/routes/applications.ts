@@ -43,4 +43,16 @@ router.delete(
   ctrl.remove
 );
 
+router.get(
+  '/:id/deal-intelligence',
+  validate(UuidParamSchema, 'params'),
+  ctrl.getDealIntelligence
+);
+
+router.get(
+  '/:id/deal-review',
+  validate(UuidParamSchema, 'params'),
+  ctrl.getDealReview
+);
+
 export default router;

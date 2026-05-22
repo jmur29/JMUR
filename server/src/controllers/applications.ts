@@ -6,6 +6,7 @@ import {
   updateApplication,
   softDeleteApplication,
 } from '../services/applications';
+import prisma from '../prisma/client';
 import type { ApplicationStatus } from '@prisma/client';
 
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -79,6 +80,52 @@ export async function remove(req: Request, res: Response, next: NextFunction): P
       return;
     }
     res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getDealIntelligence(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const application = await prisma.application.findFirst({
+      where: { id: req.params.id, tenantId: req.user.tenantId, deletedAt: null },
+      select: { id: true, dealIntelligenceReport: true, processingStatus: true },
+    });
+
+    if (!application) {
+      res.status(404).json({ error: 'Application not found', code: 'NOT_FOUND' });
+      return;
+    }
+
+    if (!application.dealIntelligenceReport) {
+      res.status(404).json({ error: 'Report not yet generated', code: 'NOT_READY' });
+      return;
+    }
+
+    res.json(application.dealIntelligenceReport);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getDealReview(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const application = await prisma.application.findFirst({
+      where: { id: req.params.id, tenantId: req.user.tenantId, deletedAt: null },
+      select: { id: true, dealReviewReport: true, processingStatus: true },
+    });
+
+    if (!application) {
+      res.status(404).json({ error: 'Application not found', code: 'NOT_FOUND' });
+      return;
+    }
+
+    if (!application.dealReviewReport) {
+      res.status(404).json({ error: 'Report not yet generated', code: 'NOT_READY' });
+      return;
+    }
+
+    res.json(application.dealReviewReport);
   } catch (err) {
     next(err);
   }

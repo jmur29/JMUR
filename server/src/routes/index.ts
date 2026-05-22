@@ -10,6 +10,7 @@ import documentsRouter from './documents';
 import reportsRouter from './reports';
 import adminRouter from './admin';
 import aiRouter from './ai';
+import intakeRouter from './intake';
 
 const router = Router();
 
@@ -45,5 +46,8 @@ router.use('/admin', adminRouter);
 
 // AI — document parsing + underwriting review
 router.use('/ai', aiRouter);
+
+// Intake — document processing pipeline (zip, finmo, submission notes)
+router.use('/intake', intakeRouter);
 
 export default router;

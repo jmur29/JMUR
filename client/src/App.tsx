@@ -9,6 +9,9 @@ import ApplicationDetail from './pages/ApplicationDetail';
 import ApplicationReport from './pages/ApplicationReport';
 import Admin from './pages/Admin';
 import AdminPipeline from './pages/AdminPipeline';
+import DealImport from './pages/DealImport';
+import DealIntelligenceReport from './pages/DealIntelligenceReport';
+import DealReviewDashboard from './pages/DealReviewDashboard';
 import { useApiAuth } from './lib/api';
 import Spinner from './components/ui/Spinner';
 
@@ -84,6 +87,9 @@ export default function App() {
           <Route path="/applications/new" element={<NewApplication />} />
           <Route path="/applications/:id" element={<ApplicationDetail />} />
           <Route path="/applications/:id/report" element={<ApplicationReport />} />
+          <Route path="/import" element={<DealImport />} />
+          <Route path="/applications/:id/intelligence" element={<DealIntelligenceReport />} />
+          <Route path="/applications/:id/review" element={<DealReviewDashboard />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/pipeline" element={<AdminPipeline />} />
         </Route>
