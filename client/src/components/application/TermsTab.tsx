@@ -83,10 +83,7 @@ export default function TermsTab({ application }: TermsTabProps) {
         data.contractRate,
         data.amortizationYears
       );
-      if (terms?.id) {
-        return termsApi.update(terms.id, { ...data, stressRate, monthlyPayment, mortgageAmount });
-      }
-      return termsApi.create(application.id, { ...data, stressRate, monthlyPayment, mortgageAmount });
+      return termsApi.upsert(application.id, { ...data, stressRate, monthlyPayment, mortgageAmount });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: appKeys.detail(application.id) });

@@ -87,7 +87,7 @@ export default function DocumentsTab({ application }: DocumentsTabProps) {
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: DocumentStatus }) =>
-      documentsApi.updateStatus(id, status),
+      documentsApi.updateStatus(application.id, id, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents', application.id] });
       queryClient.invalidateQueries({ queryKey: appKeys.detail(application.id) });
@@ -97,7 +97,7 @@ export default function DocumentsTab({ application }: DocumentsTabProps) {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => documentsApi.delete(id),
+    mutationFn: (id: string) => documentsApi.delete(application.id, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents', application.id] });
       queryClient.invalidateQueries({ queryKey: appKeys.detail(application.id) });

@@ -108,11 +108,13 @@ export const applicationsApi = {
 
 // ---------------------------------------------------------------------------
 // Borrowers
+// Server route: POST /borrowers (applicationId in body)
 // ---------------------------------------------------------------------------
 export const borrowersApi = {
+  // appId is passed as applicationId in the request body
   create(appId: string, data: Partial<Borrower>): Promise<Borrower> {
     return apiClient
-      .post<Borrower>(`/applications/${appId}/borrowers`, data)
+      .post<Borrower>('/borrowers', { applicationId: appId, ...data })
       .then((r) => r.data);
   },
 
@@ -127,73 +129,99 @@ export const borrowersApi = {
 
 // ---------------------------------------------------------------------------
 // Income
+// Server route: PUT /income/:borrowerId (upsert — handles both create and update)
 // ---------------------------------------------------------------------------
 export const incomeApi = {
-  create(borrowerId: string, data: Partial<Income>): Promise<Income> {
+  upsert(borrowerId: string, data: Partial<Income>): Promise<Income> {
     return apiClient
-      .post<Income>(`/borrowers/${borrowerId}/income`, data)
+      .put<Income>(`/income/${borrowerId}`, data)
       .then((r) => r.data);
   },
 
-  update(id: string, data: Partial<Income>): Promise<Income> {
-    return apiClient.patch<Income>(`/income/${id}`, data).then((r) => r.data);
+  // Kept for backwards compat — both map to upsert
+  create(borrowerId: string, data: Partial<Income>): Promise<Income> {
+    return apiClient.put<Income>(`/income/${borrowerId}`, data).then((r) => r.data);
+  },
+
+  update(borrowerId: string, data: Partial<Income>): Promise<Income> {
+    return apiClient.put<Income>(`/income/${borrowerId}`, data).then((r) => r.data);
   },
 };
 
 // ---------------------------------------------------------------------------
 // Property
+// Server route: PUT /property/:applicationId (upsert)
 // ---------------------------------------------------------------------------
 export const propertyApi = {
-  create(appId: string, data: Partial<Property>): Promise<Property> {
+  upsert(appId: string, data: Partial<Property>): Promise<Property> {
     return apiClient
-      .post<Property>(`/applications/${appId}/property`, data)
+      .put<Property>(`/property/${appId}`, data)
       .then((r) => r.data);
   },
 
-  update(id: string, data: Partial<Property>): Promise<Property> {
-    return apiClient.patch<Property>(`/property/${id}`, data).then((r) => r.data);
+  // Kept for backwards compat — both map to upsert
+  create(appId: string, data: Partial<Property>): Promise<Property> {
+    return apiClient.put<Property>(`/property/${appId}`, data).then((r) => r.data);
+  },
+
+  update(appId: string, data: Partial<Property>): Promise<Property> {
+    return apiClient.put<Property>(`/property/${appId}`, data).then((r) => r.data);
   },
 };
 
 // ---------------------------------------------------------------------------
 // Mortgage Terms
+// Server route: PUT /terms/:applicationId (upsert)
 // ---------------------------------------------------------------------------
 export const termsApi = {
-  create(appId: string, data: Partial<MortgageTerms>): Promise<MortgageTerms> {
+  upsert(appId: string, data: Partial<MortgageTerms>): Promise<MortgageTerms> {
     return apiClient
-      .post<MortgageTerms>(`/applications/${appId}/terms`, data)
+      .put<MortgageTerms>(`/terms/${appId}`, data)
       .then((r) => r.data);
   },
 
-  update(id: string, data: Partial<MortgageTerms>): Promise<MortgageTerms> {
-    return apiClient.patch<MortgageTerms>(`/terms/${id}`, data).then((r) => r.data);
+  // Kept for backwards compat — both map to upsert
+  create(appId: string, data: Partial<MortgageTerms>): Promise<MortgageTerms> {
+    return apiClient.put<MortgageTerms>(`/terms/${appId}`, data).then((r) => r.data);
+  },
+
+  update(appId: string, data: Partial<MortgageTerms>): Promise<MortgageTerms> {
+    return apiClient.put<MortgageTerms>(`/terms/${appId}`, data).then((r) => r.data);
   },
 };
 
 // ---------------------------------------------------------------------------
 // Underwriting
+// Server routes:
+//   GET  /underwriting/:applicationId/calculate
+//   POST /underwriting/:applicationId/decide
 // ---------------------------------------------------------------------------
 export const underwritingApi = {
   calculate(appId: string): Promise<UWResult> {
     return apiClient
-      .post<UWResult>(`/applications/${appId}/calculate`)
+      .get<UWResult>(`/underwriting/${appId}/calculate`)
       .then((r) => r.data);
   },
 
   saveDecision(appId: string, data: SaveDecisionPayload): Promise<Application> {
     return apiClient
-      .post<Application>(`/applications/${appId}/decision`, data)
+      .post<Application>(`/underwriting/${appId}/decide`, data)
       .then((r) => r.data);
   },
 };
 
 // ---------------------------------------------------------------------------
 // Documents
+// Server routes:
+//   GET    /documents/:applicationId
+//   POST   /documents/:applicationId/upload
+//   PATCH  /documents/:applicationId/:id/status
+//   DELETE /documents/:applicationId/:id
 // ---------------------------------------------------------------------------
 export const documentsApi = {
   list(appId: string): Promise<Document[]> {
     return apiClient
-      .get<Document[]>(`/applications/${appId}/documents`)
+      .get<Document[]>(`/documents/${appId}`)
       .then((r) => r.data);
   },
 
@@ -203,7 +231,7 @@ export const documentsApi = {
     onUploadProgress?: (pct: number) => void
   ): Promise<Document> {
     return apiClient
-      .post<Document>(`/applications/${appId}/documents`, formData, {
+      .post<Document>(`/documents/${appId}/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (evt) => {
           if (onUploadProgress && evt.total) {
@@ -214,30 +242,40 @@ export const documentsApi = {
       .then((r) => r.data);
   },
 
-  updateStatus(id: string, status: DocumentStatus): Promise<Document> {
+  updateStatus(appId: string, id: string, status: DocumentStatus): Promise<Document> {
     return apiClient
-      .patch<Document>(`/documents/${id}`, { status })
+      .patch<Document>(`/documents/${appId}/${id}/status`, { status })
       .then((r) => r.data);
   },
 
-  delete(id: string): Promise<void> {
-    return apiClient.delete(`/documents/${id}`).then(() => undefined);
+  delete(appId: string, id: string): Promise<void> {
+    return apiClient.delete(`/documents/${appId}/${id}`).then(() => undefined);
   },
 };
 
 // ---------------------------------------------------------------------------
 // Reports
+// Server routes:
+//   GET /reports/:applicationId/html
+//   GET /reports/:applicationId/pdf
 // ---------------------------------------------------------------------------
 export const reportsApi = {
   generate(appId: string): Promise<{ url: string }> {
     return apiClient
-      .post<{ url: string }>(`/applications/${appId}/report`)
-      .then((r) => r.data);
+      .get(`/reports/${appId}/pdf`, { responseType: 'blob' })
+      .then((r) => {
+        const blob = new Blob([r.data as BlobPart], { type: 'application/pdf' });
+        return { url: URL.createObjectURL(blob) };
+      });
   },
 };
 
 // ---------------------------------------------------------------------------
 // Admin
+// Server routes:
+//   GET   /admin/users
+//   PATCH /admin/users/:userId/role
+//   GET   /admin/stats
 // ---------------------------------------------------------------------------
 export const adminApi = {
   listUsers(params?: { page?: number; pageSize?: number }): Promise<PaginatedResponse<User>> {
@@ -247,11 +285,11 @@ export const adminApi = {
   },
 
   updateUserRole(id: string, role: UserRole): Promise<User> {
-    return apiClient.patch<User>(`/admin/users/${id}`, { role }).then((r) => r.data);
+    return apiClient.patch<User>(`/admin/users/${id}/role`, { role }).then((r) => r.data);
   },
 
   getPipelineStats(): Promise<PipelineStats> {
-    return apiClient.get<PipelineStats>('/admin/pipeline').then((r) => r.data);
+    return apiClient.get<PipelineStats>('/admin/stats').then((r) => r.data);
   },
 };
 

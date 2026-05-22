@@ -56,7 +56,7 @@ export const CreateBorrowerSchema = z.object({
   dob: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
   email: z.string().email(),
   phone: z.string().min(7).max(20),
-  sin: z.string().regex(/^\d{9}$/, 'SIN must be exactly 9 digits'),
+  sin: z.string().regex(/^\d{9}$/, 'SIN must be exactly 9 digits').optional().default(''),
   employmentType: z.enum(['EMPLOYED', 'SELF_EMPLOYED', 'CONTRACT', 'RETIRED', 'OTHER']),
   creditScore: z.number().int().min(300).max(900),
   bankruptcies: z.boolean().default(false),

@@ -101,12 +101,7 @@ export default function PropertyTab({ application }: PropertyTabProps) {
   }, [property, reset]);
 
   const saveMutation = useMutation({
-    mutationFn: (data: PropertyFormValues) => {
-      if (property?.id) {
-        return propertyApi.update(property.id, data);
-      }
-      return propertyApi.create(application.id, data);
-    },
+    mutationFn: (data: PropertyFormValues) => propertyApi.upsert(application.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: appKeys.detail(application.id) });
       toast.success('Property saved');
