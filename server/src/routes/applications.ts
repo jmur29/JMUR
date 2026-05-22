@@ -67,4 +67,10 @@ router.post(
   ctrl.generateDealReview
 );
 
+router.patch(
+  '/:id/fraud-signals/:signalId/acknowledge',
+  validate(UuidParamSchema, 'params'),
+  ctrl.acknowledgeFraudSignal
+);
+
 export default router;

@@ -167,6 +167,37 @@ export async function generateDealIntelligence(req: Request, res: Response, next
   }
 }
 
+export async function acknowledgeFraudSignal(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id, signalId } = req.params;
+    const application = await prisma.application.findFirst({
+      where: { id, tenantId: req.user.tenantId, deletedAt: null },
+      select: { id: true, dealReviewReport: true },
+    });
+
+    if (!application?.dealReviewReport) {
+      res.status(404).json({ error: 'Application or report not found' });
+      return;
+    }
+
+    const report = application.dealReviewReport as { fraudSignals?: { id: string; acknowledged: boolean }[] };
+    if (report.fraudSignals) {
+      report.fraudSignals = report.fraudSignals.map((s) =>
+        s.id === signalId ? { ...s, acknowledged: true } : s
+      );
+    }
+
+    await prisma.application.update({
+      where: { id },
+      data: { dealReviewReport: report as object },
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function generateDealReview(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const application = await prisma.application.findFirst({
