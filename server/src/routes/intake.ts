@@ -5,7 +5,7 @@ import * as ctrl from '../controllers/intake';
 const router = Router();
 router.use(requireAuth);
 
-router.post('/zip', ctrl.uploadMiddleware.single('file'), ctrl.handleZipUpload);
+router.post('/zip', ctrl.uploadMiddleware.array('file', 50), ctrl.handleZipUpload);
 router.post('/finmo', ctrl.uploadMiddleware.single('file'), ctrl.handleFinmoImport);
 router.post('/submission-notes', ctrl.handleSubmissionNotes);
 
