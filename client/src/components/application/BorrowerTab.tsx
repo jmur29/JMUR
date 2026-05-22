@@ -38,7 +38,7 @@ interface SingleBorrowerFormProps {
 function SingleBorrowerForm({
   borrower,
   applicationId,
-  onDelete,
+  onDelete: _onDelete,
   canDelete = false,
 }: SingleBorrowerFormProps) {
   const queryClient = useQueryClient();
@@ -80,7 +80,7 @@ function SingleBorrowerForm({
     onError: () => toast.error('Failed to remove co-borrower'),
   });
 
-  const onBlurSave = useCallback(
+  const _onBlurSave = useCallback(
     async (field: string, value: unknown) => {
       setIsDirty(true);
       const isValid = await methods.trigger();
