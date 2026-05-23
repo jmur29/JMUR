@@ -292,7 +292,7 @@ function BrokerView({ stats, statsLoading, apps, appsLoading }: {
                         {primary ? `${primary.firstName} ${primary.lastName}` : '—'}
                       </td>
                       <td className="px-3 py-3 text-xs text-[#6B6860] hidden sm:table-cell">
-                        {app.mortgageTerms?.mortgageType ?? '—'}
+                        {app.mortgageTerms ? `$${(app.mortgageTerms.mortgageAmount / 1000).toFixed(0)}K` : '—'}
                       </td>
                       <td className="px-3 py-3 hidden md:table-cell">
                         {score !== null ? (
