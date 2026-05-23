@@ -458,7 +458,7 @@ const fontaineDealReview = {
 
 // ─── Main seed function ───────────────────────────────────────────────────────
 
-async function main() {
+export async function main() {
   console.log('Seeding ClearPath UW database (realistic demo data)...');
 
   // ── Tenant ──────────────────────────────────────────────────────────────────
@@ -1279,11 +1279,15 @@ async function main() {
   console.log(`  App 5:     CL-0005 — Benjamin Fontaine — Purchase $615K Ottawa — IN_REVIEW (quality 67, fraud signal)`);
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+// Only self-execute when run directly (tsx src/prisma/seed.ts), not when imported
+const argv1 = process.argv[1] ?? '';
+if (argv1.endsWith('seed.ts') || argv1.endsWith('seed.js')) {
+  main()
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}

@@ -6,6 +6,7 @@ import cors from 'cors';
 import logger from './utils/logger';
 import { errorHandler } from './middleware/error';
 import apiRouter from './routes/index';
+import { autoSeedIfEmpty } from './utils/autoSeed';
 
 const app = express();
 
@@ -62,6 +63,7 @@ app.listen(PORT, () => {
   logger.info(`ClearPath UW API listening on port ${PORT}`, {
     env: process.env.NODE_ENV ?? 'development',
   });
+  autoSeedIfEmpty().catch((err) => logger.error('Auto-seed failed', { err }));
 });
 
 export default app;
