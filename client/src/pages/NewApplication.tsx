@@ -199,7 +199,7 @@ export default function NewApplication() {
 
       // Save parsed income data so AI analysis has salary context
       if (p?.baseSalary || p?.employerName) {
-        await incomeApi.create(borrower.id, {
+        await incomeApi.upsert(borrower.id, {
           baseSalary: p?.baseSalary ?? 0,
           employerName: p?.employerName ?? null,
           yearsEmployed: p?.yearsEmployed ?? null,
@@ -211,7 +211,7 @@ export default function NewApplication() {
       }
 
       if (p?.address) {
-        await propertyApi.create(app.id, {
+        await propertyApi.upsert(app.id, {
           address: p.address,
           city: p.city ?? '',
           province: p.province ?? 'ON',
@@ -228,7 +228,7 @@ export default function NewApplication() {
       }
 
       if (p?.contractRate) {
-        await termsApi.create(app.id, {
+        await termsApi.upsert(app.id, {
           contractRate: p.contractRate,
           amortizationYears: p.amortizationYears ?? 25,
           termYears: p.termYears ?? 5,
