@@ -13,27 +13,36 @@ const app = express();
 // ─── Security & parsing ───────────────────────────────────────────────────────
 
 app.use(helmet());
-const _corsOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
+
+// Origins that are always allowed regardless of CORS_ORIGIN env var
+const _hardcodedOrigins = [
+  'https://jmur.vercel.app',
+  'https://web-production-52930a.up.railway.app',
+];
+const _envOrigins = (process.env.CORS_ORIGIN ?? '')
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
+const _allowedOrigins = new Set([..._hardcodedOrigins, ..._envOrigins]);
 
 app.use(
   cors({
     origin: (origin, cb) => {
-      // Allow server-to-server (no origin) and localhost in dev
+      // Allow server-to-server (no origin header), e.g. curl or internal calls
       if (!origin) return cb(null, true);
-      // Allow any Vercel preview/prod deployment plus explicitly configured origins
-      if (
-        _corsOrigins.includes(origin) ||
-        origin.endsWith('.vercel.app') ||
-        origin.startsWith('http://localhost')
-      ) {
+      // Allow localhost in development
+      if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
         return cb(null, true);
       }
-      cb(new Error('Not allowed by CORS'));
+      // Allow any Vercel preview/production deployment (*.vercel.app)
+      if (origin.endsWith('.vercel.app')) return cb(null, true);
+      // Allow explicitly configured origins
+      if (_allowedOrigins.has(origin)) return cb(null, true);
+      cb(new Error(`CORS blocked: ${origin}`));
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-test-user-id'],
   })
 );
 

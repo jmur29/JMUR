@@ -24,8 +24,19 @@ import type {
 // ---------------------------------------------------------------------------
 // Base axios instance
 // ---------------------------------------------------------------------------
+const _apiBase = import.meta.env.VITE_API_URL as string | undefined;
+if (!_apiBase && import.meta.env.PROD) {
+  // eslint-disable-next-line no-console
+  console.error(
+    '[ClearPath] VITE_API_URL is not set — all API calls will 404. ' +
+    'Set it to https://<your-express-api-host>/api in your deployment environment.'
+  );
+}
+
 export const apiClient: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? '/api',
+  // In dev: falls back to '/api' so the Vite proxy can rewrite to localhost:3001/api
+  // In prod: VITE_API_URL must be set, e.g. https://clearpath-api-xxx.up.railway.app/api
+  baseURL: _apiBase ?? '/api',
   headers: {
     'Content-Type': 'application/json',
   },
