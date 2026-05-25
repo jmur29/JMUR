@@ -71,7 +71,7 @@ router.post('/clerk', async (req: Request, res: Response): Promise<void> => {
         );
         const email = primaryEmail?.email_address ?? '';
         const tenantId = data.public_metadata?.tenantId;
-        const role = data.public_metadata?.role ?? 'VIEWER';
+        const role = data.public_metadata?.role ?? 'UNDERWRITER';
 
         if (!tenantId) {
           logger.warn('Clerk webhook: user has no tenantId in public_metadata', {

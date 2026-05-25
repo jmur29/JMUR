@@ -46,20 +46,23 @@ app.use(
   })
 );
 
-// Raw body needed for Clerk webhook signature verification
+// Raw body needed for Clerk webhook signature verification — register for both path prefixes
 app.use('/api/webhooks', express.raw({ type: 'application/json' }));
+app.use('/webhooks', express.raw({ type: 'application/json' }));
 
 app.use(express.json({ limit: '10mb' }));
 
-// ─── Health (no auth, must be before apiRouter) ───────────────────────────────
+// ─── Health (no auth, no prefix ambiguity) ────────────────────────────────────
 
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', ts: new Date().toISOString() });
-});
+app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
+app.get('/api/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
+// Mount at both /api and / so the app works regardless of whether VITE_API_URL
+// includes the /api suffix or not (Vercel dashboard env var may override .env.production).
 
 app.use('/api', apiRouter);
+app.use('/', apiRouter);
 
 // ─── Global error handler ────────────────────────────────────────────────────
 
