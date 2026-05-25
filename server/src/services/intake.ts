@@ -554,8 +554,8 @@ export async function generateDealIntelligenceFromApplication(
       const primary = app.borrowers.find((b) => b.type === 'PRIMARY') ?? app.borrowers[0];
       const summaryText = [
         primary ? `Borrower: ${primary.firstName} ${primary.lastName}` : '',
-        app.property ? `Property: ${app.property.address}, value ${app.property.appraisedValue}` : '',
-        app.mortgageTerms ? `Mortgage: ${app.mortgageTerms.mortgageAmount} at ${app.mortgageTerms.contractRate}%` : '',
+        app.property ? `Property: ${app.property.address}, value ${Number(app.property.appraisedValue)}` : '',
+        app.mortgageTerms ? `Mortgage: ${Number(app.mortgageTerms.mortgageAmount)} at ${Number(app.mortgageTerms.contractRate)}%` : '',
       ].filter(Boolean).join('\n');
 
       if (summaryText) {

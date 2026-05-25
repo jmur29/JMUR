@@ -84,9 +84,7 @@ function IncomeSection({ borrower, applicationId }: IncomeSectionProps) {
   }, [income, reset]);
 
   const saveMutation = useMutation({
-    mutationFn: (data: IncomeFormValues) => {
-      return incomeApi.upsert(borrower.id, data);
-    },
+    mutationFn: (data: IncomeFormValues) => incomeApi.upsert(borrower.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: appKeys.detail(applicationId) });
       toast.success('Income saved');

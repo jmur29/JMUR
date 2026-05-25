@@ -51,14 +51,15 @@ app.use('/api/webhooks', express.raw({ type: 'application/json' }));
 
 app.use(express.json({ limit: '10mb' }));
 
+// ─── Health (no auth, must be before apiRouter) ───────────────────────────────
+
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', ts: new Date().toISOString() });
+});
+
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
 app.use('/api', apiRouter);
-
-// Health check
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', ts: new Date().toISOString() });
-});
 
 // ─── Global error handler ────────────────────────────────────────────────────
 

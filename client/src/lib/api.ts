@@ -119,8 +119,10 @@ export const applicationsApi = {
 
 // ---------------------------------------------------------------------------
 // Borrowers
+// Server route: POST /borrowers (applicationId in body)
 // ---------------------------------------------------------------------------
 export const borrowersApi = {
+  // appId is passed as applicationId in the request body
   create(appId: string, data: Partial<Borrower>): Promise<Borrower> {
     return apiClient
       .post<Borrower>('/borrowers', { applicationId: appId, ...data })
@@ -138,6 +140,7 @@ export const borrowersApi = {
 
 // ---------------------------------------------------------------------------
 // Income
+// Server route: PUT /income/:borrowerId (upsert — handles both create and update)
 // ---------------------------------------------------------------------------
 export const incomeApi = {
   upsert(borrowerId: string, data: Partial<Income>): Promise<Income> {
@@ -149,6 +152,7 @@ export const incomeApi = {
 
 // ---------------------------------------------------------------------------
 // Property
+// Server route: PUT /property/:applicationId (upsert)
 // ---------------------------------------------------------------------------
 export const propertyApi = {
   upsert(appId: string, data: Partial<Property>): Promise<Property> {
@@ -160,6 +164,7 @@ export const propertyApi = {
 
 // ---------------------------------------------------------------------------
 // Mortgage Terms
+// Server route: PUT /terms/:applicationId (upsert)
 // ---------------------------------------------------------------------------
 export const termsApi = {
   upsert(appId: string, data: Partial<MortgageTerms>): Promise<MortgageTerms> {
@@ -171,6 +176,9 @@ export const termsApi = {
 
 // ---------------------------------------------------------------------------
 // Underwriting
+// Server routes:
+//   GET  /underwriting/:applicationId/calculate
+//   POST /underwriting/:applicationId/decide
 // ---------------------------------------------------------------------------
 export const underwritingApi = {
   calculate(appId: string): Promise<UWResult> {
@@ -188,6 +196,11 @@ export const underwritingApi = {
 
 // ---------------------------------------------------------------------------
 // Documents
+// Server routes:
+//   GET    /documents/:applicationId
+//   POST   /documents/:applicationId/upload
+//   PATCH  /documents/:applicationId/:id/status
+//   DELETE /documents/:applicationId/:id
 // ---------------------------------------------------------------------------
 export const documentsApi = {
   list(appId: string): Promise<Document[]> {
@@ -226,17 +239,27 @@ export const documentsApi = {
 
 // ---------------------------------------------------------------------------
 // Reports
+// Server routes:
+//   GET /reports/:applicationId/html
+//   GET /reports/:applicationId/pdf
 // ---------------------------------------------------------------------------
 export const reportsApi = {
   generate(appId: string): Promise<{ url: string }> {
     return apiClient
-      .post<{ url: string }>(`/applications/${appId}/report`)
-      .then((r) => r.data);
+      .get(`/reports/${appId}/pdf`, { responseType: 'blob' })
+      .then((r) => {
+        const blob = new Blob([r.data as BlobPart], { type: 'application/pdf' });
+        return { url: URL.createObjectURL(blob) };
+      });
   },
 };
 
 // ---------------------------------------------------------------------------
 // Admin
+// Server routes:
+//   GET   /admin/users
+//   PATCH /admin/users/:userId/role
+//   GET   /admin/stats
 // ---------------------------------------------------------------------------
 export const adminApi = {
   listUsers(params?: { page?: number; pageSize?: number }): Promise<PaginatedResponse<User>> {
@@ -250,7 +273,7 @@ export const adminApi = {
   },
 
   getPipelineStats(): Promise<PipelineStats> {
-    return apiClient.get<PipelineStats>('/admin/pipeline').then((r) => r.data);
+    return apiClient.get<PipelineStats>('/admin/stats').then((r) => r.data);
   },
 };
 

@@ -25,4 +25,7 @@ router.patch(
 // GET /admin/stats
 router.get('/stats', ctrl.stats);
 
+// GET /admin/pipeline — alias for stats (same data)
+router.get('/pipeline', ctrl.stats);
+
 export default router;
