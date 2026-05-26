@@ -1987,45 +1987,34 @@ function setupIncomeHub() {
       ).setNumberFormat('"$"#,##0.00');
     }, BLUE, WHITE);
 
-  // Hero 4: Next Cheque (rows heroTop to heroTop+2, cols H — use H–H only, single col label + date)
-  // Next cheque date
+  // Hero 4: Next Cheque — single merged cell, both sheets combined.
+  // MINIFS(..., ">0") avoids returning serial-0 (Dec 30 1899) when no deals match.
+  // LET stores the computed date once so we don't recalculate it in the amount SUMPRODUCT.
   sheet.getRange(heroTop, 8).setValue('📅  NEXT CHEQUE')
     .setBackground(ORANGE).setFontColor(WHITE)
     .setFontFamily('Arial').setFontSize(9).setFontWeight('bold')
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
-  sheet.getRange(heroTop + 1, 8)
+  sheet.getRange(heroTop + 1, 8, 2, 1).merge()
     .setFormula(
-      '=IFERROR(TEXT(ARRAYFORMULA(MIN(IF(' +
-        '(TRIM(\'2025 Funded\'!T$4:T$200)<>"'+STATUS_PAID+'")*' +
-        '(\'2025 Funded\'!X$4:X$200<>""),' +
-        '\'2025 Funded\'!X$4:X$200))),"mmm d, yyyy")&CHAR(10)&' +
-        '"$"&TEXT(SUMPRODUCT((TRIM(\'2025 Funded\'!T$4:T$200)<>"'+STATUS_PAID+'")*' +
-        '(\'2025 Funded\'!X$4:X$200=ARRAYFORMULA(MIN(IF((TRIM(\'2025 Funded\'!T$4:T$200)<>"'+STATUS_PAID+'")*' +
-        '(\'2025 Funded\'!X$4:X$200<>""),\'2025 Funded\'!X$4:X$200))))' +
-        '*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0)),"#,##0.00"),' +
-        '"No upcoming")'
+      '=IFERROR(' +
+        'LET(d,MIN(' +
+          'MINIFS(\'2025 Funded\'!X$4:X$200,\'2025 Funded\'!T$4:T$200,"'+STATUS_AWAITING+'",\'2025 Funded\'!X$4:X$200,">0"),' +
+          'MINIFS(\'2026 Funded\'!X$4:X$200,\'2026 Funded\'!T$4:T$200,"'+STATUS_AWAITING+'",\'2026 Funded\'!X$4:X$200,">0")' +
+        '),' +
+        'IF(d>0,' +
+          'TEXT(d,"mmm d, yyyy")&CHAR(10)&"$"&TEXT(' +
+            'SUMPRODUCT((TRIM(\'2025 Funded\'!T$4:T$200)="'+STATUS_AWAITING+'")*(IFERROR(VALUE(\'2025 Funded\'!X$4:X$200),0)=d)*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0))' +
+            '+SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)="'+STATUS_AWAITING+'")*(IFERROR(VALUE(\'2026 Funded\'!X$4:X$200),0)=d)*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),' +
+          '"#,##0.00"),' +
+          '"No upcoming")' +
+        '),"No upcoming")'
     )
     .setBackground(ORANGE_LIGHT).setFontColor(ORANGE)
-    .setFontFamily('Arial Black').setFontSize(13).setFontWeight('bold')
+    .setFontFamily('Arial Black').setFontSize(14).setFontWeight('bold')
     .setHorizontalAlignment('center').setVerticalAlignment('middle')
     .setWrap(true);
-  sheet.setRowHeight(heroTop + 1, 52);
-  sheet.getRange(heroTop + 2, 8)
-    .setFormula(
-      '=IFERROR(TEXT(ARRAYFORMULA(MIN(IF(' +
-        '(TRIM(\'2026 Funded\'!T$4:T$200)<>"'+STATUS_PAID+'")*' +
-        '(\'2026 Funded\'!X$4:X$200<>""),' +
-        '\'2026 Funded\'!X$4:X$200))),"mmm d, yyyy")&CHAR(10)&' +
-        '"$"&TEXT(SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)<>"'+STATUS_PAID+'")*' +
-        '(\'2026 Funded\'!X$4:X$200=ARRAYFORMULA(MIN(IF((TRIM(\'2026 Funded\'!T$4:T$200)<>"'+STATUS_PAID+'")*' +
-        '(\'2026 Funded\'!X$4:X$200<>""),\'2026 Funded\'!X$4:X$200))))' +
-        '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),"#,##0.00"),' +
-        '"No upcoming")'
-    )
-    .setBackground(ORANGE_LIGHT).setFontColor(TEXT_MED)
-    .setFontFamily('Arial').setFontSize(10)
-    .setHorizontalAlignment('center').setVerticalAlignment('middle')
-    .setWrap(true);
+  sheet.setRowHeight(heroTop + 1, 45);
+  sheet.setRowHeight(heroTop + 2, 31);
 
   // ══════════════════════════════════════════════════════════════════════════════
   // SECTION 3 — UPCOMING PAYMENT SCHEDULE
