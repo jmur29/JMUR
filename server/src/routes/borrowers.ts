@@ -23,7 +23,7 @@ router.get(
 // POST /borrowers
 router.post(
   '/',
-  requireRole(['ADMIN', 'UNDERWRITER']),
+  requireRole(['ADMIN', 'BROKER', 'UNDERWRITER']),
   validate(CreateBorrowerSchema),
   ctrl.create
 );
@@ -31,7 +31,7 @@ router.post(
 // PATCH /borrowers/:borrowerId
 router.patch(
   '/:borrowerId',
-  requireRole(['ADMIN', 'UNDERWRITER']),
+  requireRole(['ADMIN', 'BROKER', 'UNDERWRITER']),
   validate(BorrowerIdParamSchema, 'params'),
   validate(UpdateBorrowerSchema),
   ctrl.update
@@ -40,7 +40,7 @@ router.patch(
 // DELETE /borrowers/:borrowerId
 router.delete(
   '/:borrowerId',
-  requireRole(['ADMIN', 'UNDERWRITER']),
+  requireRole(['ADMIN', 'BROKER', 'UNDERWRITER']),
   validate(BorrowerIdParamSchema, 'params'),
   ctrl.remove
 );

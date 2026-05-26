@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'UNDERWRITER' | 'VIEWER';
+export type UserRole = 'ADMIN' | 'BROKER' | 'UNDERWRITER' | 'VIEWER';
 export type ApplicationStatus =
   | 'DRAFT'
   | 'IN_REVIEW'

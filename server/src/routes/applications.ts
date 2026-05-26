@@ -18,7 +18,7 @@ router.get('/', validate(ListApplicationsQuerySchema, 'query'), ctrl.list);
 
 router.post(
   '/',
-  requireRole(['ADMIN', 'UNDERWRITER']),
+  requireRole(['ADMIN', 'BROKER', 'UNDERWRITER']),
   ctrl.create
 );
 
@@ -30,7 +30,7 @@ router.get(
 
 router.patch(
   '/:id',
-  requireRole(['ADMIN', 'UNDERWRITER']),
+  requireRole(['ADMIN', 'BROKER', 'UNDERWRITER']),
   validate(UuidParamSchema, 'params'),
   validate(UpdateApplicationSchema),
   ctrl.update

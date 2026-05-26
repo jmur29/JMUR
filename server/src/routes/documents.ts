@@ -43,7 +43,7 @@ router.get(
 // POST /documents/:applicationId/upload
 router.post(
   '/:applicationId/upload',
-  requireRole(['ADMIN', 'UNDERWRITER']),
+  requireRole(['ADMIN', 'BROKER', 'UNDERWRITER']),
   validate(ApplicationIdParamSchema, 'params'),
   upload.single('file'),
   ctrl.upload
@@ -59,7 +59,7 @@ router.get(
 // PATCH /documents/:applicationId/:id/status
 router.patch(
   '/:applicationId/:id/status',
-  requireRole(['ADMIN', 'UNDERWRITER']),
+  requireRole(['ADMIN', 'BROKER', 'UNDERWRITER']),
   validate(UpdateDocumentSchema),
   ctrl.updateStatus
 );
@@ -67,7 +67,7 @@ router.patch(
 // DELETE /documents/:applicationId/:id
 router.delete(
   '/:applicationId/:id',
-  requireRole(['ADMIN', 'UNDERWRITER']),
+  requireRole(['ADMIN', 'BROKER', 'UNDERWRITER']),
   ctrl.remove
 );
 

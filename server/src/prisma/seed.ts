@@ -458,52 +458,57 @@ const fontaineDealReview = {
 
 // ─── Main seed function ───────────────────────────────────────────────────────
 
-export async function main() {
+export async function main(targetTenantId = SEED_TENANT_ID, targetUserId = SEED_USER_ID) {
   console.log('Seeding ClearPath UW database (realistic demo data)...');
 
-  // ── Tenant ──────────────────────────────────────────────────────────────────
-  const tenant = await prisma.tenant.upsert({
-    where: { id: SEED_TENANT_ID },
-    create: {
-      id: SEED_TENANT_ID,
-      name: 'ClearPath Demo',
-      slug: 'demo',
-      primaryColor: '#1B4332',
-    },
-    update: {
-      name: 'ClearPath Demo',
-      primaryColor: '#1B4332',
-    },
-  });
-  console.log(`Tenant: ${tenant.name} (${tenant.id})`);
+  // ── Tenant & demo user — only for the canonical seed tenant ─────────────────
+  if (targetTenantId === SEED_TENANT_ID) {
+    await prisma.tenant.upsert({
+      where: { id: SEED_TENANT_ID },
+      create: {
+        id: SEED_TENANT_ID,
+        name: 'ClearPath Demo',
+        slug: 'demo',
+        primaryColor: '#1B4332',
+      },
+      update: {
+        name: 'ClearPath Demo',
+        primaryColor: '#1B4332',
+      },
+    });
 
-  // ── Demo user ────────────────────────────────────────────────────────────────
-  const demoUser = await prisma.user.upsert({
-    where: { id: SEED_USER_ID },
-    create: {
-      id: SEED_USER_ID,
-      tenantId: SEED_TENANT_ID,
-      clerkId: 'seed_clerk_id',
-      firstName: 'Demo',
-      lastName: 'User',
-      email: 'demo@clearpath.ca',
-      role: 'ADMIN',
-    },
-    update: {
-      firstName: 'Demo',
-      lastName: 'User',
-      email: 'demo@clearpath.ca',
-      role: 'ADMIN',
-    },
-  });
-  console.log(`Demo user: ${demoUser.email}`);
+    await prisma.user.upsert({
+      where: { id: SEED_USER_ID },
+      create: {
+        id: SEED_USER_ID,
+        tenantId: SEED_TENANT_ID,
+        clerkId: 'seed_clerk_id',
+        firstName: 'Demo',
+        lastName: 'User',
+        email: 'demo@clearpath.ca',
+        role: 'ADMIN',
+      },
+      update: {
+        firstName: 'Demo',
+        lastName: 'User',
+        email: 'demo@clearpath.ca',
+        role: 'ADMIN',
+      },
+    });
+    console.log(`Tenant: ClearPath Demo (${targetTenantId}), User: demo@clearpath.ca`);
+  }
+
+  // File number prefix — unique per tenant so multiple seed runs don't conflict
+  const filePrefix = targetTenantId === SEED_TENANT_ID
+    ? 'CL'
+    : targetTenantId.replace(/-/g, '').slice(0, 6).toUpperCase();
 
   // ── Application 1 — Sarah Chen — Purchase $549K Oakville — IN_REVIEW ────────
   const app1 = await prisma.application.upsert({
-    where: { fileNumber: 'CL-0001' },
+    where: { fileNumber: `${filePrefix}-0001` },
     create: {
-      tenantId: SEED_TENANT_ID,
-      fileNumber: 'CL-0001',
+      tenantId: targetTenantId,
+      fileNumber: `${filePrefix}-0001`,
       status: 'IN_REVIEW',
       processingStatus: 'COMPLETE',
       dealIntelligenceReport: sarahChenDealIntelligence as unknown as Prisma.InputJsonValue,
@@ -622,7 +627,7 @@ export async function main() {
       await prisma.document.create({
         data: {
           applicationId: app1.id,
-          uploadedById: SEED_USER_ID,
+          uploadedById: targetUserId,
           name: doc.name,
           type: doc.type,
           s3Key: PLACEHOLDER_S3,
@@ -635,10 +640,10 @@ export async function main() {
 
   // ── Application 2 — Derek & Aisha Tran — Purchase $720K Barrie — DRAFT ──────
   const app2 = await prisma.application.upsert({
-    where: { fileNumber: 'CL-0002' },
+    where: { fileNumber: `${filePrefix}-0002` },
     create: {
-      tenantId: SEED_TENANT_ID,
-      fileNumber: 'CL-0002',
+      tenantId: targetTenantId,
+      fileNumber: `${filePrefix}-0002`,
       status: 'DRAFT',
       processingStatus: 'COMPLETE',
       dealIntelligenceReport: derekAishaDealIntelligence as unknown as Prisma.InputJsonValue,
@@ -804,7 +809,7 @@ export async function main() {
       await prisma.document.create({
         data: {
           applicationId: app2.id,
-          uploadedById: SEED_USER_ID,
+          uploadedById: targetUserId,
           name: doc.name,
           type: doc.type,
           s3Key: PLACEHOLDER_S3,
@@ -817,10 +822,10 @@ export async function main() {
 
   // ── Application 3 — Marcus Webb — Refinance $380K Hamilton — CONDITIONALLY_APPROVED ──
   const app3 = await prisma.application.upsert({
-    where: { fileNumber: 'CL-0003' },
+    where: { fileNumber: `${filePrefix}-0003` },
     create: {
-      tenantId: SEED_TENANT_ID,
-      fileNumber: 'CL-0003',
+      tenantId: targetTenantId,
+      fileNumber: `${filePrefix}-0003`,
       status: 'CONDITIONALLY_APPROVED',
       processingStatus: 'COMPLETE',
       dealIntelligenceReport: marcusWebbDealIntelligence as unknown as Prisma.InputJsonValue,
@@ -937,7 +942,7 @@ export async function main() {
       await prisma.document.create({
         data: {
           applicationId: app3.id,
-          uploadedById: SEED_USER_ID,
+          uploadedById: targetUserId,
           name: doc.name,
           type: doc.type,
           s3Key: PLACEHOLDER_S3,
@@ -950,10 +955,10 @@ export async function main() {
 
   // ── Application 4 — Jerome Okonkwo — Purchase $615K Toronto — APPROVED ───────
   const app4 = await prisma.application.upsert({
-    where: { fileNumber: 'CL-0004' },
+    where: { fileNumber: `${filePrefix}-0004` },
     create: {
-      tenantId: SEED_TENANT_ID,
-      fileNumber: 'CL-0004',
+      tenantId: targetTenantId,
+      fileNumber: `${filePrefix}-0004`,
       status: 'APPROVED',
       processingStatus: 'COMPLETE',
       dealReviewReport: okonkwoDealReview as unknown as Prisma.InputJsonValue,
@@ -1070,7 +1075,7 @@ export async function main() {
       await prisma.document.create({
         data: {
           applicationId: app4.id,
-          uploadedById: SEED_USER_ID,
+          uploadedById: targetUserId,
           name: doc.name,
           type: doc.type,
           s3Key: PLACEHOLDER_S3,
@@ -1101,17 +1106,17 @@ export async function main() {
           { type: 'PASS', message: '33% down payment — conventional mortgage', field: 'ltv' },
         ],
         notes: 'Clean A-lender file. All documentation verified. No exceptions required.',
-        decidedById: SEED_USER_ID,
+        decidedById: targetUserId,
       },
     });
   }
 
   // ── Application 5 — Benjamin Fontaine — Purchase $789K Ottawa — IN_REVIEW ───
   const app5 = await prisma.application.upsert({
-    where: { fileNumber: 'CL-0005' },
+    where: { fileNumber: `${filePrefix}-0005` },
     create: {
-      tenantId: SEED_TENANT_ID,
-      fileNumber: 'CL-0005',
+      tenantId: targetTenantId,
+      fileNumber: `${filePrefix}-0005`,
       status: 'IN_REVIEW',
       processingStatus: 'COMPLETE',
       dealReviewReport: fontaineDealReview as unknown as Prisma.InputJsonValue,
@@ -1228,7 +1233,7 @@ export async function main() {
       await prisma.document.create({
         data: {
           applicationId: app5.id,
-          uploadedById: SEED_USER_ID,
+          uploadedById: targetUserId,
           name: doc.name,
           type: doc.type,
           s3Key: PLACEHOLDER_S3,
@@ -1264,14 +1269,14 @@ export async function main() {
         ],
         notes:
           'Manual review required. Employer name discrepancy must be resolved. Stress test TDS exceeds guideline — may require B-lender channel.',
-        decidedById: SEED_USER_ID,
+        decidedById: targetUserId,
       },
     });
   }
 
   console.log('\nSeed complete.');
-  console.log(`  Tenant:    ${tenant.name} (id: ${tenant.id})`);
-  console.log(`  User:      ${demoUser.email} (ADMIN)`);
+  console.log(`  Tenant ID: ${targetTenantId}`);
+  console.log(`  User ID:   ${targetUserId}`);
   console.log(`  App 1:     CL-0001 — Sarah Chen — Purchase $549K Oakville — IN_REVIEW (score 88)`);
   console.log(`  App 2:     CL-0002 — Derek & Aisha Tran — Purchase $720K Barrie — DRAFT (score 61)`);
   console.log(`  App 3:     CL-0003 — Marcus Webb — Refinance $380K Hamilton — CONDITIONALLY_APPROVED (score 94)`);

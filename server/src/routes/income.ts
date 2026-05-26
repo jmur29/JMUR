@@ -14,7 +14,7 @@ router.get('/:borrowerId', validate(BorrowerIdParamSchema, 'params'), ctrl.getBy
 // PUT /income/:borrowerId
 router.put(
   '/:borrowerId',
-  requireRole(['ADMIN', 'UNDERWRITER']),
+  requireRole(['ADMIN', 'BROKER', 'UNDERWRITER']),
   validate(BorrowerIdParamSchema, 'params'),
   validate(UpsertIncomeSchema),
   ctrl.upsert

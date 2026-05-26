@@ -18,7 +18,7 @@ router.get(
 // PUT /property/:applicationId
 router.put(
   '/:applicationId',
-  requireRole(['ADMIN', 'UNDERWRITER']),
+  requireRole(['ADMIN', 'BROKER', 'UNDERWRITER']),
   validate(ApplicationIdParamSchema, 'params'),
   validate(UpsertPropertySchema),
   ctrl.upsert

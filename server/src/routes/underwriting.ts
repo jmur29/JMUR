@@ -28,7 +28,7 @@ router.get(
 // POST /underwriting/:applicationId/decide — save decision + update status
 router.post(
   '/:applicationId/decide',
-  requireRole(['ADMIN', 'UNDERWRITER']),
+  requireRole(['ADMIN', 'BROKER', 'UNDERWRITER']),
   validate(ApplicationIdParamSchema, 'params'),
   validate(SaveDecisionSchema),
   ctrl.decide

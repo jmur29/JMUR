@@ -15,3 +15,15 @@ export async function autoSeedIfEmpty(): Promise<void> {
     logger.info('Auto-seed complete');
   }
 }
+
+export async function seedForTenant(tenantId: string, userId: string): Promise<void> {
+  const count = await prisma.application.count({
+    where: { tenantId, deletedAt: null },
+  });
+
+  if (count === 0) {
+    logger.info('Seeding demo data for tenant', { tenantId });
+    await runSeed(tenantId, userId);
+    logger.info('Tenant seed complete', { tenantId });
+  }
+}
