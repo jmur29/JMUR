@@ -1713,10 +1713,13 @@ function rebuildFundedSheet_(ss, sheetName) {
 function pad2_(n) { return n < 10 ? '0' + n : String(n); }
 
 // Builds the Expected Pay Date formula for a given row reference string.
+// Only populated for Awaiting Payment or Paid deals — Pending Close stays blank.
 // Homewise schedule: closing 1–10 → EOM same month | 11–20 → 15th next | 21–31 → 30th next
 function expectedPayDateFormula_(r) {
   var f = 'F' + r;
-  return '=IF('+f+'="","",IF(DAY('+f+')<=10,EOMONTH('+f+',0),' +
+  var t = 'T' + r;
+  var isActive = 'OR('+t+'="'+STATUS_AWAITING+'",'+t+'="'+STATUS_PAID+'")';
+  return '=IF(OR('+f+'="",NOT('+isActive+')),"",IF(DAY('+f+')<=10,EOMONTH('+f+',0),' +
     'IF(DAY('+f+')<=20,' +
       'DATE(YEAR('+f+')+IF(MONTH('+f+')=12,1,0),IF(MONTH('+f+')=12,1,MONTH('+f+')+1),15),' +
       'DATE(YEAR('+f+')+IF(MONTH('+f+')=12,1,0),IF(MONTH('+f+')=12,1,MONTH('+f+')+1),30))))';
