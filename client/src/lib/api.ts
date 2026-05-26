@@ -36,7 +36,7 @@ if (!_apiBase && import.meta.env.PROD) {
 export const apiClient: AxiosInstance = axios.create({
   // In dev: falls back to '/api' so the Vite proxy can rewrite to localhost:3001/api
   // In prod: VITE_API_URL must be set, e.g. https://clearpath-api-xxx.up.railway.app/api
-  baseURL: _apiBase ?? '/api',
+  baseURL: _apiBase || '/api',
   headers: {
     'Content-Type': 'application/json',
   },
