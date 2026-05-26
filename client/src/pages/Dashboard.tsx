@@ -243,7 +243,7 @@ function BrokerView({ stats, statsLoading, apps, appsLoading }: {
             <StatCard label="Total Files" value={stats?.totalApplications ?? 0} icon={<FileText size={16} />} />
             <StatCard label="In Review" value={stats?.inReview ?? 0} icon={<Clock size={16} />} />
             <StatCard label="Approved (Month)" value={stats?.approvedThisMonth ?? 0} icon={<CheckCircle size={16} />} />
-            <StatCard label="Avg GDS" value={stats ? formatPercent(stats.avgGds) : '—'} icon={<TrendingUp size={16} />} />
+            <StatCard label="Avg GDS" value={stats?.avgGds != null ? formatPercent(stats.avgGds) : '—'} icon={<TrendingUp size={16} />} />
           </>
         )}
       </div>
@@ -380,7 +380,7 @@ function UnderwriterView({ stats, statsLoading, apps, appsLoading }: {
             <StatCard label="Total Files" value={stats?.totalApplications ?? 0} icon={<FileText size={16} />} />
             <StatCard label="In Review" value={stats?.inReview ?? 0} icon={<Clock size={16} />} />
             <StatCard label="Approved (Month)" value={stats?.approvedThisMonth ?? 0} icon={<CheckCircle size={16} />} />
-            <StatCard label="Avg GDS" value={stats ? formatPercent(stats.avgGds) : '—'} icon={<TrendingUp size={16} />} />
+            <StatCard label="Avg GDS" value={stats?.avgGds != null ? formatPercent(stats.avgGds) : '—'} icon={<TrendingUp size={16} />} />
           </>
         )}
       </div>

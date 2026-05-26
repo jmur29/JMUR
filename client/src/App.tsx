@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { SignIn, SignUp, useAuth } from '@clerk/clerk-react';
+import { SignIn, SignUp, useAuth, useClerk } from '@clerk/clerk-react';
 import AppLayout from './components/layout/AppLayout';
 import Dashboard from './pages/Dashboard';
 import ApplicationList from './pages/ApplicationList';
@@ -39,13 +39,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function UnauthorizedListener() {
+  const { signOut } = useClerk();
   useEffect(() => {
     const handler = () => {
-      window.location.href = '/sign-in';
+      // Sign out of Clerk first so the redirect to /sign-in doesn't
+      // immediately bounce back to /dashboard (the loop-breaker).
+      signOut().catch(() => null).finally(() => {
+        window.location.href = '/sign-in';
+      });
     };
     window.addEventListener('clearpath:unauthorized', handler);
     return () => window.removeEventListener('clearpath:unauthorized', handler);
-  }, []);
+  }, [signOut]);
   return null;
 }
 
