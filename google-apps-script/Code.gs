@@ -22,6 +22,7 @@ function onOpen() {
     { name: 'Rebuild Year Over Year',   functionName: 'rebuildYearOverYear'    },
     { name: 'Fix Maturity Dates',        functionName: 'fixAllMaturityDates'    },
     { name: 'Fix Renewal Alerts',        functionName: 'fixAllRenewalAlerts'    },
+    { name: 'Fix Commission Formulas',   functionName: 'fixAllCommissionFormulas' },
     { name: 'Refresh Deal Statuses',     functionName: 'refreshDealStatuses'    },
     { name: 'Fix Status Column',         functionName: 'fixStatusColumn'        },
     { name: 'Fix Totals & References',   functionName: 'fixAllTotalsAndRefs'    },
@@ -90,23 +91,15 @@ function writeDeal(params) {
   sheet.getRange(insertRow, 11).setNumberFormat('0" bps"');
   sheet.getRange(insertRow, 12).setNumberFormat('0%');
 
-  // M: Gross Comm — explicit value if provided, otherwise formula from Amount × BPS
-  if (grossComm !== '' && grossComm !== 0) {
-    sheet.getRange(insertRow, 13).setValue(grossComm);
-  } else {
-    sheet.getRange(insertRow, 13)
-      .setFormula('=IF(G'+r+'="","",IFERROR(ROUND(G'+r+'*(K'+r+'/10000),2),0))');
-  }
-  sheet.getRange(insertRow, 13).setNumberFormat('$#,##0.00');
+  // M: Gross Comm — always a live formula so editing BPS or Amount auto-recalculates
+  sheet.getRange(insertRow, 13)
+    .setFormula('=IF(G'+r+'="","",IFERROR(ROUND(G'+r+'*(K'+r+'/10000),2),0))')
+    .setNumberFormat('$#,##0.00');
 
-  // N: Your Comm — explicit value if provided, otherwise formula from Gross Comm × Split
-  if (yourComm !== '' && yourComm !== 0) {
-    sheet.getRange(insertRow, 14).setValue(yourComm);
-  } else {
-    sheet.getRange(insertRow, 14)
-      .setFormula('=IF(M'+r+'="","",IFERROR(ROUND(M'+r+'*L'+r+',2),0))');
-  }
-  sheet.getRange(insertRow, 14).setNumberFormat('$#,##0.00');
+  // N: Your Comm — always a live formula so editing Split auto-recalculates
+  sheet.getRange(insertRow, 14)
+    .setFormula('=IF(M'+r+'="","",IFERROR(ROUND(M'+r+'*L'+r+',2),0))')
+    .setNumberFormat('$#,##0.00');
 
   sheet.getRange(insertRow, 18)
     .setFormula('=IF(AND(F'+r+'<>"",H'+r+'<>""),DATE(YEAR(F'+r+')+H'+r+',MONTH(F'+r+'),DAY(F'+r+')),"")')
@@ -1680,6 +1673,38 @@ function fixAllRenewalAlerts() {
   });
   SpreadsheetApp.flush();
   ss.toast('Renewal alerts fixed — ' + fixed + ' rows updated.');
+}
+
+// ─── fixAllCommissionFormulas (public) ────────────────────────────────────────
+// Converts any static values in cols M and N to live formulas so that editing
+// BPS (col K) or Amount (col G) instantly recalculates commissions.
+
+function fixAllCommissionFormulas() {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var fixed = 0;
+  ['2025 Funded', '2026 Funded'].forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    var totalsRow   = findTotalsRow_(sheet);
+    var lastDataRow = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+    if (lastDataRow < 4) return;
+    for (var rn = 4; rn <= lastDataRow; rn++) {
+      var borrower = String(sheet.getRange(rn, 2).getValue() || '').trim();
+      if (!borrower) continue;
+      var r = String(rn);
+      // M: Gross Comm — G × (K/10000)
+      sheet.getRange(rn, 13)
+        .setFormula('=IF(G'+r+'="","",IFERROR(ROUND(G'+r+'*(K'+r+'/10000),2),0))')
+        .setNumberFormat('$#,##0.00');
+      // N: Your Comm — M × L (split)
+      sheet.getRange(rn, 14)
+        .setFormula('=IF(M'+r+'="","",IFERROR(ROUND(M'+r+'*L'+r+',2),0))')
+        .setNumberFormat('$#,##0.00');
+      fixed++;
+    }
+  });
+  SpreadsheetApp.flush();
+  ss.toast('Commission formulas applied to ' + fixed + ' rows. Changing BPS or Amount will now auto-update commissions.');
 }
 
 // ─── formatAllSheets (public) ─────────────────────────────────────────────────
