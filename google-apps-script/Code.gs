@@ -2257,31 +2257,34 @@ function setupIncomeHub() {
   tRow++;
 
   // Progress rows
+  // Note: pr[1] is the bare expression (no leading '=') so it can be embedded in compound formulas.
   var targetCell = 'E' + (tRow - 1);
+  var totalsRef2 = String(monthRow - 2);
   var progressRows = [
-    ['✅  Paid',              '=C'+(monthRow - 2), GREEN,   GREEN_LIGHT],
-    ['🔄  Paid + Awaiting',  '=C'+(monthRow - 2)+'+D'+(monthRow - 2), '#7A5000', GOLD_LIGHT],
-    ['📋  Full Pipeline',    '=C'+(monthRow - 2)+'+D'+(monthRow - 2)+'+E'+(monthRow - 2), BLUE,    BLUE_LIGHT],
+    ['✅  Paid',             'C'+totalsRef2,                              GREEN,    GREEN_LIGHT],
+    ['🔄  Paid + Awaiting', 'C'+totalsRef2+'+D'+totalsRef2,              '#7A5000',GOLD_LIGHT],
+    ['📋  Full Pipeline',   'C'+totalsRef2+'+D'+totalsRef2+'+E'+totalsRef2, BLUE,  BLUE_LIGHT],
   ];
 
   progressRows.forEach(function(pr) {
+    var expr = pr[1]; // bare expression — prepend '=' where needed
     sheet.setRowHeight(tRow, 26);
     sheet.getRange(tRow, 2, 1, 2).merge()
       .setValue(pr[0])
       .setBackground(pr[3]).setFontColor(pr[2])
       .setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
       .setHorizontalAlignment('left').setVerticalAlignment('middle');
-    sheet.getRange(tRow, 4).setFormula(pr[1])
+    sheet.getRange(tRow, 4).setFormula('='+expr)
       .setBackground(pr[3]).setFontColor(pr[2])
       .setNumberFormat('"$"#,##0').setFontFamily('Arial Black').setFontSize(11)
       .setHorizontalAlignment('right').setVerticalAlignment('middle');
-    sheet.getRange(tRow, 5).setFormula('=IFERROR('+pr[1]+'/'+targetCell+'*100,0)')
+    sheet.getRange(tRow, 5).setFormula('=IFERROR(('+expr+')/'+targetCell+'*100,0)')
       .setBackground(pr[3]).setFontColor(pr[2])
       .setNumberFormat('0"%"').setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
       .setHorizontalAlignment('center').setVerticalAlignment('middle');
     // Progress bar
     sheet.getRange(tRow, 6, 1, 2).merge()
-      .setFormula('=IFERROR(REPT("█",MIN(20,ROUND('+pr[1]+'/'+targetCell+'*20,0)))&REPT("░",MAX(0,20-MIN(20,ROUND('+pr[1]+'/'+targetCell+'*20,0))))," ")')
+      .setFormula('=IFERROR(REPT("█",MIN(20,ROUND(('+expr+')/'+targetCell+'*20,0)))&REPT("░",MAX(0,20-MIN(20,ROUND(('+expr+')/'+targetCell+'*20,0))))," ")')
       .setBackground(pr[3]).setFontColor(pr[2])
       .setFontFamily('Arial').setFontSize(9)
       .setHorizontalAlignment('left').setVerticalAlignment('middle');
