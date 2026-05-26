@@ -14,6 +14,7 @@ var STATUS_PAID     = '✅ Paid';
 
 function onOpen() {
   SpreadsheetApp.getActiveSpreadsheet().addMenu('JM Tools', [
+    { name: '💼 Rebuild Income Hub',       functionName: 'setupIncomeHub'         },
     { name: '✦ Overhaul All Sheets',     functionName: 'overhaulSheet'          },
     { name: 'Add Deal from Inbox',       functionName: 'addDealFromInbox'       },
     { name: 'Setup Inbox Sheet',        functionName: 'setupInbox'             },
@@ -1862,6 +1863,553 @@ function fixAllExpectedPayDates() {
 
   SpreadsheetApp.flush();
   ss.toast('Expected Pay Dates applied to ' + fixed + ' rows. X = date, Y = days remaining (colour-coded).');
+}
+
+// ─── setupIncomeHub (public) ──────────────────────────────────────────────────
+// Builds (or fully rebuilds) the "💼 Income Hub" sheet — a command-centre
+// dashboard for tracking closed income, incoming payments, and pipeline.
+
+function setupIncomeHub() {
+  var ss   = SpreadsheetApp.getActiveSpreadsheet();
+  var HUB  = '💼 Income Hub';
+
+  // ── colours ──────────────────────────────────────────────────────────────────
+  var NAVY        = '#1B3A6B';
+  var GOLD        = '#C9A84C';
+  var GOLD_LIGHT  = '#FFF8E7';
+  var GREEN       = '#1E6B3C';
+  var GREEN_LIGHT = '#E6F4EC';
+  var BLUE        = '#1F4E79';
+  var BLUE_LIGHT  = '#DDEEFF';
+  var ORANGE      = '#8B4513';
+  var ORANGE_LIGHT= '#FFF0E0';
+  var WHITE       = '#FFFFFF';
+  var LIGHT_GREY  = '#F2F5FA';
+  var MID_GREY    = '#D0D7E5';
+  var TEXT_DARK   = '#1A1A2E';
+  var TEXT_MED    = '#4A4A6A';
+
+  // ── get or create sheet ───────────────────────────────────────────────────────
+  var sheet = ss.getSheetByName(HUB);
+  if (sheet) {
+    sheet.clear();
+    sheet.clearConditionalFormatRules();
+  } else {
+    sheet = ss.insertSheet(HUB, 0);
+  }
+  sheet.setTabColor(GOLD);
+
+  // ── page setup ────────────────────────────────────────────────────────────────
+  sheet.setColumnWidth(1, 22);   // A  — left gutter
+  sheet.setColumnWidth(2, 160);  // B  — label
+  sheet.setColumnWidth(3, 140);  // C
+  sheet.setColumnWidth(4, 140);  // D
+  sheet.setColumnWidth(5, 140);  // E
+  sheet.setColumnWidth(6, 140);  // F
+  sheet.setColumnWidth(7, 140);  // G
+  sheet.setColumnWidth(8, 140);  // H
+  sheet.setColumnWidth(9, 22);   // I  — right gutter
+  sheet.setFrozenRows(4);
+
+  // ── helper: apply hero box ───────────────────────────────────────────────────
+  function heroBox(row, col, label, valueFn, bg, fg) {
+    var labelRange = sheet.getRange(row, col, 1, 2);
+    labelRange.merge()
+      .setValue(label)
+      .setBackground(bg).setFontColor(fg)
+      .setFontFamily('Arial').setFontSize(9).setFontWeight('bold')
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+    var valRange = sheet.getRange(row + 1, col, 2, 2);
+    valRange.merge()
+      .setBackground(bg).setFontColor(fg)
+      .setFontFamily('Arial Black').setFontSize(20).setFontWeight('bold')
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+    valueFn(valRange);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // SECTION 1 — TITLE BANNER
+  // ══════════════════════════════════════════════════════════════════════════════
+  sheet.setRowHeight(1, 10);   // thin top spacer
+  sheet.setRowHeight(2, 42);
+  sheet.setRowHeight(3, 18);   // subtitle/timestamp row
+  sheet.setRowHeight(4, 10);   // spacer before freeze
+
+  sheet.getRange(2, 2, 1, 7).merge()
+    .setValue('💼  JM MORTGAGES — INCOME COMMAND CENTRE')
+    .setBackground(NAVY).setFontColor(GOLD)
+    .setFontFamily('Arial Black').setFontSize(18).setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+
+  sheet.getRange(3, 2, 1, 7).merge()
+    .setValue('Last rebuilt: ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'MMMM d, yyyy  h:mm a'))
+    .setBackground(NAVY).setFontColor('#8899BB')
+    .setFontFamily('Arial').setFontSize(9).setFontStyle('italic')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+
+  // gutter rows
+  sheet.getRange(2, 1, 3, 1).setBackground(NAVY);
+  sheet.getRange(2, 9, 3, 1).setBackground(NAVY);
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // SECTION 2 — HERO STATS (rows 5–9)
+  // ══════════════════════════════════════════════════════════════════════════════
+  var heroTop = 5;
+  sheet.setRowHeight(heroTop,     28);  // label row
+  sheet.setRowHeight(heroTop + 1, 38);  // value row
+  sheet.setRowHeight(heroTop + 2, 38);  // value row cont.
+  sheet.setRowHeight(heroTop + 3, 14);  // spacer
+
+  // Hero 1: Paid YTD (cols B–C, dark green)
+  heroBox(heroTop, 2, '✅  PAID YTD',
+    function(r) {
+      r.setFormula(
+        '=IFERROR(SUMPRODUCT((TRIM(\'2025 Funded\'!T$4:T$200)="'+STATUS_PAID+'")*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0))' +
+        '+SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)="'+STATUS_PAID+'")*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),0)'
+      ).setNumberFormat('"$"#,##0.00');
+    }, GREEN, WHITE);
+
+  // Hero 2: Awaiting Payment (cols D–E, gold)
+  heroBox(heroTop, 4, '🔄  AWAITING PAYMENT',
+    function(r) {
+      r.setFormula(
+        '=IFERROR(SUMPRODUCT((TRIM(\'2025 Funded\'!T$4:T$200)="'+STATUS_AWAITING+'")*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0))' +
+        '+SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)="'+STATUS_AWAITING+'")*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),0)'
+      ).setNumberFormat('"$"#,##0.00');
+    }, GOLD, TEXT_DARK);
+
+  // Hero 3: Pipeline (cols F–G, blue)
+  heroBox(heroTop, 6, '⏳  PIPELINE',
+    function(r) {
+      r.setFormula(
+        '=IFERROR(SUMPRODUCT((TRIM(\'2025 Funded\'!T$4:T$200)="'+STATUS_PENDING+'")*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0))' +
+        '+SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)="'+STATUS_PENDING+'")*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),0)'
+      ).setNumberFormat('"$"#,##0.00');
+    }, BLUE, WHITE);
+
+  // Hero 4: Next Cheque (rows heroTop to heroTop+2, cols H — use H–H only, single col label + date)
+  // Next cheque date
+  sheet.getRange(heroTop, 8).setValue('📅  NEXT CHEQUE')
+    .setBackground(ORANGE).setFontColor(WHITE)
+    .setFontFamily('Arial').setFontSize(9).setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.getRange(heroTop + 1, 8)
+    .setFormula(
+      '=IFERROR(TEXT(ARRAYFORMULA(MIN(IF(' +
+        '(TRIM(\'2025 Funded\'!T$4:T$200)<>"'+STATUS_PAID+'")*' +
+        '(\'2025 Funded\'!X$4:X$200<>""),' +
+        '\'2025 Funded\'!X$4:X$200))),"mmm d, yyyy")&CHAR(10)&' +
+        '"$"&TEXT(SUMPRODUCT((TRIM(\'2025 Funded\'!T$4:T$200)<>"'+STATUS_PAID+'")*' +
+        '(\'2025 Funded\'!X$4:X$200=ARRAYFORMULA(MIN(IF((TRIM(\'2025 Funded\'!T$4:T$200)<>"'+STATUS_PAID+'")*' +
+        '(\'2025 Funded\'!X$4:X$200<>""),\'2025 Funded\'!X$4:X$200))))' +
+        '*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0)),"#,##0.00"),' +
+        '"No upcoming")'
+    )
+    .setBackground(ORANGE_LIGHT).setFontColor(ORANGE)
+    .setFontFamily('Arial Black').setFontSize(13).setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle')
+    .setWrap(true);
+  sheet.setRowHeight(heroTop + 1, 52);
+  sheet.getRange(heroTop + 2, 8)
+    .setFormula(
+      '=IFERROR(TEXT(ARRAYFORMULA(MIN(IF(' +
+        '(TRIM(\'2026 Funded\'!T$4:T$200)<>"'+STATUS_PAID+'")*' +
+        '(\'2026 Funded\'!X$4:X$200<>""),' +
+        '\'2026 Funded\'!X$4:X$200))),"mmm d, yyyy")&CHAR(10)&' +
+        '"$"&TEXT(SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)<>"'+STATUS_PAID+'")*' +
+        '(\'2026 Funded\'!X$4:X$200=ARRAYFORMULA(MIN(IF((TRIM(\'2026 Funded\'!T$4:T$200)<>"'+STATUS_PAID+'")*' +
+        '(\'2026 Funded\'!X$4:X$200<>""),\'2026 Funded\'!X$4:X$200))))' +
+        '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),"#,##0.00"),' +
+        '"No upcoming")'
+    )
+    .setBackground(ORANGE_LIGHT).setFontColor(TEXT_MED)
+    .setFontFamily('Arial').setFontSize(10)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle')
+    .setWrap(true);
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // SECTION 3 — UPCOMING PAYMENT SCHEDULE
+  // ══════════════════════════════════════════════════════════════════════════════
+  var schedStart = heroTop + 4;   // row 13
+
+  // Section header
+  sheet.setRowHeight(schedStart, 30);
+  sheet.getRange(schedStart, 2, 1, 7).merge()
+    .setValue('UPCOMING PAYMENT SCHEDULE  —  Awaiting Payment Deals')
+    .setBackground(NAVY).setFontColor(WHITE)
+    .setFontFamily('Arial').setFontSize(11).setFontWeight('bold')
+    .setHorizontalAlignment('left').setVerticalAlignment('middle');
+  sheet.getRange(schedStart, 2).setValue('  UPCOMING PAYMENT SCHEDULE  —  Awaiting Payment Deals');
+
+  // Column headers row
+  var schedHdr = schedStart + 1;
+  sheet.setRowHeight(schedHdr, 24);
+  var schedHeaders = [['Expected Date', 'Borrowers', '', 'Your Comm', 'Days Away', '', '']];
+  sheet.getRange(schedHdr, 2, 1, 7).setValues(schedHeaders)
+    .setBackground(MID_GREY).setFontColor(TEXT_DARK)
+    .setFontFamily('Arial').setFontSize(9).setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.getRange(schedHdr, 3, 1, 2).merge(); // merge borrowers + blank
+  sheet.getRange(schedHdr, 6, 1, 2).merge(); // merge last two cols
+
+  // Build rows dynamically from data
+  var groups   = buildPaymentGroups_(ss);
+  var dataRow  = schedHdr + 1;
+  var today    = new Date();
+  today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  if (groups.length === 0) {
+    sheet.setRowHeight(dataRow, 24);
+    sheet.getRange(dataRow, 2, 1, 7).merge()
+      .setValue('No awaiting-payment deals found.')
+      .setBackground(LIGHT_GREY).setFontColor(TEXT_MED)
+      .setFontFamily('Arial').setFontSize(10).setFontStyle('italic')
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+    dataRow++;
+  } else {
+    groups.forEach(function(g) {
+      var daysAway = Math.round((g.date - today) / 86400000);
+      var rowBg, rowFg, urgency;
+      if (daysAway <= 0) {
+        rowBg = '#C6EFCE'; rowFg = GREEN; urgency = daysAway === 0 ? 'TODAY' : 'OVERDUE';
+      } else if (daysAway <= 7) {
+        rowBg = '#FFEB9C'; rowFg = '#7A5000'; urgency = daysAway + 'd';
+      } else if (daysAway <= 30) {
+        rowBg = BLUE_LIGHT; rowFg = BLUE; urgency = daysAway + 'd';
+      } else {
+        rowBg = LIGHT_GREY; rowFg = TEXT_MED; urgency = daysAway + 'd';
+      }
+
+      var dateStr = Utilities.formatDate(g.date, Session.getScriptTimeZone(), 'MMM d, yyyy');
+
+      sheet.setRowHeight(dataRow, 24);
+      sheet.getRange(dataRow, 2).setValue(dateStr)
+        .setBackground(rowBg).setFontColor(rowFg)
+        .setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
+        .setHorizontalAlignment('center').setVerticalAlignment('middle');
+      sheet.getRange(dataRow, 3, 1, 2).merge()
+        .setValue(g.names)
+        .setBackground(rowBg).setFontColor(rowFg)
+        .setFontFamily('Arial').setFontSize(10)
+        .setHorizontalAlignment('left').setVerticalAlignment('middle');
+      sheet.getRange(dataRow, 5).setValue(g.total)
+        .setBackground(rowBg).setFontColor(rowFg)
+        .setNumberFormat('"$"#,##0.00')
+        .setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
+        .setHorizontalAlignment('center').setVerticalAlignment('middle');
+      sheet.getRange(dataRow, 6, 1, 2).merge()
+        .setValue(urgency)
+        .setBackground(rowBg).setFontColor(rowFg)
+        .setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
+        .setHorizontalAlignment('center').setVerticalAlignment('middle');
+      dataRow++;
+    });
+  }
+
+  // thin separator
+  sheet.setRowHeight(dataRow, 10);
+  sheet.getRange(dataRow, 2, 1, 7).merge().setBackground(NAVY);
+  dataRow++;
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // SECTION 4 — MONTHLY INCOME SCORECARD
+  // ══════════════════════════════════════════════════════════════════════════════
+  var monthStart = dataRow;
+
+  sheet.setRowHeight(monthStart, 30);
+  sheet.getRange(monthStart, 2, 1, 7).merge()
+    .setValue('  MONTHLY INCOME SCORECARD  —  2026')
+    .setBackground(NAVY).setFontColor(WHITE)
+    .setFontFamily('Arial').setFontSize(11).setFontWeight('bold')
+    .setHorizontalAlignment('left').setVerticalAlignment('middle');
+
+  var monthHdr = monthStart + 1;
+  sheet.setRowHeight(monthHdr, 22);
+  sheet.getRange(monthHdr, 2, 1, 7).setValues([['Month', 'Paid', 'Awaiting', 'Pipeline', 'Total', 'Bar (Paid)', '']])
+    .setBackground(MID_GREY).setFontColor(TEXT_DARK)
+    .setFontFamily('Arial').setFontSize(9).setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.getRange(monthHdr, 7, 1, 1).merge();
+
+  var monthRow = monthHdr + 1;
+  var monthTotalPaid = 0;
+
+  for (var m = 1; m <= 12; m++) {
+    var mStr  = (m < 10 ? '0' : '') + m;
+    var mName = MONTHS_[m - 1];
+
+    // SUMPRODUCT for each status in 2026 Funded only (2026 YOY sheet)
+    var paidFormula =
+      '=IFERROR(SUMPRODUCT(' +
+        '(TRIM(\'2026 Funded\'!T$4:T$200)="'+STATUS_PAID+'")' +
+        '*(MONTH(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))='+m+')' +
+        '*(YEAR(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))=2026)' +
+        '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),0)';
+
+    var awaitFormula =
+      '=IFERROR(SUMPRODUCT(' +
+        '(TRIM(\'2026 Funded\'!T$4:T$200)="'+STATUS_AWAITING+'")' +
+        '*(MONTH(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))='+m+')' +
+        '*(YEAR(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))=2026)' +
+        '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),0)';
+
+    var pendFormula =
+      '=IFERROR(SUMPRODUCT(' +
+        '(TRIM(\'2026 Funded\'!T$4:T$200)="'+STATUS_PENDING+'")' +
+        '*(MONTH(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))='+m+')' +
+        '*(YEAR(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))=2026)' +
+        '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),0)';
+
+    var isCurrentMonth = (m === new Date().getMonth() + 1);
+    var rowBg = isCurrentMonth ? GOLD_LIGHT : (m % 2 === 0 ? WHITE : LIGHT_GREY);
+
+    sheet.setRowHeight(monthRow, 22);
+    sheet.getRange(monthRow, 2).setValue(mName)
+      .setBackground(rowBg).setFontColor(TEXT_DARK)
+      .setFontFamily('Arial').setFontSize(10).setFontWeight(isCurrentMonth ? 'bold' : 'normal')
+      .setHorizontalAlignment('left').setVerticalAlignment('middle');
+    sheet.getRange(monthRow, 3).setFormula(paidFormula)
+      .setBackground(rowBg).setFontColor(GREEN)
+      .setNumberFormat('"$"#,##0').setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
+      .setHorizontalAlignment('right').setVerticalAlignment('middle');
+    sheet.getRange(monthRow, 4).setFormula(awaitFormula)
+      .setBackground(rowBg).setFontColor(GOLD)
+      .setNumberFormat('"$"#,##0').setFontFamily('Arial').setFontSize(10)
+      .setHorizontalAlignment('right').setVerticalAlignment('middle');
+    sheet.getRange(monthRow, 5).setFormula(pendFormula)
+      .setBackground(rowBg).setFontColor(BLUE)
+      .setNumberFormat('"$"#,##0').setFontFamily('Arial').setFontSize(10)
+      .setHorizontalAlignment('right').setVerticalAlignment('middle');
+    sheet.getRange(monthRow, 6).setFormula('=C'+monthRow+'+D'+monthRow+'+E'+monthRow)
+      .setBackground(rowBg).setFontColor(TEXT_DARK)
+      .setNumberFormat('"$"#,##0').setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
+      .setHorizontalAlignment('right').setVerticalAlignment('middle');
+    // Text bar: paid proportion relative to $20k scale
+    sheet.getRange(monthRow, 7, 1, 1).merge()
+      .setFormula('=IFERROR(REPT("█",ROUND(C'+monthRow+'/1000,0))," ")')
+      .setBackground(rowBg).setFontColor(GREEN)
+      .setFontFamily('Arial').setFontSize(7)
+      .setHorizontalAlignment('left').setVerticalAlignment('middle');
+    monthRow++;
+  }
+
+  // Totals row
+  var totalsRef = monthHdr + 1;
+  sheet.setRowHeight(monthRow, 26);
+  sheet.getRange(monthRow, 2).setValue('TOTAL 2026')
+    .setBackground(NAVY).setFontColor(WHITE)
+    .setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
+    .setHorizontalAlignment('left').setVerticalAlignment('middle');
+  sheet.getRange(monthRow, 3).setFormula('=SUM(C'+totalsRef+':C'+(monthRow-1)+')')
+    .setBackground(NAVY).setFontColor('#66FF99')
+    .setNumberFormat('"$"#,##0').setFontFamily('Arial Black').setFontSize(11)
+    .setHorizontalAlignment('right').setVerticalAlignment('middle');
+  sheet.getRange(monthRow, 4).setFormula('=SUM(D'+totalsRef+':D'+(monthRow-1)+')')
+    .setBackground(NAVY).setFontColor(GOLD)
+    .setNumberFormat('"$"#,##0').setFontFamily('Arial').setFontSize(11).setFontWeight('bold')
+    .setHorizontalAlignment('right').setVerticalAlignment('middle');
+  sheet.getRange(monthRow, 5).setFormula('=SUM(E'+totalsRef+':E'+(monthRow-1)+')')
+    .setBackground(NAVY).setFontColor('#88AADD')
+    .setNumberFormat('"$"#,##0').setFontFamily('Arial').setFontSize(11)
+    .setHorizontalAlignment('right').setVerticalAlignment('middle');
+  sheet.getRange(monthRow, 6).setFormula('=C'+monthRow+'+D'+monthRow+'+E'+monthRow)
+    .setBackground(NAVY).setFontColor(WHITE)
+    .setNumberFormat('"$"#,##0').setFontFamily('Arial Black').setFontSize(12)
+    .setHorizontalAlignment('right').setVerticalAlignment('middle');
+  sheet.getRange(monthRow, 7).setBackground(NAVY);
+  monthRow++;
+
+  // spacer
+  sheet.setRowHeight(monthRow, 10);
+  sheet.getRange(monthRow, 2, 1, 7).merge().setBackground(NAVY);
+  monthRow++;
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // SECTION 5 — ANNUAL TARGET & PROGRESS
+  // ══════════════════════════════════════════════════════════════════════════════
+  var targetStart = monthRow;
+
+  sheet.setRowHeight(targetStart, 30);
+  sheet.getRange(targetStart, 2, 1, 7).merge()
+    .setValue('  ANNUAL TARGET & PROGRESS')
+    .setBackground(NAVY).setFontColor(WHITE)
+    .setFontFamily('Arial').setFontSize(11).setFontWeight('bold')
+    .setHorizontalAlignment('left').setVerticalAlignment('middle');
+
+  var tRow = targetStart + 1;
+
+  // Target row (editable)
+  sheet.setRowHeight(tRow, 28);
+  sheet.getRange(tRow, 2, 1, 3).merge()
+    .setValue('Annual Target (edit me →)')
+    .setBackground(LIGHT_GREY).setFontColor(TEXT_MED)
+    .setFontFamily('Arial').setFontSize(10)
+    .setHorizontalAlignment('left').setVerticalAlignment('middle');
+  sheet.getRange(tRow, 5)
+    .setValue(150000)
+    .setBackground(GOLD_LIGHT).setFontColor(TEXT_DARK)
+    .setNumberFormat('"$"#,##0').setFontFamily('Arial Black').setFontSize(13).setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.getRange(tRow, 6, 1, 2).merge()
+    .setValue('← edit your annual income goal')
+    .setFontFamily('Arial').setFontSize(8).setFontStyle('italic').setFontColor('#AAAAAA')
+    .setHorizontalAlignment('left').setVerticalAlignment('middle');
+  tRow++;
+
+  // Progress rows
+  var targetCell = 'E' + (tRow - 1);
+  var progressRows = [
+    ['✅  Paid',              '=C'+(monthRow - 2), GREEN,   GREEN_LIGHT],
+    ['🔄  Paid + Awaiting',  '=C'+(monthRow - 2)+'+D'+(monthRow - 2), '#7A5000', GOLD_LIGHT],
+    ['📋  Full Pipeline',    '=C'+(monthRow - 2)+'+D'+(monthRow - 2)+'+E'+(monthRow - 2), BLUE,    BLUE_LIGHT],
+  ];
+
+  progressRows.forEach(function(pr) {
+    sheet.setRowHeight(tRow, 26);
+    sheet.getRange(tRow, 2, 1, 2).merge()
+      .setValue(pr[0])
+      .setBackground(pr[3]).setFontColor(pr[2])
+      .setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
+      .setHorizontalAlignment('left').setVerticalAlignment('middle');
+    sheet.getRange(tRow, 4).setFormula(pr[1])
+      .setBackground(pr[3]).setFontColor(pr[2])
+      .setNumberFormat('"$"#,##0').setFontFamily('Arial Black').setFontSize(11)
+      .setHorizontalAlignment('right').setVerticalAlignment('middle');
+    sheet.getRange(tRow, 5).setFormula('=IFERROR('+pr[1]+'/'+targetCell+'*100,0)')
+      .setBackground(pr[3]).setFontColor(pr[2])
+      .setNumberFormat('0"%"').setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+    // Progress bar
+    sheet.getRange(tRow, 6, 1, 2).merge()
+      .setFormula('=IFERROR(REPT("█",MIN(20,ROUND('+pr[1]+'/'+targetCell+'*20,0)))&REPT("░",MAX(0,20-MIN(20,ROUND('+pr[1]+'/'+targetCell+'*20,0))))," ")')
+      .setBackground(pr[3]).setFontColor(pr[2])
+      .setFontFamily('Arial').setFontSize(9)
+      .setHorizontalAlignment('left').setVerticalAlignment('middle');
+    tRow++;
+  });
+
+  // spacer
+  sheet.setRowHeight(tRow, 10);
+  sheet.getRange(tRow, 2, 1, 7).merge().setBackground(NAVY);
+  tRow++;
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // SECTION 6 — DEAL METRICS
+  // ══════════════════════════════════════════════════════════════════════════════
+  var metricsStart = tRow;
+
+  sheet.setRowHeight(metricsStart, 30);
+  sheet.getRange(metricsStart, 2, 1, 7).merge()
+    .setValue('  DEAL METRICS  —  2026 YTD')
+    .setBackground(NAVY).setFontColor(WHITE)
+    .setFontFamily('Arial').setFontSize(11).setFontWeight('bold')
+    .setHorizontalAlignment('left').setVerticalAlignment('middle');
+
+  var metrics = [
+    ['Avg Commission / Deal',
+      '=IFERROR(SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)<>"")*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0))/' +
+        'SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)<>"")*ISNUMBER(IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),FALSE))),0)',
+      '"$"#,##0.00'],
+    ['Avg Deal Size (Loan)',
+      '=IFERROR(SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)<>"")*IFERROR(VALUE(\'2026 Funded\'!G$4:G$200),0))/' +
+        'SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)<>"")*ISNUMBER(IFERROR(VALUE(\'2026 Funded\'!G$4:G$200),FALSE))),0)',
+      '"$"#,##0'],
+    ['Largest Commission',
+      '=IFERROR(MAX(\'2026 Funded\'!N$4:N$200),0)',
+      '"$"#,##0.00'],
+    ['Total Deals (all statuses)',
+      '=IFERROR(COUNTA(\'2026 Funded\'!B$4:B$200),0)',
+      '0'],
+    ['Deals — ✅ Paid',
+      '=IFERROR(COUNTIF(\'2026 Funded\'!T$4:T$200,"'+STATUS_PAID+'"),0)',
+      '0'],
+    ['Deals — 🔄 Awaiting',
+      '=IFERROR(COUNTIF(\'2026 Funded\'!T$4:T$200,"'+STATUS_AWAITING+'"),0)',
+      '0'],
+    ['Deals — ⏳ Pipeline',
+      '=IFERROR(COUNTIF(\'2026 Funded\'!T$4:T$200,"'+STATUS_PENDING+'"),0)',
+      '0'],
+    ['Self-Sourced Deals',
+      '=IFERROR(COUNTIF(\'2026 Funded\'!D$4:D$200,"Self"),0)',
+      '0'],
+  ];
+
+  var mRow = metricsStart + 1;
+  metrics.forEach(function(m, i) {
+    var bg = i % 2 === 0 ? LIGHT_GREY : WHITE;
+    sheet.setRowHeight(mRow, 24);
+    sheet.getRange(mRow, 2, 1, 3).merge()
+      .setValue(m[0])
+      .setBackground(bg).setFontColor(TEXT_DARK)
+      .setFontFamily('Arial').setFontSize(10)
+      .setHorizontalAlignment('left').setVerticalAlignment('middle');
+    sheet.getRange(mRow, 5, 1, 3).merge()
+      .setFormula(m[1])
+      .setBackground(bg).setFontColor(NAVY)
+      .setNumberFormat(m[2]).setFontFamily('Arial Black').setFontSize(11)
+      .setHorizontalAlignment('right').setVerticalAlignment('middle');
+    mRow++;
+  });
+
+  // ── bottom gutter ─────────────────────────────────────────────────────────────
+  sheet.setRowHeight(mRow, 20);
+  sheet.getRange(mRow, 2, 1, 7).merge().setBackground(NAVY);
+
+  // ── gutter column fills ───────────────────────────────────────────────────────
+  var totalRows = mRow + 1;
+  sheet.getRange(5, 1, totalRows, 1).setBackground(LIGHT_GREY);
+  sheet.getRange(5, 9, totalRows, 1).setBackground(LIGHT_GREY);
+
+  SpreadsheetApp.flush();
+  ss.toast('💼 Income Hub rebuilt successfully.');
+}
+
+// ─── buildPaymentGroups_ (private) ───────────────────────────────────────────
+// Reads all AWAITING-payment deals from both funded sheets.
+// Groups by Expected Pay Date (col X), sorts ascending.
+// Returns: [{date: Date, total: number, names: "Smith · Jones"}]
+
+function buildPaymentGroups_(ss) {
+  var groups = {};
+
+  ['2025 Funded', '2026 Funded'].forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 4) return;
+
+    var numRows = lastRow - 3;
+    // Read cols B (borrower=1), N (yourComm=13), T (status=19), X (expectedPay=23) — all 0-based from col 2
+    var data = sheet.getRange(4, 2, numRows, 23).getValues(); // B to X (cols 2–24 = 23 cols)
+
+    data.forEach(function(row) {
+      var borrower = String(row[0] || '').trim();           // col B (index 0)
+      var yourComm = parseFloat(row[12]) || 0;              // col N (index 12)
+      var status   = String(row[18] || '').trim();          // col T (index 18)
+      var payDate  = row[22];                               // col X (index 22)
+
+      if (!borrower) return;
+      if (status !== STATUS_AWAITING) return;
+      if (!payDate || !(payDate instanceof Date) || isNaN(payDate.getTime())) return;
+
+      // Normalise to midnight local
+      var d = new Date(payDate.getFullYear(), payDate.getMonth(), payDate.getDate());
+      var key = d.getTime();
+
+      if (!groups[key]) groups[key] = { date: d, total: 0, deals: [] };
+      groups[key].total += yourComm;
+      groups[key].deals.push(borrower.split(' ').pop()); // last name only for brevity
+    });
+  });
+
+  var sorted = Object.keys(groups).map(function(k) { return groups[k]; });
+  sorted.sort(function(a, b) { return a.date - b.date; });
+
+  sorted.forEach(function(g) {
+    g.names = g.deals.join(' · ');
+  });
+
+  return sorted;
 }
 
 // ─── formatAllSheets (public) ─────────────────────────────────────────────────
