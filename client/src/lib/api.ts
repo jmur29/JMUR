@@ -62,9 +62,16 @@ apiClient.interceptors.response.use(
   (res) => res,
   (err: AxiosError) => {
     const status = err.response?.status;
-    if (status === 401) {
-      // Let the Clerk provider handle redirect
-      window.dispatchEvent(new CustomEvent('clearpath:unauthorized'));
+    if (status === 401 || status === 503) {
+      const body = err.response?.data as { error?: string; code?: string } | undefined;
+      window.dispatchEvent(new CustomEvent('clearpath:api-error', {
+        detail: {
+          status,
+          error: body?.error ?? `HTTP ${status}`,
+          code: body?.code ?? 'UNKNOWN',
+          url: err.config?.url ?? 'unknown',
+        },
+      }));
     }
     return Promise.reject(err);
   }
