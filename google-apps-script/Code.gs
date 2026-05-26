@@ -1960,30 +1960,48 @@ function setupIncomeHub() {
   sheet.setRowHeight(heroTop + 2, 38);  // value row cont.
   sheet.setRowHeight(heroTop + 3, 14);  // spacer
 
-  // Hero 1: Paid YTD (cols B–C, dark green)
+  // Hero 1: Paid YTD — current calendar year only, matching the monthly scorecard
   heroBox(heroTop, 2, '✅  PAID YTD',
     function(r) {
       r.setFormula(
-        '=IFERROR(SUMPRODUCT((TRIM(\'2025 Funded\'!T$4:T$200)="'+STATUS_PAID+'")*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0))' +
-        '+SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)="'+STATUS_PAID+'")*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),0)'
+        '=IFERROR(' +
+          'SUMPRODUCT((TRIM(\'2025 Funded\'!T$4:T$200)="'+STATUS_PAID+'")' +
+            '*(YEAR(IF(\'2025 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2025 Funded\'!F$4:F$200))=YEAR(TODAY()))' +
+            '*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0))' +
+          '+SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)="'+STATUS_PAID+'")' +
+            '*(YEAR(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))=YEAR(TODAY()))' +
+            '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0))' +
+        ',0)'
       ).setNumberFormat('"$"#,##0.00');
     }, GREEN, WHITE);
 
-  // Hero 2: Awaiting Payment (cols D–E, gold)
+  // Hero 2: Awaiting Payment — current year only
   heroBox(heroTop, 4, '🔄  AWAITING PAYMENT',
     function(r) {
       r.setFormula(
-        '=IFERROR(SUMPRODUCT((TRIM(\'2025 Funded\'!T$4:T$200)="'+STATUS_AWAITING+'")*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0))' +
-        '+SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)="'+STATUS_AWAITING+'")*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),0)'
+        '=IFERROR(' +
+          'SUMPRODUCT((TRIM(\'2025 Funded\'!T$4:T$200)="'+STATUS_AWAITING+'")' +
+            '*(YEAR(IF(\'2025 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2025 Funded\'!F$4:F$200))=YEAR(TODAY()))' +
+            '*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0))' +
+          '+SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)="'+STATUS_AWAITING+'")' +
+            '*(YEAR(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))=YEAR(TODAY()))' +
+            '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0))' +
+        ',0)'
       ).setNumberFormat('"$"#,##0.00');
     }, GOLD, TEXT_DARK);
 
-  // Hero 3: Pipeline (cols F–G, blue)
+  // Hero 3: Pipeline — current year only
   heroBox(heroTop, 6, '⏳  PIPELINE',
     function(r) {
       r.setFormula(
-        '=IFERROR(SUMPRODUCT((TRIM(\'2025 Funded\'!T$4:T$200)="'+STATUS_PENDING+'")*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0))' +
-        '+SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)="'+STATUS_PENDING+'")*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),0)'
+        '=IFERROR(' +
+          'SUMPRODUCT((TRIM(\'2025 Funded\'!T$4:T$200)="'+STATUS_PENDING+'")' +
+            '*(YEAR(IF(\'2025 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2025 Funded\'!F$4:F$200))=YEAR(TODAY()))' +
+            '*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0))' +
+          '+SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)="'+STATUS_PENDING+'")' +
+            '*(YEAR(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))=YEAR(TODAY()))' +
+            '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0))' +
+        ',0)'
       ).setNumberFormat('"$"#,##0.00');
     }, BLUE, WHITE);
 
