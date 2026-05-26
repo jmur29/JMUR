@@ -23,6 +23,7 @@ function onOpen() {
     { name: 'Fix Maturity Dates',        functionName: 'fixAllMaturityDates'    },
     { name: 'Fix Renewal Alerts',        functionName: 'fixAllRenewalAlerts'    },
     { name: 'Fix Commission Formulas',   functionName: 'fixAllCommissionFormulas' },
+    { name: 'Fix Expected Pay Dates',    functionName: 'fixAllExpectedPayDates'  },
     { name: 'Refresh Deal Statuses',     functionName: 'refreshDealStatuses'    },
     { name: 'Fix Status Column',         functionName: 'fixStatusColumn'        },
     { name: 'Fix Totals & References',   functionName: 'fixAllTotalsAndRefs'    },
@@ -39,6 +40,7 @@ function onOpen() {
 //   G  Amount | H  Term | I  Rate Type | J  Rate | K  BPS | L  Split
 //   M  Gross Comm | N  Your Comm | O  Notes | P  Email | Q  Phone
 //   R  Maturity Date | S  Renewal Alert | T  Status | U  Pay Date
+//   X  Expected Pay Date (col 24) | Y  Days to Pay (col 25)
 
 function writeDeal(params) {
   var ss   = SpreadsheetApp.getActiveSpreadsheet();
@@ -116,6 +118,17 @@ function writeDeal(params) {
     .setHorizontalAlignment('center').setFontFamily('Arial').setFontSize(10);
   applyStatusValidation_(sheet, insertRow);
   sheet.getRange(insertRow, 21).setNumberFormat('yyyy-mm-dd');
+
+  // X: Expected Pay Date — Homewise schedule
+  sheet.getRange(insertRow, 24)
+    .setFormula(expectedPayDateFormula_(r))
+    .setNumberFormat('yyyy-mm-dd');
+
+  // Y: Days to Payment (blank once paid)
+  sheet.getRange(insertRow, 25)
+    .setFormula('=IF(OR(X'+r+'="",T'+r+'="'+STATUS_PAID+'"),"",X'+r+'-TODAY())')
+    .setNumberFormat('0')
+    .setHorizontalAlignment('center');
 
   // Match row formatting of rebuildFundedSheet_
   var rowBg = (insertRow - 4) % 2 === 0 ? '#FFFFFF' : '#F2F5FA';
@@ -578,6 +591,34 @@ function applyStatusCF_(sheet) {
   sheet.setConditionalFormatRules(existing.concat(newRules));
 }
 
+function applyDaysToPayCF_(sheet) {
+  var totalsRow   = findTotalsRow_(sheet);
+  var lastDataRow = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+  var numRows     = Math.max(1, lastDataRow - 3);
+  var colYRange   = sheet.getRange(4, 25, numRows, 1);
+  var existing    = sheet.getConditionalFormatRules().filter(function(rule) {
+    return rule.getRanges().every(function(rng) { return rng.getColumn() !== 25; });
+  });
+  var newRules = [
+    // <= 0: green — payment due today or overdue
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenNumberLessThanOrEqualTo(0)
+      .setBackground('#C6EFCE').setFontColor('#276221')
+      .setRanges([colYRange]).build(),
+    // 1–7: yellow — payment this week
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenNumberBetween(1, 7)
+      .setBackground('#FFEB9C').setFontColor('#9C6500')
+      .setRanges([colYRange]).build(),
+    // 8–30: light blue — payment this month
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenNumberBetween(8, 30)
+      .setBackground('#DDEBF7').setFontColor('#1F4E79')
+      .setRanges([colYRange]).build(),
+  ];
+  sheet.setConditionalFormatRules(existing.concat(newRules));
+}
+
 // ─── setupProjectedIncome_ (private) ─────────────────────────────────────────
 
 function setupProjectedIncome_(ss, sheetName, rowNum) {
@@ -898,6 +939,48 @@ function setupMvMSummaryBlock_(sheet, NAVY, GOLD) {
         .setRanges([pr]).build());
     }
   }
+
+  // ── Next Payment section (headline rows) ─────────────────────────────────
+  // Thin gold separator
+  sheet.getRange(32, 2, 1, NC).setBackground(GOLD);
+  sheet.setRowHeight(32, 4);
+
+  // Row 33: Next Payment Date — array formula: MIN of non-paid expected pay dates
+  sheet.getRange(33, 2, 1, NC).clearContent().clearFormat();
+  sheet.setRowHeight(33, 36);
+  sheet.getRange(33, 2, 1, 5).merge()
+    .setValue('📅 Next Payment Date')
+    .setBackground(GOLD).setFontColor(NAVY)
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(11)
+    .setHorizontalAlignment('left').setVerticalAlignment('middle');
+  sheet.getRange(33, 7, 1, 10).merge()
+    .setFormula('=IFERROR(ARRAYFORMULA(MIN(IF(' +
+      '(TRIM(\'2026 Funded\'!T$4:T$100)<>"' + STATUS_PAID + '")' +
+      '*(\'2026 Funded\'!X$4:X$100<>""),' +
+      '\'2026 Funded\'!X$4:X$100))),"—")')
+    .setNumberFormat('yyyy-mm-dd')
+    .setBackground(GOLD).setFontColor(NAVY)
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(14)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+
+  // Row 34: Next Payment Amount — sum of Your Comm where ExpPayDate = row 33 value
+  sheet.getRange(34, 2, 1, NC).clearContent().clearFormat();
+  sheet.setRowHeight(34, 36);
+  sheet.getRange(34, 2, 1, 5).merge()
+    .setValue('💰 Next Payment Amount')
+    .setBackground(GOLD).setFontColor(NAVY)
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(11)
+    .setHorizontalAlignment('left').setVerticalAlignment('middle');
+  sheet.getRange(34, 7, 1, 10).merge()
+    .setFormula('=IFERROR(SUMPRODUCT(' +
+      '(TRIM(\'2026 Funded\'!T$4:T$100)<>"' + STATUS_PAID + '")' +
+      '*(\'2026 Funded\'!X$4:X$100=G33)' +
+      '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$100),0)),"—")')
+    .setNumberFormat('$#,##0.00')
+    .setBackground(GOLD).setFontColor(NAVY)
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(14)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+
   return cfRules;
 }
 
@@ -1423,6 +1506,11 @@ function rebuildFundedSheet_(ss, sheetName) {
     .setBackground('#2C5F9E').setFontColor('#FFFFFF')
     .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  // Col X (24): Expected Pay Date | Col Y (25): Days to Pay
+  sheet.getRange(2, 24, 1, 2).setValues([['Expected Pay Date', 'Days to Pay']])
+    .setBackground(NAVY).setFontColor('#FFFFFF')
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
   sheet.setRowHeight(2, 30);
 
   // ── 6. Row 3: gold accent line ────────────────────────────────────────────
@@ -1499,6 +1587,17 @@ function rebuildFundedSheet_(ss, sheetName) {
       // S: Renewal Alert — 120-day threshold from RENEWAL_DAYS setting
       sheet.getRange(rn, 19)
         .setFormula('=IF(R'+r+'="","",IF(R'+r+'-TODAY()<=30,"🔴 RENEW NOW",IF(R'+r+'-TODAY()<=120,"🟡 SOON","🟢 OK")))');
+
+      // X: Expected Pay Date (Homewise schedule)
+      sheet.getRange(rn, 24)
+        .setFormula(expectedPayDateFormula_(r))
+        .setNumberFormat('yyyy-mm-dd');
+
+      // Y: Days to Payment (blank once paid)
+      sheet.getRange(rn, 25)
+        .setFormula('=IF(OR(X'+r+'="",T'+r+'="'+STATUS_PAID+'"),"",X'+r+'-TODAY())')
+        .setNumberFormat('0')
+        .setHorizontalAlignment('center');
 
     }
 
@@ -1599,18 +1698,29 @@ function rebuildFundedSheet_(ss, sheetName) {
   }
 
   // ── 9. Column widths ──────────────────────────────────────────────────────
-  var widths = [36, 165, 95, 80, 115, 100, 110, 52, 90, 68, 58, 55, 112, 112, 120, 140, 105, 100, 78, 135, 100];
+  var widths = [36, 165, 95, 80, 115, 100, 110, 52, 90, 68, 58, 55, 112, 112, 120, 140, 105, 100, 78, 135, 100, 50, 50, 125, 78];
   for (var ci = 0; ci < widths.length; ci++) sheet.setColumnWidth(ci + 1, widths[ci]);
 
   // ── 10. Freeze rows 1–2 and cols A–B; hide Email + Phone ─────────────────
   sheet.setFrozenRows(2);
   sheet.hideColumns(16, 2); // P: Email, Q: Phone
 
-  // ── 11. Status conditional formatting ────────────────────────────────────
+  // ── 11. Status and Days-to-Pay conditional formatting ─────────────────────
   applyStatusCF_(sheet);
+  applyDaysToPayCF_(sheet);
 }
 
 function pad2_(n) { return n < 10 ? '0' + n : String(n); }
+
+// Builds the Expected Pay Date formula for a given row reference string.
+// Homewise schedule: closing 1–10 → EOM same month | 11–20 → 15th next | 21–31 → 30th next
+function expectedPayDateFormula_(r) {
+  var f = 'F' + r;
+  return '=IF('+f+'="","",IF(DAY('+f+')<=10,EOMONTH('+f+',0),' +
+    'IF(DAY('+f+')<=20,' +
+      'DATE(YEAR('+f+')+IF(MONTH('+f+')=12,1,0),IF(MONTH('+f+')=12,1,MONTH('+f+')+1),15),' +
+      'DATE(YEAR('+f+')+IF(MONTH('+f+')=12,1,0),IF(MONTH('+f+')=12,1,MONTH('+f+')+1),30))))';
+}
 
 function parseDateVal_(v) {
   if (v === '' || v === null || v === undefined) return '';
@@ -1705,6 +1815,50 @@ function fixAllCommissionFormulas() {
   });
   SpreadsheetApp.flush();
   ss.toast('Commission formulas applied to ' + fixed + ' rows. Changing BPS or Amount will now auto-update commissions.');
+}
+
+// ─── fixAllExpectedPayDates (public) ─────────────────────────────────────────
+// Adds col X (Expected Pay Date) and col Y (Days to Pay) to every deal row in
+// both funded sheets, writes headers, column widths, and conditional formatting.
+
+function fixAllExpectedPayDates() {
+  var ss   = SpreadsheetApp.getActiveSpreadsheet();
+  var NAVY = '#1B3A6B';
+  var fixed = 0;
+
+  ['2025 Funded', '2026 Funded'].forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+
+    sheet.getRange(2, 24, 1, 2).setValues([['Expected Pay Date', 'Days to Pay']])
+      .setBackground(NAVY).setFontColor('#FFFFFF')
+      .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sheet.setColumnWidth(24, 125);
+    sheet.setColumnWidth(25, 78);
+
+    var totalsRow   = findTotalsRow_(sheet);
+    var lastDataRow = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+    if (lastDataRow < 4) return;
+
+    for (var rn = 4; rn <= lastDataRow; rn++) {
+      var borrower = String(sheet.getRange(rn, 2).getValue() || '').trim();
+      if (!borrower) continue;
+      var r = String(rn);
+      sheet.getRange(rn, 24)
+        .setFormula(expectedPayDateFormula_(r))
+        .setNumberFormat('yyyy-mm-dd');
+      sheet.getRange(rn, 25)
+        .setFormula('=IF(OR(X'+r+'="",T'+r+'="'+STATUS_PAID+'"),"",X'+r+'-TODAY())')
+        .setNumberFormat('0')
+        .setHorizontalAlignment('center');
+      fixed++;
+    }
+    applyDaysToPayCF_(sheet);
+  });
+
+  SpreadsheetApp.flush();
+  ss.toast('Expected Pay Dates applied to ' + fixed + ' rows. X = date, Y = days remaining (colour-coded).');
 }
 
 // ─── formatAllSheets (public) ─────────────────────────────────────────────────
