@@ -129,7 +129,7 @@ export const UpdateDocumentSchema = z.object({
 // ─── Admin schemas ────────────────────────────────────────────────────────────
 
 export const UpdateUserRoleSchema = z.object({
-  role: z.enum(['ADMIN', 'UNDERWRITER', 'VIEWER']),
+  role: z.enum(['ADMIN', 'BROKER', 'UNDERWRITER', 'VIEWER']),
 });
 
 // ─── Param schemas ────────────────────────────────────────────────────────────

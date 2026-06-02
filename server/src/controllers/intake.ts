@@ -3,6 +3,7 @@ import multer from 'multer';
 import AdmZip from 'adm-zip';
 import { processZipUpload, processFinmoPdf, processSubmissionNotes } from '../services/intake';
 import { createApplication } from '../services/applications';
+import logger from '../utils/logger';
 
 const storage = multer.memoryStorage();
 export const uploadMiddleware = multer({ storage, limits: { fileSize: 100 * 1024 * 1024 } }); // 100MB
@@ -34,7 +35,7 @@ export async function handleZipUpload(req: Request, res: Response, next: NextFun
     const { buffer, originalname } = bundleFiles(allFiles);
 
     // Start processing async — return immediately with applicationId
-    processZipUpload(app.id, buffer, req.user.tenantId, originalname).catch(console.error);
+    processZipUpload(app.id, buffer, req.user.tenantId, originalname).catch((err: unknown) => logger.error('async intake processing failed', { error: err instanceof Error ? err.message : String(err) }));
 
     res.json({ applicationId: app.id, documentCount: allFiles.length, status: 'PROCESSING' });
   } catch (err) { next(err); }
@@ -46,7 +47,7 @@ export async function handleFinmoImport(req: Request, res: Response, next: NextF
     if (!file) { res.status(400).json({ error: 'No file uploaded' }); return; }
 
     const app = await createApplication(req.user.tenantId, req.user.id);
-    processFinmoPdf(app.id, file.buffer, req.user.tenantId).catch(console.error);
+    processFinmoPdf(app.id, file.buffer, req.user.tenantId).catch((err: unknown) => logger.error('async intake processing failed', { error: err instanceof Error ? err.message : String(err) }));
 
     res.json({ applicationId: app.id });
   } catch (err) { next(err); }
@@ -60,7 +61,7 @@ export async function handleSubmissionNotes(req: Request, res: Response, next: N
       return;
     }
     const app = await createApplication(req.user.tenantId, req.user.id);
-    processSubmissionNotes(app.id, text.trim(), req.user.tenantId).catch(console.error);
+    processSubmissionNotes(app.id, text.trim(), req.user.tenantId).catch((err: unknown) => logger.error('async intake processing failed', { error: err instanceof Error ? err.message : String(err) }));
 
     res.json({ applicationId: app.id });
   } catch (err) { next(err); }

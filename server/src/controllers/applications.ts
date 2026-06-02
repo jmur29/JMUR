@@ -11,6 +11,7 @@ import { generateDealIntelligenceFromApplication } from '../services/intake';
 import { buildDealReview } from '../services/ai';
 import prisma from '../prisma/client';
 import type { ApplicationStatus } from '@prisma/client';
+import logger from '../utils/logger';
 
 export async function list(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -160,7 +161,7 @@ export async function generateDealIntelligence(req: Request, res: Response, next
     }
 
     // Kick off async generation from existing application data
-    generateDealIntelligenceFromApplication(application.id, req.user.tenantId).catch(console.error);
+    generateDealIntelligenceFromApplication(application.id, req.user.tenantId).catch((err: unknown) => logger.error('generateDealIntelligence failed', { applicationId: application.id, error: err instanceof Error ? err.message : String(err) }));
 
     res.json({ status: 'PROCESSING', applicationId: application.id });
   } catch (err) {
@@ -238,7 +239,7 @@ export async function generateDealReview(req: Request, res: Response, next: Next
           where: { id: application.id },
           data: { processingStatus: 'FAILED' },
         });
-        console.error('generateDealReview failed', err);
+        logger.error('generateDealReview failed', { applicationId: application.id, error: err instanceof Error ? err.message : String(err) });
       }
     })();
 

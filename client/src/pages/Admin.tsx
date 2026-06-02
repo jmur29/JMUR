@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 
 const ROLE_OPTIONS: { value: UserRole; label: string; color: string }[] = [
   { value: 'ADMIN', label: 'Admin', color: 'bg-[#FEF3C7] text-[#92400E]' },
+  { value: 'BROKER', label: 'Broker', color: 'bg-[#D1FAE5] text-[#065F46]' },
   { value: 'UNDERWRITER', label: 'Underwriter', color: 'bg-[#DBEAFE] text-[#1E40AF]' },
   { value: 'VIEWER', label: 'Viewer', color: 'bg-[#F7F6F3] text-[#6B6860]' },
 ];
