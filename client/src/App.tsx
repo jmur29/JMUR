@@ -12,7 +12,7 @@ import AdminPipeline from './pages/AdminPipeline';
 import DealImport from './pages/DealImport';
 import DealIntelligenceReport from './pages/DealIntelligenceReport';
 import DealReviewDashboard from './pages/DealReviewDashboard';
-import { useApiAuth } from './lib/api';
+import { useApiAuth, setAuthToken } from './lib/api';
 import Spinner from './components/ui/Spinner';
 
 function AuthSync() {
@@ -21,9 +21,25 @@ function AuthSync() {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const [tokenReady, setTokenReady] = useState(false);
 
-  if (!isLoaded) {
+  // Eagerly fetch the auth token before rendering any children so that
+  // React Query hooks inside pages never fire without an Authorization header.
+  useEffect(() => {
+    if (!isSignedIn) return;
+    let active = true;
+    getToken().then((token) => {
+      if (!active) return;
+      setAuthToken(token);
+      setTokenReady(true);
+    }).catch(() => {
+      if (active) setTokenReady(true); // still render, error banner will show
+    });
+    return () => { active = false; };
+  }, [isSignedIn, getToken]);
+
+  if (!isLoaded || (isSignedIn && !tokenReady)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Spinner size="lg" />
