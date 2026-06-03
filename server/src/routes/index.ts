@@ -11,25 +11,8 @@ import reportsRouter from './reports';
 import adminRouter from './admin';
 import aiRouter from './ai';
 import intakeRouter from './intake';
-import { main as runSeed } from '../prisma/seed';
-import logger from '../utils/logger';
 
 const router = Router();
-
-// ─── TEMP: one-shot seed endpoint — delete after use ─────────────────────────
-router.post('/admin/seed', async (_req, res) => {
-  logger.info('[temp-seed] seed endpoint hit');
-  try {
-    await runSeed();
-    logger.info('[temp-seed] seed complete');
-    res.json({ ok: true, message: 'Seed complete' });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    logger.error('[temp-seed] seed failed', { error: msg });
-    res.status(500).json({ ok: false, error: msg });
-  }
-});
-// ─────────────────────────────────────────────────────────────────────────────
 
 // Webhooks (no auth — verified via svix signature)
 router.use('/webhooks', webhooksRouter);

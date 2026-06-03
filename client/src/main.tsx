@@ -5,21 +5,52 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { AxiosError } from 'axios';
 import App from './App';
 import './index.css';
 
-const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
+// ---------------------------------------------------------------------------
+// Config guard — render a visible error instead of throwing so the user
+// can see what's missing rather than getting a blank page.
+// ---------------------------------------------------------------------------
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
+
+const root = document.getElementById('root')!;
 
 if (!PUBLISHABLE_KEY) {
-  throw new Error('Missing Clerk publishable key. Set VITE_CLERK_PUBLISHABLE_KEY in .env');
-}
+  root.innerHTML = `
+    <div style="font-family:ui-monospace,monospace;font-size:13px;padding:32px;color:#111;background:#fff;min-height:100vh">
+      <div style="font-weight:700;font-size:16px;color:#7f1d1d;margin-bottom:12px">
+        ⚠ Missing VITE_CLERK_PUBLISHABLE_KEY
+      </div>
+      <p style="margin-bottom:8px">
+        The Vercel environment variable <code>VITE_CLERK_PUBLISHABLE_KEY</code>
+        is not set in this build.
+      </p>
+      <p style="color:#6b7280;font-size:12px">
+        1. Go to Vercel → your project → Settings → Environment Variables<br>
+        2. Add <strong>VITE_CLERK_PUBLISHABLE_KEY</strong> = <em>pk_test_…</em> (from Clerk dashboard)<br>
+        3. Redeploy — this variable is baked in at build time
+      </p>
+    </div>`;
+  // Stop execution — do not mount React
+} else {
 
+// ---------------------------------------------------------------------------
+// React Query — do not retry 401/403/404, only retry network errors
+// ---------------------------------------------------------------------------
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      retry: 1,
       refetchOnWindowFocus: false,
+      retry: (failureCount, error) => {
+        if (error instanceof AxiosError) {
+          const status = error.response?.status;
+          if (status === 401 || status === 403 || status === 404 || status === 503) return false;
+        }
+        return failureCount < 1;
+      },
     },
     mutations: {
       retry: 0,
@@ -27,6 +58,9 @@ const queryClient = new QueryClient({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Error boundary — catches render errors instead of showing blank page
+// ---------------------------------------------------------------------------
 class RootErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { error: Error | null }
@@ -70,7 +104,7 @@ class RootErrorBoundary extends React.Component<
   }
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <RootErrorBoundary>
       <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
@@ -102,3 +136,5 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </RootErrorBoundary>
   </React.StrictMode>
 );
+
+} // end PUBLISHABLE_KEY guard
