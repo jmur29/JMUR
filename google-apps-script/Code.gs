@@ -35,6 +35,97 @@ function onOpen() {
   ]);
 }
 
+// ─── onEdit (simple trigger) ─────────────────────────────────────────────────
+// Fires on every cell edit in a funded sheet. Auto-seeds formula columns so the
+// sheet behaves like a live SaaS tool — no script runs needed for routine entry.
+//
+// Re-entrance guard: the FORMULA_COLS set causes this trigger to return
+// immediately when it fires because of its own setFormula calls, preventing loops.
+
+function onEdit(e) {
+  if (!e) return;
+  var range = e.range;
+  var sheet = range.getSheet();
+  var name  = sheet.getName();
+  if (name !== '2025 Funded' && name !== '2026 Funded') return;
+
+  var row = range.getRow();
+  var col = range.getColumn();
+  if (row < 4) return;
+
+  // Return immediately for formula columns — writing back to these fires onEdit
+  // again; ignoring them here breaks the recursion.
+  // 13=M 14=N 18=R 19=S 24=X 25=Y
+  var FORMULA_COLS = {13:1, 14:1, 18:1, 19:1, 24:1, 25:1};
+  if (FORMULA_COLS[col]) return;
+
+  // Nothing to do if borrower (col B) is empty
+  var borrower = String(sheet.getRange(row, 2).getValue() || '').trim();
+  if (!borrower) return;
+
+  var r = String(row);
+
+  // ── Commission — refresh M and N whenever any input column in B–L changes ────
+  // This covers: Amount (G=7), BPS (K=11), Split (L=12) and first-entry for any col.
+  if (col >= 2 && col <= 14) {
+    sheet.getRange(row, 13)
+      .setFormula('=IF(G'+r+'="","",IFERROR(ROUND(G'+r+'*(K'+r+'/10000),2),0))')
+      .setNumberFormat('$#,##0.00');
+    sheet.getRange(row, 14)
+      .setFormula('=IF(M'+r+'="","",IFERROR(ROUND(M'+r+'*L'+r+',2),0))')
+      .setNumberFormat('$#,##0.00');
+  }
+
+  // ── Maturity + Renewal Alert — refresh when Closing Date (F=6) or Term (H=8) changes
+  if (col === 6 || col === 8) {
+    sheet.getRange(row, 18)
+      .setFormula('=IF(AND(F'+r+'<>"",H'+r+'<>""),DATE(YEAR(F'+r+')+H'+r+',MONTH(F'+r+'),DAY(F'+r+')),"")')
+      .setNumberFormat('yyyy-mm-dd');
+    sheet.getRange(row, 19)
+      .setFormula('=IF(R'+r+'="","",IF(R'+r+'-TODAY()<=30,"🔴 RENEW NOW",IF(R'+r+'-TODAY()<=120,"🟡 SOON","🟢 OK")))');
+  }
+
+  // ── Expected Pay Date + Days to Pay — refresh when Closing (F=6) or Status (T=20) changes
+  if (col === 6 || col === 20) {
+    sheet.getRange(row, 24)
+      .setFormula(expectedPayDateFormula_(r))
+      .setNumberFormat('yyyy-mm-dd');
+    sheet.getRange(row, 25)
+      .setFormula('=IF(OR(X'+r+'="",T'+r+'="'+STATUS_PAID+'"),"",X'+r+'-TODAY())')
+      .setNumberFormat('0').setHorizontalAlignment('center');
+  }
+
+  // ── First entry: seed any missing formula columns when borrower is first typed
+  if (col === 2) {
+    if (!sheet.getRange(row, 18).getFormula())
+      sheet.getRange(row, 18)
+        .setFormula('=IF(AND(F'+r+'<>"",H'+r+'<>""),DATE(YEAR(F'+r+')+H'+r+',MONTH(F'+r+'),DAY(F'+r+')),"")')
+        .setNumberFormat('yyyy-mm-dd');
+    if (!sheet.getRange(row, 19).getFormula())
+      sheet.getRange(row, 19)
+        .setFormula('=IF(R'+r+'="","",IF(R'+r+'-TODAY()<=30,"🔴 RENEW NOW",IF(R'+r+'-TODAY()<=120,"🟡 SOON","🟢 OK")))');
+    if (!sheet.getRange(row, 24).getFormula())
+      sheet.getRange(row, 24)
+        .setFormula(expectedPayDateFormula_(r)).setNumberFormat('yyyy-mm-dd');
+    if (!sheet.getRange(row, 25).getFormula())
+      sheet.getRange(row, 25)
+        .setFormula('=IF(OR(X'+r+'="",T'+r+'="'+STATUS_PAID+'"),"",X'+r+'-TODAY())')
+        .setNumberFormat('0').setHorizontalAlignment('center');
+    // Auto-assign initial status if T is blank
+    var tCell = sheet.getRange(row, 20);
+    if (!String(tCell.getValue() || '').trim()) {
+      tCell.setValue(computeInitialStatus_(sheet.getRange(row, 6).getValue()))
+        .setHorizontalAlignment('center');
+      applyStatusValidation_(sheet, row);
+    }
+    sheet.getRange(row, 6).setNumberFormat('yyyy-mm-dd');
+  }
+
+  // ── Auto-apply number format for commonly-misformatted input columns ──────────
+  var FMT = {6:'yyyy-mm-dd', 7:'"$"#,##0.00', 10:'0.00"%"', 11:'0" bps"', 12:'0%', 21:'yyyy-mm-dd'};
+  if (FMT[col]) sheet.getRange(row, col).setNumberFormat(FMT[col]);
+}
+
 // ─── writeDeal ────────────────────────────────────────────────────────────────
 // A–U column layout:
 //   A  # | B  Borrower | C  Type | D  Source | E  Lender | F  Closing Date
@@ -2051,67 +2142,82 @@ function setupIncomeHub() {
   // Column headers row
   var schedHdr = schedStart + 1;
   sheet.setRowHeight(schedHdr, 24);
-  var schedHeaders = [['Expected Date', 'Borrowers', '', 'Your Comm', 'Days Away', '', '']];
-  sheet.getRange(schedHdr, 2, 1, 7).setValues(schedHeaders)
+  // Headers match the 4-column FILTER output: date | borrower | amount | days
+  sheet.getRange(schedHdr, 2, 1, 7)
+    .setValues([['Expected Date', 'Borrower', 'Your Comm', 'Days Away', '', '', '']])
     .setBackground(MID_GREY).setFontColor(TEXT_DARK)
     .setFontFamily('Arial').setFontSize(9).setFontWeight('bold')
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
-  sheet.getRange(schedHdr, 3, 1, 2).merge(); // merge borrowers + blank
-  sheet.getRange(schedHdr, 6, 1, 2).merge(); // merge last two cols
 
-  // Build rows dynamically from data
-  var groups   = buildPaymentGroups_(ss);
-  var dataRow  = schedHdr + 1;
-  var today    = new Date();
-  today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  // ── Live FILTER formula — updates automatically when deal statuses change ─────
+  // Combines both funded sheets: Status=AWAITING, sorted by Expected Pay Date asc.
+  // Cols B=date  C=borrower  D=amount  E=days (positive=future, 0=today, negative=overdue)
+  var FILTER_ROWS = 50; // reserved spill zone; raise if you ever have >50 awaiting deals
+  var filterRow   = schedHdr + 1;
+  var frStr       = String(filterRow);
 
-  if (groups.length === 0) {
-    sheet.setRowHeight(dataRow, 24);
-    sheet.getRange(dataRow, 2, 1, 7).merge()
-      .setValue('No awaiting-payment deals found.')
-      .setBackground(LIGHT_GREY).setFontColor(TEXT_MED)
-      .setFontFamily('Arial').setFontSize(10).setFontStyle('italic')
-      .setHorizontalAlignment('center').setVerticalAlignment('middle');
-    dataRow++;
-  } else {
-    groups.forEach(function(g) {
-      var daysAway = Math.round((g.date - today) / 86400000);
-      var rowBg, rowFg, urgency;
-      if (daysAway <= 0) {
-        rowBg = '#C6EFCE'; rowFg = GREEN; urgency = daysAway === 0 ? 'TODAY' : 'OVERDUE';
-      } else if (daysAway <= 7) {
-        rowBg = '#FFEB9C'; rowFg = '#7A5000'; urgency = daysAway + 'd';
-      } else if (daysAway <= 30) {
-        rowBg = BLUE_LIGHT; rowFg = BLUE; urgency = daysAway + 'd';
-      } else {
-        rowBg = LIGHT_GREY; rowFg = TEXT_MED; urgency = daysAway + 'd';
-      }
+  var filterF =
+    '=IFERROR(' +
+      'SORT(' +
+        'FILTER(' +
+          '{\'2025 Funded\'!X$4:X$100,\'2025 Funded\'!B$4:B$100,' +
+           'IFERROR(VALUE(\'2025 Funded\'!N$4:N$100),0),' +
+           'IFERROR(VALUE(\'2025 Funded\'!X$4:X$100)-TODAY(),9999);' +
+           '\'2026 Funded\'!X$4:X$100,\'2026 Funded\'!B$4:B$100,' +
+           'IFERROR(VALUE(\'2026 Funded\'!N$4:N$100),0),' +
+           'IFERROR(VALUE(\'2026 Funded\'!X$4:X$100)-TODAY(),9999)},' +
+          '{TRIM(\'2025 Funded\'!T$4:T$100)="'+STATUS_AWAITING+'";' +
+           'TRIM(\'2026 Funded\'!T$4:T$100)="'+STATUS_AWAITING+'"},' +
+          '{ISNUMBER(\'2025 Funded\'!X$4:X$100)*(\'2025 Funded\'!X$4:X$100>0);' +
+           'ISNUMBER(\'2026 Funded\'!X$4:X$100)*(\'2026 Funded\'!X$4:X$100>0)}' +
+        '),' +
+        '1,TRUE' +  // sort by date column ascending
+      '),' +
+      '{"No awaiting-payment deals","","",""}' +
+    ')';
 
-      var dateStr = Utilities.formatDate(g.date, Session.getScriptTimeZone(), 'MMM d, yyyy');
+  sheet.getRange(filterRow, 2).setFormula(filterF);
 
-      sheet.setRowHeight(dataRow, 24);
-      sheet.getRange(dataRow, 2).setValue(dateStr)
-        .setBackground(rowBg).setFontColor(rowFg)
-        .setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
-        .setHorizontalAlignment('center').setVerticalAlignment('middle');
-      sheet.getRange(dataRow, 3, 1, 2).merge()
-        .setValue(g.names)
-        .setBackground(rowBg).setFontColor(rowFg)
-        .setFontFamily('Arial').setFontSize(10)
-        .setHorizontalAlignment('left').setVerticalAlignment('middle');
-      sheet.getRange(dataRow, 5).setValue(g.total)
-        .setBackground(rowBg).setFontColor(rowFg)
-        .setNumberFormat('"$"#,##0.00')
-        .setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
-        .setHorizontalAlignment('center').setVerticalAlignment('middle');
-      sheet.getRange(dataRow, 6, 1, 2).merge()
-        .setValue(urgency)
-        .setBackground(rowBg).setFontColor(rowFg)
-        .setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
-        .setHorizontalAlignment('center').setVerticalAlignment('middle');
-      dataRow++;
+  // Pre-format the full spill zone so values display correctly as soon as they appear
+  for (var fh = filterRow; fh < filterRow + FILTER_ROWS; fh++) sheet.setRowHeight(fh, 22);
+  sheet.getRange(filterRow, 2, FILTER_ROWS, 1)  // date
+    .setNumberFormat('mmm d, yyyy').setFontFamily('Arial').setFontSize(10)
+    .setFontWeight('bold').setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.getRange(filterRow, 3, FILTER_ROWS, 1)  // borrower
+    .setFontFamily('Arial').setFontSize(10)
+    .setHorizontalAlignment('left').setVerticalAlignment('middle');
+  sheet.getRange(filterRow, 4, FILTER_ROWS, 1)  // amount
+    .setNumberFormat('"$"#,##0.00').setFontFamily('Arial').setFontSize(10)
+    .setFontWeight('bold').setHorizontalAlignment('right').setVerticalAlignment('middle');
+  sheet.getRange(filterRow, 5, FILTER_ROWS, 1)  // days — custom format self-labels
+    .setNumberFormat('0"d";"OVERDUE";"TODAY"').setFontFamily('Arial').setFontSize(10)
+    .setFontWeight('bold').setHorizontalAlignment('center').setVerticalAlignment('middle');
+
+  // Urgency conditional formatting — rows colour themselves as data changes
+  var cfRange = sheet.getRange(filterRow, 2, FILTER_ROWS, 4);
+  var existingRules = sheet.getConditionalFormatRules().filter(function(rule) {
+    return rule.getRanges().every(function(rng) {
+      return rng.getRow() < filterRow || rng.getRow() >= filterRow + FILTER_ROWS;
     });
-  }
+  });
+  var urgencyRules = [
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=$E'+frStr+'<=0')
+      .setBackground('#C6EFCE').setFontColor('#1E6B3C')
+      .setRanges([cfRange]).build(),
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=AND($E'+frStr+'>0,$E'+frStr+'<=7)')
+      .setBackground('#FFEB9C').setFontColor('#7A5000')
+      .setRanges([cfRange]).build(),
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=AND($E'+frStr+'>7,$E'+frStr+'<=30)')
+      .setBackground(BLUE_LIGHT).setFontColor(BLUE)
+      .setRanges([cfRange]).build(),
+  ];
+  sheet.setConditionalFormatRules(existingRules.concat(urgencyRules));
+
+  // Advance dataRow past the FILTER spill zone
+  var dataRow = filterRow + FILTER_ROWS;
 
   // thin separator
   sheet.setRowHeight(dataRow, 10);
