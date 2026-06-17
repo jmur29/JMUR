@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>The Murvota Open</title>
+<meta name="description" content="You've earned a spot — RSVP for Jake &amp; Bri's home opener, Fri July 24" />
+<meta name="theme-color" content="#1f3d23" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="The Murvota Open" />
+<meta property="og:description" content="You've earned a spot — RSVP for Jake &amp; Bri's home opener, Fri July 24" />
+<meta property="og:image" content="/invite.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="The Murvota Open — invitation" />
+<!-- og:url is best set to the absolute deployed URL; see SETUP.md -->
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="The Murvota Open" />
+<meta name="twitter:description" content="You've earned a spot — RSVP for Jake &amp; Bri's home opener, Fri July 24" />
+<meta name="twitter:image" content="/invite.png" />
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231f3d23'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='%23f3efe4' font-family='Georgia,serif'%3EM%3C/text%3E%3C/svg%3E" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --green: #1f3d23;
+    --green-soft: #2e5233;
+    --cream: #f3efe4;
+    --cream-deep: #e9e3d3;
+    --ink: #1f3d23;
+    --line: rgba(31, 61, 35, 0.35);
+    --stripe: 14px;
+    --maxw: 540px;
+    --radius: 4px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; }
+
+  body {
+    background: var(--cream);
+    color: var(--ink);
+    font-family: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+    font-size: 18px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* room for the fixed top/bottom stripes */
+    padding: calc(var(--stripe) + 22px) 18px calc(var(--stripe) + 40px);
+  }
+
+  /* striped green/cream ribbon across top and bottom of the page */
+  .ribbon {
+    position: fixed;
+    left: 0;
+    right: 0;
+    height: var(--stripe);
+    z-index: 10;
+    background-image: repeating-linear-gradient(
+      -45deg,
+      var(--green) 0,
+      var(--green) 12px,
+      var(--cream) 12px,
+      var(--cream) 24px
+    );
+    border-block: 1px solid var(--green);
+  }
+  .ribbon--top { top: 0; }
+  .ribbon--bottom { bottom: 0; }
+
+  .wrap {
+    max-width: var(--maxw);
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+  }
+
+  /* ---- Invite card ---- */
+  .card {
+    background: var(--cream);
+    border: 1px solid var(--green);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 0 rgba(31,61,35,0.06), 0 18px 40px -28px rgba(31,61,35,0.45);
+    padding: 40px 30px 44px;
+    text-align: center;
+    position: relative;
+  }
+  /* delicate inner keyline for the country-club feel */
+  .card::after {
+    content: "";
+    position: absolute;
+    inset: 8px;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    pointer-events: none;
+  }
+  .card > * { position: relative; }
+
+  .detail {
+    font-variant: small-caps;
+    letter-spacing: 0.14em;
+    text-transform: lowercase;
+    color: var(--green);
+  }
+
+  .congrats {
+    font-variant: small-caps;
+    letter-spacing: 0.18em;
+    font-weight: 600;
+    font-size: 1.18rem;
+    color: var(--green);
+    margin: 0 0 4px;
+  }
+  .earned {
+    font-variant: small-caps;
+    letter-spacing: 0.13em;
+    font-size: 1.02rem;
+    color: var(--green-soft);
+    margin: 0 0 18px;
+  }
+
+  .the {
+    font-variant: small-caps;
+    letter-spacing: 0.22em;
+    font-size: 1.1rem;
+    color: var(--green);
+    margin: 0;
+  }
+  .murvota {
+    font-family: "Dancing Script", "Cormorant Garamond", cursive;
+    font-weight: 700;
+    font-size: clamp(3.6rem, 18vw, 5.4rem);
+    line-height: 0.9;
+    color: var(--green);
+    margin: 2px 0 0;
+  }
+  .open {
+    font-variant: small-caps;
+    letter-spacing: 0.42em;
+    text-indent: 0.42em;
+    font-size: 1.7rem;
+    font-weight: 600;
+    color: var(--green);
+    margin: 0 0 6px;
+  }
+
+  .clubs {
+    width: 62px;
+    height: 62px;
+    margin: 12px auto 18px;
+    display: block;
+    color: var(--green);
+  }
+
+  .rule {
+    width: 64px;
+    height: 1px;
+    background: var(--line);
+    border: 0;
+    margin: 0 auto 18px;
+  }
+
+  .when  { font-size: 1.5rem; font-weight: 600; letter-spacing: 0.02em; margin: 0 0 10px; }
+  .where { letter-spacing: 0.1em; margin: 0 0 6px; }
+  .dress { letter-spacing: 0.1em; margin: 0 0 18px; }
+  .opener {
+    font-style: italic;
+    font-size: 1.18rem;
+    color: var(--green-soft);
+    margin: 0;
+  }
+
+  /* ---- Panels (form + leaderboard) ---- */
+  .panel {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 24px 22px 26px;
+  }
+  .panel h2 {
+    font-variant: small-caps;
+    letter-spacing: 0.16em;
+    font-weight: 600;
+    font-size: 1.25rem;
+    color: var(--green);
+    margin: 0 0 4px;
+    text-align: center;
+  }
+  .panel .sub {
+    text-align: center;
+    font-variant: small-caps;
+    letter-spacing: 0.1em;
+    color: var(--green-soft);
+    margin: 0 0 18px;
+    font-size: 0.95rem;
+  }
+
+  label.field { display: block; margin: 0 0 16px; }
+  .field-label {
+    display: block;
+    font-variant: small-caps;
+    letter-spacing: 0.12em;
+    color: var(--green);
+    margin: 0 0 6px;
+    font-size: 1rem;
+  }
+
+  input[type="text"], select, textarea {
+    width: 100%;
+    font-family: inherit;
+    font-size: 1.05rem;
+    color: var(--ink);
+    background: #fbf9f2;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 11px 12px;
+  }
+  textarea { resize: vertical; min-height: 70px; }
+  input[type="text"]:focus, select:focus, textarea:focus {
+    outline: 2px solid var(--green);
+    outline-offset: 1px;
+    border-color: var(--green);
+  }
+
+  .status-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+  .status-btn {
+    font-family: inherit;
+    font-size: 1rem;
+    font-variant: small-caps;
+    letter-spacing: 0.06em;
+    color: var(--green);
+    background: #fbf9f2;
+    border: 1px solid var(--green);
+    border-radius: var(--radius);
+    padding: 11px 6px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  }
+  .status-btn:hover { background: var(--cream-deep); }
+  .status-btn:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+  .status-btn[aria-pressed="true"] {
+    background: var(--green);
+    color: var(--cream);
+  }
+
+  .hint {
+    font-size: 0.92rem;
+    font-style: italic;
+    color: var(--green-soft);
+    margin: 0 0 16px;
+  }
+
+  .submit {
+    width: 100%;
+    font-family: inherit;
+    font-variant: small-caps;
+    letter-spacing: 0.14em;
+    font-size: 1.18rem;
+    font-weight: 600;
+    color: var(--cream);
+    background: var(--green);
+    border: 1px solid var(--green);
+    border-radius: var(--radius);
+    padding: 13px;
+    cursor: pointer;
+    transition: background 0.15s ease, opacity 0.15s ease;
+  }
+  .submit:hover:not(:disabled) { background: var(--green-soft); }
+  .submit:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+  .submit:disabled { opacity: 0.42; cursor: not-allowed; }
+
+  .form-msg {
+    text-align: center;
+    margin: 14px 0 0;
+    min-height: 1.2em;
+    font-style: italic;
+    color: var(--green-soft);
+  }
+
+  [hidden] { display: none !important; }
+
+  /* ---- Leaderboard ---- */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin: 0 0 22px;
+  }
+  .stat {
+    text-align: center;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px 6px;
+    background: #fbf9f2;
+  }
+  .stat .num {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--green);
+  }
+  .stat .lbl {
+    display: block;
+    font-variant: small-caps;
+    letter-spacing: 0.1em;
+    font-size: 0.86rem;
+    color: var(--green-soft);
+    margin-top: 4px;
+  }
+
+  .board-col + .board-col { margin-top: 18px; }
+  .board-col h3 {
+    font-variant: small-caps;
+    letter-spacing: 0.12em;
+    font-size: 1.05rem;
+    color: var(--green);
+    margin: 0 0 8px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 4px;
+  }
+  .board-col ul { list-style: none; margin: 0; padding: 0; }
+  .board-col li {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 0;
+  }
+  .board-col li .who { font-weight: 500; }
+  .board-col li .extra {
+    font-style: italic;
+    color: var(--green-soft);
+    font-size: 0.92rem;
+    white-space: nowrap;
+  }
+  .empty {
+    font-style: italic;
+    color: var(--green-soft);
+    margin: 0;
+  }
+  .board-note {
+    text-align: center;
+    font-size: 0.86rem;
+    font-style: italic;
+    color: var(--green-soft);
+    margin: 18px 0 0;
+  }
+
+  .foot {
+    text-align: center;
+    font-variant: small-caps;
+    letter-spacing: 0.1em;
+    color: var(--green-soft);
+    font-size: 0.9rem;
+    padding-top: 2px;
+  }
+
+  @media (max-width: 380px) {
+    .status-group { grid-template-columns: 1fr; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="ribbon ribbon--top" aria-hidden="true"></div>
+
+  <main class="wrap">
+
+    <!-- ============ INVITE ============ -->
+    <section class="card" aria-label="Invitation">
+      <p class="congrats">Congratulations!</p>
+      <p class="earned">You've earned a spot at</p>
+
+      <p class="the">The</p>
+      <p class="murvota">Murvota</p>
+      <p class="open">Open</p>
+
+      <!-- crossed golf clubs -->
+      <svg class="clubs" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+        <g stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+          <!-- club one -->
+          <line x1="16" y1="8" x2="44" y2="52" />
+          <path d="M44 52c0 3 2.6 4.6 5.4 4.6 3 0 5.2-2 5.2-4.8 0-2-1.2-3.4-3-4" fill="none" />
+          <!-- club two -->
+          <line x1="48" y1="8" x2="20" y2="52" />
+          <path d="M20 52c0 3-2.6 4.6-5.4 4.6-3 0-5.2-2-5.2-4.8 0-2 1.2-3.4 3-4" fill="none" />
+          <!-- grips -->
+          <line x1="16" y1="8" x2="13" y2="6" />
+          <line x1="48" y1="8" x2="51" y2="6" />
+        </g>
+        <circle cx="32" cy="14" r="2.6" fill="currentColor" />
+      </svg>
+
+      <hr class="rule" />
+
+      <p class="when">Friday, July 24th</p>
+      <p class="where detail">25 Ordnance St, Unit 511, Buzzer 1622</p>
+      <p class="dress detail">Dress code: golf course attire</p>
+      <p class="opener">Jake &amp; Bri's home opener</p>
+    </section>
+
+    <!-- ============ FORM ============ -->
+    <section class="panel" aria-label="RSVP form">
+      <h2>RSVP</h2>
+      <p class="sub">Claim your spot</p>
+
+      <form id="rsvp-form" novalidate>
+        <label class="field" for="name">
+          <span class="field-label">Your name</span>
+          <input type="text" id="name" name="name" autocomplete="name" maxlength="80"
+                 placeholder="First &amp; last" required />
+        </label>
+
+        <div class="field" role="radiogroup" aria-label="Will you be there?">
+          <span class="field-label">Will you be there?</span>
+          <div class="status-group">
+            <button type="button" class="status-btn" data-status="in"    role="radio" aria-checked="false">I'm in</button>
+            <button type="button" class="status-btn" data-status="maybe" role="radio" aria-checked="false">Maybe</button>
+            <button type="button" class="status-btn" data-status="out"   role="radio" aria-checked="false">Can't make it</button>
+          </div>
+        </div>
+
+        <label class="field" for="guests" id="guests-field">
+          <span class="field-label">Bringing anyone?</span>
+          <select id="guests" name="guests">
+            <option value="0">Just me</option>
+            <option value="1">+1</option>
+            <option value="2">+2</option>
+            <option value="3">+3</option>
+          </select>
+        </label>
+
+        <label class="field" for="note">
+          <span class="field-label">Note <span style="text-transform:none;letter-spacing:0;font-variant:normal;">(optional)</span></span>
+          <textarea id="note" name="note" maxlength="280" placeholder="Anything you want Jake &amp; Bri to know?"></textarea>
+        </label>
+
+        <button type="submit" class="submit" id="submit" disabled>Send RSVP</button>
+        <p class="form-msg" id="form-msg" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <!-- ============ LEADERBOARD ============ -->
+    <section class="panel" aria-label="Leaderboard">
+      <h2>The Field</h2>
+      <p class="sub">Who's on the card</p>
+
+      <div class="stats">
+        <div class="stat"><span class="num" id="stat-heads">—</span><span class="lbl">Heads coming</span></div>
+        <div class="stat"><span class="num" id="stat-in">—</span><span class="lbl">In</span></div>
+        <div class="stat"><span class="num" id="stat-maybe">—</span><span class="lbl">Maybe</span></div>
+      </div>
+
+      <div id="board"></div>
+      <p class="board-note" id="board-note" hidden></p>
+    </section>
+
+    <p class="foot">See you on the course ⛳</p>
+  </main>
+
+  <div class="ribbon ribbon--bottom" aria-hidden="true"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ⬇️  Paste your deployed Google Apps Script Web App URL here.
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby1dIFpEdumpkhjlRa8dR5MdIUx3aG1WeragkaPlGWKJHWkYbCX6q_kJXchq9RW0Gcgdw/exec";
+
+  // ---------- state ----------
+  const state = { name: "", status: "", guests: 0, note: "" };
+
+  const $ = (sel) => document.querySelector(sel);
+  const nameEl   = $("#name");
+  const guestsEl = $("#guests");
+  const guestsField = $("#guests-field");
+  const noteEl   = $("#note");
+  const submitEl = $("#submit");
+  const formEl   = $("#rsvp-form");
+  const msgEl    = $("#form-msg");
+  const statusBtns = Array.from(document.querySelectorAll(".status-btn"));
+
+  const STATUS_LABEL = { in: "In", maybe: "Maybe", out: "Can't make it" };
+
+  // ---------- form behaviour ----------
+  function refreshValidity() {
+    submitEl.disabled = !(state.name.trim() && state.status);
+  }
+
+  nameEl.addEventListener("input", () => { state.name = nameEl.value; refreshValidity(); });
+  guestsEl.addEventListener("change", () => { state.guests = parseInt(guestsEl.value, 10) || 0; });
+  noteEl.addEventListener("input", () => { state.note = noteEl.value; });
+
+  statusBtns.forEach((btn) => {
+    btn.addEventListener("click", () => selectStatus(btn));
+  });
+
+  function selectStatus(btn) {
+    state.status = btn.dataset.status;
+    statusBtns.forEach((b) => {
+      const on = b === btn;
+      b.setAttribute("aria-pressed", String(on));
+      b.setAttribute("aria-checked", String(on));
+    });
+    // hide guest dropdown when not attending
+    const hideGuests = state.status === "out";
+    guestsField.hidden = hideGuests;
+    if (hideGuests) { state.guests = 0; guestsEl.value = "0"; }
+    refreshValidity();
+  }
+
+  // keyboard: arrow keys move through the status radios
+  const group = document.querySelector('[role="radiogroup"]');
+  group.addEventListener("keydown", (e) => {
+    if (!["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(e.key)) return;
+    e.preventDefault();
+    const i = statusBtns.findIndex((b) => b.getAttribute("aria-pressed") === "true");
+    const dir = (e.key === "ArrowRight" || e.key === "ArrowDown") ? 1 : -1;
+    const next = statusBtns[(Math.max(0, i) + dir + statusBtns.length) % statusBtns.length];
+    next.focus();
+    selectStatus(next);
+  });
+
+  // ---------- submit (fire-and-forget POST) ----------
+  formEl.addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (submitEl.disabled) return;
+
+    const payload = {
+      name: state.name.trim(),
+      status: state.status,
+      guests: state.status === "out" ? 0 : state.guests,
+      note: state.note.trim(),
+      ts: new Date().toISOString()
+    };
+
+    if (SCRIPT_URL) {
+      // no-cors + text/plain avoids the Apps Script CORS preflight.
+      fetch(SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      }).catch(function () { /* fire-and-forget */ });
+    }
+
+    submitEl.disabled = true;
+    msgEl.textContent = "You're on the card — see you July 24th ⛳";
+
+    // give Apps Script a beat to append, then refresh the field.
+    setTimeout(loadLeaderboard, 1200);
+  });
+
+  // ---------- leaderboard ----------
+  function loadLeaderboard() {
+    if (!SCRIPT_URL) {
+      noteEl_show("Add your SCRIPT_URL to load live RSVPs.");
+      return;
+    }
+    // Try a normal cross-origin GET first; fall back to JSONP if CORS blocks it.
+    fetch(SCRIPT_URL, { method: "GET" })
+      .then((r) => r.json())
+      .then((data) => render(data))
+      .catch(() => jsonp(SCRIPT_URL).then(render).catch(() => {
+        noteEl_show("Couldn't reach the RSVP sheet right now.");
+      }));
+  }
+
+  function jsonp(url) {
+    return new Promise(function (resolve, reject) {
+      const cb = "murvota_cb_" + Math.random().toString(36).slice(2);
+      const script = document.createElement("script");
+      let done = false;
+      function cleanup() { delete window[cb]; script.remove(); }
+      window[cb] = function (data) { done = true; cleanup(); resolve(data); };
+      script.onerror = function () { cleanup(); reject(new Error("jsonp failed")); };
+      script.src = url + (url.indexOf("?") === -1 ? "?" : "&") + "callback=" + cb;
+      document.body.appendChild(script);
+      setTimeout(function () { if (!done) { cleanup(); reject(new Error("jsonp timeout")); } }, 8000);
+    });
+  }
+
+  function noteEl_show(text) {
+    const n = $("#board-note");
+    n.textContent = text;
+    n.hidden = !text;
+  }
+
+  // dedupe by name (latest wins), then compute stats + grouped lists
+  function render(data) {
+    if (!data || data.ok === false || !Array.isArray(data.rsvps)) {
+      noteEl_show("No RSVPs yet — be the first.");
+      return;
+    }
+
+    const latest = new Map();
+    data.rsvps.forEach((r) => {
+      const name = String(r.name || "").trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      const prev = latest.get(key);
+      const t = Date.parse(r.ts || r.timestamp || "") || 0;
+      if (!prev || t >= prev._t) {
+        latest.set(key, {
+          name: name,
+          status: String(r.status || "").toLowerCase(),
+          guests: Math.max(0, parseInt(r.guests, 10) || 0),
+          note: String(r.note || "").trim(),
+          _t: t
+        });
+      }
+    });
+
+    const people = Array.from(latest.values());
+    const groups = { in: [], maybe: [], out: [] };
+    people.forEach((p) => { (groups[p.status] || (groups[p.status] = [])).push(p); });
+
+    // heads coming = everyone going (status "in") plus their guests
+    let heads = 0;
+    groups.in.forEach((p) => { heads += 1 + p.guests; });
+
+    $("#stat-heads").textContent = String(heads);
+    $("#stat-in").textContent    = String(groups.in.length);
+    $("#stat-maybe").textContent = String(groups.maybe.length);
+
+    const board = $("#board");
+    board.innerHTML = "";
+    [["in", "On the card"], ["maybe", "Maybe"], ["out", "Out"]].forEach(([key, title]) => {
+      const list = groups[key] || [];
+      const col = document.createElement("div");
+      col.className = "board-col";
+      const h = document.createElement("h3");
+      h.textContent = title + " (" + list.length + ")";
+      col.appendChild(h);
+
+      if (!list.length) {
+        const p = document.createElement("p");
+        p.className = "empty";
+        p.textContent = "—";
+        col.appendChild(p);
+      } else {
+        const ul = document.createElement("ul");
+        list.sort((a, b) => a.name.localeCompare(b.name)).forEach((p) => {
+          const li = document.createElement("li");
+          const who = document.createElement("span");
+          who.className = "who";
+          who.textContent = p.name;
+          li.appendChild(who);
+
+          const bits = [];
+          if (key !== "out" && p.guests > 0) bits.push("+" + p.guests);
+          if (p.note) bits.push("“" + p.note + "”");
+          if (bits.length) {
+            const ex = document.createElement("span");
+            ex.className = "extra";
+            ex.textContent = bits.join("  ");
+            li.appendChild(ex);
+          }
+          ul.appendChild(li);
+        });
+        col.appendChild(ul);
+      }
+      board.appendChild(col);
+    });
+
+    noteEl_show(people.length ? "Names shown once each — most recent reply wins." : "No RSVPs yet — be the first.");
+  }
+
+  // ---------- init ----------
+  refreshValidity();
+  loadLeaderboard();
+})();
+</script>
+</body>
+</html>
