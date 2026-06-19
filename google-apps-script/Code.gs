@@ -14,19 +14,20 @@ var STATUS_PAID     = '✅ Paid';
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
+  var adv = ui.createMenu('⚙️ Rebuild & Tools')
+    .addItem('💼 Rebuild Income Hub',            'setupIncomeHub')
+    .addItem('✦ Overhaul All Sheets',            'overhaulSheet')
+    .addItem('📊 Rebuild Month vs Month',        'setupMonthVsMonth')
+    .addItem('📈 Rebuild Year Over Year',        'rebuildYearOverYear')
+    .addItem('🏳 Backfill Flag Columns',         'fixAllFlagColumns')
+    .addSeparator()
+    .addItem('🔔 Send Renewal Reminders Now',    'sendRenewalReminders')
+    .addItem('⚙️  Install Triggers (run once)',  'installAllTriggers')
+    .addItem('🐛 Run Diagnostic',               'runDiagnostic');
   ui.createMenu('🏦 JM Tracker')
-    .addItem('➕ Add Deal from Inbox',          'addDealFromInbox')
-    .addItem('🔄 Force Full Sync',              'fullSync_')
-    .addSeparator()
-    .addItem('💼 Rebuild Income Hub',           'setupIncomeHub')
-    .addItem('✦ Overhaul All Sheets',           'overhaulSheet')
-    .addItem('📊 Rebuild Month vs Month',       'setupMonthVsMonth')
-    .addItem('📈 Rebuild Year Over Year',       'rebuildYearOverYear')
-    .addSeparator()
-    .addItem('🔔 Send Renewal Reminders Now',   'sendRenewalReminders')
-    .addItem('⚙️  Install Triggers (run once)', 'installAllTriggers')
-    .addItem('🔧 Fix Data Issues',              'fixDataIssues_')
-    .addItem('🐛 Run Diagnostic',              'runDiagnostic')
+    .addItem('➕ Add Deal from Inbox',           'addDealFromInbox')
+    .addItem('🔄 Force Full Sync',               'fullSync_')
+    .addSubMenu(adv)
     .addToUi();
 }
 
@@ -557,13 +558,9 @@ function importCommissionReport() {
     sheet.getRange(insertRow, 13).setNumberFormat('$#,##0.00');
     sheet.getRange(insertRow, 14).setNumberFormat('$#,##0.00');
 
-    // R: Maturity Date
+    // R: Maturity Date — term (H) in years, consistent with writeDeal
     sheet.getRange(insertRow, 18)
-      .setFormula(
-        '=IF(OR(F'+r+'="",H'+r+'=""),"",EDATE(' +
-          'IFERROR(DATEVALUE(IF(ISNUMBER(F'+r+'),TEXT(F'+r+',"yyyy-mm-dd"),F'+r+')),F'+r+'),' +
-          'H'+r+'))'
-      )
+      .setFormula('=IF(AND(F'+r+'<>"",H'+r+'<>""),DATE(YEAR(F'+r+')+H'+r+',MONTH(F'+r+'),DAY(F'+r+')),"")')
       .setNumberFormat('yyyy-mm-dd');
 
     // S: Renewal Alert
@@ -857,35 +854,6 @@ function applyDaysToPayCF_(sheet) {
   sheet.setConditionalFormatRules(existing.concat(newRules));
 }
 
-// ─── setupProjectedIncome_ (private) ─────────────────────────────────────────
-
-function setupProjectedIncome_(ss, sheetName, rowNum) {
-  var sheet = ss.getSheetByName(sheetName);
-  if (!sheet) return;
-  var tCell      = sheet.getRange(rowNum, 20);
-  var hasFormula = tCell.getFormula() !== '';
-  var currentVal = String(tCell.getValue() || '').trim();
-  if (hasFormula || !currentVal) {
-    var closingVal = sheet.getRange(rowNum, 6).getValue();
-    var uVal       = sheet.getRange(rowNum, 21).getValue();
-    var hasPayDate = uVal && String(uVal).trim() !== '' && uVal !== 0;
-    tCell.clearContent()
-      .setValue(hasPayDate ? STATUS_PAID : computeInitialStatus_(closingVal))
-      .setHorizontalAlignment('center').setFontFamily('Arial').setFontSize(10);
-  }
-  applyStatusValidation_(sheet, rowNum);
-  sheet.getRange(rowNum, 21).setNumberFormat('yyyy-mm-dd');
-}
-
-function setupStatusColumn_(ss) { fixStatusColumn(); }
-
-function setupProjectedIncome() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  fixStatusColumn();
-  setupMonthVsMonth();
-  ss.toast('Projected Income setup complete.');
-}
-
 // ─── refreshDealStatuses (public) ────────────────────────────────────────────
 
 function refreshDealStatuses() {
@@ -917,7 +885,7 @@ function refreshDealStatusesSilent_() {
       var closingV = row[5];
       var currentT = String(row[19] || '').trim();
       var uVal     = row[20];
-      if (!borrower || currentT === STATUS_PAID || currentT !== STATUS_PENDING) continue;
+      if (!borrower || currentT === STATUS_PAID || currentT === STATUS_AWAITING) continue;
       var hasPayDate = uVal && String(uVal).trim() !== '' && uVal !== 0;
       if (hasPayDate || computeInitialStatus_(closingV) !== STATUS_AWAITING) continue;
       sheet.getRange(i + 4, 20).setValue(STATUS_AWAITING);
@@ -942,17 +910,6 @@ function getReminderLog_(ss) {
 }
 
 // ─── Renewal system ───────────────────────────────────────────────────────────
-
-function createRenewalTrigger() {
-  var triggers = ScriptApp.getProjectTriggers();
-  for (var i = 0; i < triggers.length; i++) {
-    if (triggers[i].getHandlerFunction() === 'sendRenewalReminders')
-      ScriptApp.deleteTrigger(triggers[i]);
-  }
-  ScriptApp.newTrigger('sendRenewalReminders')
-    .timeBased().atHour(8).everyDays(1).inTimezone('America/Toronto').create();
-  SpreadsheetApp.getActiveSpreadsheet().toast('Renewal trigger created — 8 am Toronto daily.');
-}
 
 function sendRenewalReminders() {
   refreshDealStatuses();
@@ -1015,10 +972,10 @@ function columnLetter_(n) {
 // IFERROR wraps the status comparison so broken/empty T cells are treated as
 // not-Paid (they'll appear in Awaiting/Pending, not silently dropped).
 //
-// All formulas cap ranges at row 100 (covers 97 data rows = plenty).
+// All formulas cap ranges at row 500 (covers 497 data rows — well beyond typical use).
 
 function dExpr_(sheetName, colF) {
-  var ref = "'"+sheetName+"'!"+colF+"$4:"+colF+"$100";
+  var ref = "'"+sheetName+"'!"+colF+"$4:"+colF+"$500";
   // Numeric dates (serials): use directly — avoids locale-sensitive TEXT/DATEVALUE round-trip.
   // Text dates (fallback): attempt DATEVALUE; IFERROR → 0 so empty/bad cells don't count.
   return 'IF(ISNUMBER('+ref+'),'+ref+',IFERROR(DATEVALUE('+ref+'),0))';
@@ -1027,16 +984,16 @@ function dExpr_(sheetName, colF) {
 // Status flag column helpers — use integer AB/AC/AD columns instead of emoji TRIM matching.
 // This eliminates silent failures from whitespace/encoding differences in status strings.
 function isPaid_(sheetName) {
-  return "'"+sheetName+"'!AB$4:AB$100";
+  return "'"+sheetName+"'!AB$4:AB$500";
 }
 function notPaid_(sheetName) {
-  return "(1-'"+sheetName+"'!AB$4:AB$100)";
+  return "(1-'"+sheetName+"'!AB$4:AB$500)";
 }
 function isAwaiting_(sheetName) {
-  return "'"+sheetName+"'!AC$4:AC$100";
+  return "'"+sheetName+"'!AC$4:AC$500";
 }
 function isPending_(sheetName) {
-  return "'"+sheetName+"'!AD$4:AD$100";
+  return "'"+sheetName+"'!AD$4:AD$500";
 }
 
 function mvs2025Count_(mo, status) {
@@ -1053,7 +1010,7 @@ function mvs2025Count_(mo, status) {
 function mvs2025Sum_(mo, col, status) {
   var d     = dExpr_('2025 Funded', 'F');
   var cL    = columnLetter_(col);
-  var vRef  = "'2025 Funded'!"+cL+"$4:"+cL+"$100";
+  var vRef  = "'2025 Funded'!"+cL+"$4:"+cL+"$500";
   var vals  = 'IFERROR(VALUE('+vRef+'),0)';
   var start = 'DATE(2025,'+mo+',1)';
   var end   = mo < 12 ? 'DATE(2025,'+(mo+1)+',1)' : 'DATE(2026,1,1)';
@@ -1078,7 +1035,7 @@ function mvs2026Count_(mo, status) {
 function mvs2026Sum_(mo, col, status) {
   var d     = dExpr_('2026 Funded', 'F');
   var cL    = columnLetter_(col);
-  var vRef  = "'2026 Funded'!"+cL+"$4:"+cL+"$100";
+  var vRef  = "'2026 Funded'!"+cL+"$4:"+cL+"$500";
   var vals  = 'IFERROR(VALUE('+vRef+'),0)';
   var start = 'DATE(2026,'+mo+',1)';
   var end   = mo < 12 ? 'DATE(2026,'+(mo+1)+',1)' : 'DATE(2027,1,1)';
@@ -1103,9 +1060,9 @@ function setupMvMSummaryBlock_(sheet, NAVY, GOLD) {
   var d26 = dExpr_('2026 Funded', 'F');
   var ip  = isPaid_('2026 Funded');
   var np  = notPaid_('2026 Funded');
-  var gV  = 'IFERROR(VALUE(\'2026 Funded\'!G$4:G$100),0)';
-  var nV  = 'IFERROR(VALUE(\'2026 Funded\'!N$4:N$100),0)';
-  var n25 = 'IFERROR(VALUE(\'2025 Funded\'!N$4:N$100),0)';
+  var gV  = 'IFERROR(VALUE(\'2026 Funded\'!G$4:G$500),0)';
+  var nV  = 'IFERROR(VALUE(\'2026 Funded\'!N$4:N$500),0)';
+  var n25 = 'IFERROR(VALUE(\'2025 Funded\'!N$4:N$500),0)';
 
   var awCond = isAwaiting_('2026 Funded');
   var peCond = isPending_('2026 Funded');
@@ -1205,7 +1162,10 @@ function setupMvMSummaryBlock_(sheet, NAVY, GOLD) {
     .setFontWeight('bold').setFontFamily('Arial').setFontSize(11)
     .setHorizontalAlignment('left').setVerticalAlignment('middle');
   sheet.getRange(33, 7, 1, 10).merge()
-    .setFormula('=IFERROR(LET(d,MINIFS(\'2026 Funded\'!X$4:X$100,\'2026 Funded\'!AC$4:AC$100,1,\'2026 Funded\'!X$4:X$100,">0"),IF(d>0,d,"—")),"—")')
+    .setFormula('=IFERROR(LET(d,MIN(' +
+      'MINIFS(\'2025 Funded\'!X$4:X$500,\'2025 Funded\'!AC$4:AC$500,1,\'2025 Funded\'!X$4:X$500,">0"),' +
+      'MINIFS(\'2026 Funded\'!X$4:X$500,\'2026 Funded\'!AC$4:AC$500,1,\'2026 Funded\'!X$4:X$500,">0")' +
+    '),IF(d>0,d,"—")),"—")')
     .setNumberFormat('yyyy-mm-dd')
     .setBackground(GOLD).setFontColor(NAVY)
     .setFontWeight('bold').setFontFamily('Arial').setFontSize(14)
@@ -1220,7 +1180,9 @@ function setupMvMSummaryBlock_(sheet, NAVY, GOLD) {
     .setFontWeight('bold').setFontFamily('Arial').setFontSize(11)
     .setHorizontalAlignment('left').setVerticalAlignment('middle');
   sheet.getRange(34, 7, 1, 10).merge()
-    .setFormula('=IFERROR(SUMPRODUCT(\'2026 Funded\'!AC$4:AC$100*(\'2026 Funded\'!X$4:X$100=G33)*IFERROR(VALUE(\'2026 Funded\'!N$4:N$100),0)),"—")')
+    .setFormula('=IFERROR(' +
+      'SUMPRODUCT(\'2025 Funded\'!AC$4:AC$500*(\'2025 Funded\'!X$4:X$500=G33)*IFERROR(VALUE(\'2025 Funded\'!N$4:N$500),0))' +
+      '+SUMPRODUCT(\'2026 Funded\'!AC$4:AC$500*(\'2026 Funded\'!X$4:X$500=G33)*IFERROR(VALUE(\'2026 Funded\'!N$4:N$500),0)),"—")')
     .setNumberFormat('$#,##0.00')
     .setBackground(GOLD).setFontColor(NAVY)
     .setFontWeight('bold').setFontFamily('Arial').setFontSize(14)
@@ -1388,6 +1350,15 @@ function setupMonthVsMonth() {
 //   • Rebuilds Month vs Month dashboard
 
 function overhaulSheet() {
+  var ui   = SpreadsheetApp.getUi();
+  var resp = ui.alert(
+    'Overhaul All Sheets',
+    'This will CLEAR and REBUILD both funded sheets, Month vs Month, and Year Over Year.\n\n' +
+    'Your data is safe — the rebuild reads existing rows, deduplicates, sorts by date, ' +
+    'and rewrites all formula columns cleanly.\n\nContinue?',
+    ui.ButtonSet.YES_NO
+  );
+  if (resp !== ui.Button.YES) return;
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   rebuildFundedSheet_(ss, '2025 Funded');
   rebuildFundedSheet_(ss, '2026 Funded');
@@ -1460,18 +1431,18 @@ function rebuildYearOverYear_(ss) {
   sheet.setRowHeight(3, 28);
 
   var paid = '"' + STATUS_PAID + '"';
-  var t25  = "'2025 Funded'!T$4:T$100";
-  var t26  = "'2026 Funded'!T$4:T$100";
-  var g25  = "'2025 Funded'!G$4:G$100";
-  var g26  = "'2026 Funded'!G$4:G$100";
-  var m25  = "'2025 Funded'!M$4:M$100";
-  var m26  = "'2026 Funded'!M$4:M$100";
-  var n25  = "'2025 Funded'!N$4:N$100";
-  var n26  = "'2026 Funded'!N$4:N$100";
-  var ab25 = "'2025 Funded'!AB$4:AB$100"; // IsPaid flag
-  var ab26 = "'2026 Funded'!AB$4:AB$100"; // IsPaid flag
-  var ac26 = "'2026 Funded'!AC$4:AC$100"; // IsAwaiting flag
-  var ad26 = "'2026 Funded'!AD$4:AD$100"; // IsPending flag
+  var t25  = "'2025 Funded'!T$4:T$500";
+  var t26  = "'2026 Funded'!T$4:T$500";
+  var g25  = "'2025 Funded'!G$4:G$500";
+  var g26  = "'2026 Funded'!G$4:G$500";
+  var m25  = "'2025 Funded'!M$4:M$500";
+  var m26  = "'2026 Funded'!M$4:M$500";
+  var n25  = "'2025 Funded'!N$4:N$500";
+  var n26  = "'2026 Funded'!N$4:N$500";
+  var ab25 = "'2025 Funded'!AB$4:AB$500"; // IsPaid flag
+  var ab26 = "'2026 Funded'!AB$4:AB$500"; // IsPaid flag
+  var ac26 = "'2026 Funded'!AC$4:AC$500"; // IsAwaiting flag
+  var ad26 = "'2026 Funded'!AD$4:AD$500"; // IsPending flag
   // months elapsed in 2026 (e.g. Apr 21 → 3.7)
   var pf   = '12/MAX(1,MONTH(TODAY())-1+DAY(TODAY())/DAY(EOMONTH(TODAY(),0)))';
 
@@ -1557,8 +1528,8 @@ function rebuildYearOverYear_(ss) {
     });
   sheet.setRowHeight(12, 24);
 
-  var c25 = "'2025 Funded'!C$4:C$100";
-  var c26 = "'2026 Funded'!C$4:C$100";
+  var c25 = "'2025 Funded'!C$4:C$500";
+  var c26 = "'2026 Funded'!C$4:C$500";
   ['Purchase','Refinance','Switch/Transfer','Renewal'].forEach(function(dt, i) {
     var r  = 13 + i;
     var bg = i % 2 === 0 ? '#FFFFFF' : '#F2F5FA';
@@ -1600,8 +1571,8 @@ function rebuildYearOverYear_(ss) {
     });
   sheet.setRowHeight(19, 24);
 
-  var l25 = "'2025 Funded'!L$4:L$100";
-  var l26 = "'2026 Funded'!L$4:L$100";
+  var l25 = "'2025 Funded'!L$4:L$500";
+  var l26 = "'2026 Funded'!L$4:L$500";
   [{label:'Self-sourced (90%)',val:0.9},{label:'HW Pre-Appr (40%)',val:0.4},{label:'HW Switch/Refi (35%)',val:0.35}]
     .forEach(function(st, i) {
       var r  = 20 + i;
@@ -1978,11 +1949,15 @@ function pad2_(n) { return n < 10 ? '0' + n : String(n); }
 function expectedPayDateFormula_(r) {
   var f = 'F' + r;
   var t = 'T' + r;
-  var isActive = 'OR('+t+'="'+STATUS_AWAITING+'",'+t+'="'+STATUS_PAID+'")';
-  return '=IF(OR('+f+'="",NOT('+isActive+')),"",IF(DAY('+f+')<=10,EOMONTH('+f+',0),' +
-    'IF(DAY('+f+')<=20,' +
-      'DATE(YEAR('+f+')+IF(MONTH('+f+')=12,1,0),IF(MONTH('+f+')=12,1,MONTH('+f+')+1),15),' +
-      'DATE(YEAR('+f+')+IF(MONTH('+f+')=12,1,0),IF(MONTH('+f+')=12,1,MONTH('+f+')+1),30))))';
+  var isActive  = 'OR('+t+'="'+STATUS_AWAITING+'",'+t+'="'+STATUS_PAID+'")';
+  var nxYear    = 'YEAR('+f+')+IF(MONTH('+f+')=12,1,0)';
+  var nxMo      = 'IF(MONTH('+f+')=12,1,MONTH('+f+')+1)';
+  // For days 21-31: use MIN(30th of next month, last day of next month) to handle February.
+  var day30safe = 'MIN(DATE('+nxYear+','+nxMo+',30),EOMONTH('+f+',1))';
+  return '=IF(OR('+f+'="",NOT('+isActive+')),"",'+
+    'IF(DAY('+f+')<=10,EOMONTH('+f+',0),'+
+    'IF(DAY('+f+')<=20,DATE('+nxYear+','+nxMo+',15),'+
+    day30safe+')))';
 }
 
 function parseDateVal_(v) {
@@ -2124,6 +2099,52 @@ function fixAllExpectedPayDates() {
   ss.toast('Expected Pay Dates applied to ' + fixed + ' rows. X = date, Y = days remaining (colour-coded).');
 }
 
+// ─── fixAllFlagColumns (public) ──────────────────────────────────────────────
+// Seeds AB/AC/AD (IsPaid/IsAwaiting/IsPending) formulas on ALL existing rows in
+// both funded sheets. Run this once after first deploying the flag-column update
+// to backfill deals that were added before the feature existed.
+// Uses setFormulas() batch write — fast even for 200+ rows.
+
+function fixAllFlagColumns() {
+  var ss   = SpreadsheetApp.getActiveSpreadsheet();
+  var NAVY = '#1B3A6B';
+  var fixed = 0;
+
+  ['2025 Funded', '2026 Funded'].forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+
+    var totalsRow   = findTotalsRow_(sheet);
+    var lastDataRow = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+    if (lastDataRow < 4) return;
+    var n = lastDataRow - 3;
+
+    var abF = [], acF = [], adF = [];
+    for (var rn = 4; rn <= lastDataRow; rn++) {
+      var r = String(rn);
+      abF.push(['=IF(T'+r+'="'+STATUS_PAID+'",1,0)']);
+      acF.push(['=IF(T'+r+'="'+STATUS_AWAITING+'",1,0)']);
+      adF.push(['=IF(T'+r+'="'+STATUS_PENDING+'",1,0)']);
+    }
+    sheet.getRange(4, 28, n, 1).setFormulas(abF);
+    sheet.getRange(4, 29, n, 1).setFormulas(acF);
+    sheet.getRange(4, 30, n, 1).setFormulas(adF);
+    fixed += n;
+
+    // Ensure headers and hidden state
+    sheet.getRange(2, 28, 1, 3).setValues([['IsPaid', 'IsAwaiting', 'IsPending']])
+      .setBackground(NAVY).setFontColor('#FFFFFF')
+      .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+    try { sheet.hideColumns(28, 3); } catch(e) {}
+  });
+
+  SpreadsheetApp.flush();
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    '✅ Flag columns seeded on ' + fixed + ' rows. Run 🔄 Force Full Sync to refresh all dashboards.'
+  );
+}
+
 // ─── setupIncomeHub (public) ──────────────────────────────────────────────────
 // Builds (or fully rebuilds) the "💼 Income Hub" sheet — a command-centre
 // dashboard for tracking closed income, incoming payments, and pipeline.
@@ -2148,8 +2169,24 @@ function setupIncomeHub() {
   var TEXT_DARK   = '#1A1A2E';
   var TEXT_MED    = '#4A4A6A';
 
+  // ── Preserve Annual Target across rebuilds ────────────────────────────────────
+  var savedTarget = 150000;
+  var existingHub = ss.getSheetByName(HUB);
+  if (existingHub) {
+    var lastHubRow = existingHub.getLastRow();
+    if (lastHubRow > 0) {
+      var hubVals = existingHub.getRange(1, 2, lastHubRow, 4).getValues();
+      for (var hi = 0; hi < hubVals.length; hi++) {
+        if (String(hubVals[hi][0]).indexOf('Annual Target') !== -1) {
+          var tv = parseFloat(hubVals[hi][3]); // col B + offset 3 = col E
+          if (!isNaN(tv) && tv > 0) { savedTarget = tv; break; }
+        }
+      }
+    }
+  }
+
   // ── get or create sheet ───────────────────────────────────────────────────────
-  var sheet = ss.getSheetByName(HUB);
+  var sheet = existingHub;
   if (sheet) {
     sheet.clear();
     sheet.clearConditionalFormatRules();
@@ -2224,12 +2261,12 @@ function setupIncomeHub() {
     function(r) {
       r.setFormula(
         '=IFERROR(' +
-          'SUMPRODUCT(\'2025 Funded\'!AB$4:AB$200' +
-            '*(YEAR(IF(\'2025 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2025 Funded\'!F$4:F$200))=YEAR(TODAY()))' +
-            '*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0))' +
-          '+SUMPRODUCT(\'2026 Funded\'!AB$4:AB$200' +
-            '*(YEAR(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))=YEAR(TODAY()))' +
-            '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0))' +
+          'SUMPRODUCT(\'2025 Funded\'!AB$4:AB$500' +
+            '*(YEAR(IF(\'2025 Funded\'!F$4:F$500="",DATE(1900,1,1),\'2025 Funded\'!F$4:F$500))=YEAR(TODAY()))' +
+            '*IFERROR(VALUE(\'2025 Funded\'!N$4:N$500),0))' +
+          '+SUMPRODUCT(\'2026 Funded\'!AB$4:AB$500' +
+            '*(YEAR(IF(\'2026 Funded\'!F$4:F$500="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$500))=YEAR(TODAY()))' +
+            '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$500),0))' +
         ',0)'
       ).setNumberFormat('"$"#,##0.00');
     }, GREEN, WHITE);
@@ -2239,12 +2276,12 @@ function setupIncomeHub() {
     function(r) {
       r.setFormula(
         '=IFERROR(' +
-          'SUMPRODUCT(\'2025 Funded\'!AC$4:AC$200' +
-            '*(YEAR(IF(\'2025 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2025 Funded\'!F$4:F$200))=YEAR(TODAY()))' +
-            '*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0))' +
-          '+SUMPRODUCT(\'2026 Funded\'!AC$4:AC$200' +
-            '*(YEAR(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))=YEAR(TODAY()))' +
-            '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0))' +
+          'SUMPRODUCT(\'2025 Funded\'!AC$4:AC$500' +
+            '*(YEAR(IF(\'2025 Funded\'!F$4:F$500="",DATE(1900,1,1),\'2025 Funded\'!F$4:F$500))=YEAR(TODAY()))' +
+            '*IFERROR(VALUE(\'2025 Funded\'!N$4:N$500),0))' +
+          '+SUMPRODUCT(\'2026 Funded\'!AC$4:AC$500' +
+            '*(YEAR(IF(\'2026 Funded\'!F$4:F$500="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$500))=YEAR(TODAY()))' +
+            '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$500),0))' +
         ',0)'
       ).setNumberFormat('"$"#,##0.00');
     }, GOLD, TEXT_DARK);
@@ -2254,12 +2291,12 @@ function setupIncomeHub() {
     function(r) {
       r.setFormula(
         '=IFERROR(' +
-          'SUMPRODUCT(\'2025 Funded\'!AD$4:AD$200' +
-            '*(YEAR(IF(\'2025 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2025 Funded\'!F$4:F$200))=YEAR(TODAY()))' +
-            '*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0))' +
-          '+SUMPRODUCT(\'2026 Funded\'!AD$4:AD$200' +
-            '*(YEAR(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))=YEAR(TODAY()))' +
-            '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0))' +
+          'SUMPRODUCT(\'2025 Funded\'!AD$4:AD$500' +
+            '*(YEAR(IF(\'2025 Funded\'!F$4:F$500="",DATE(1900,1,1),\'2025 Funded\'!F$4:F$500))=YEAR(TODAY()))' +
+            '*IFERROR(VALUE(\'2025 Funded\'!N$4:N$500),0))' +
+          '+SUMPRODUCT(\'2026 Funded\'!AD$4:AD$500' +
+            '*(YEAR(IF(\'2026 Funded\'!F$4:F$500="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$500))=YEAR(TODAY()))' +
+            '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$500),0))' +
         ',0)'
       ).setNumberFormat('"$"#,##0.00');
     }, BLUE, WHITE);
@@ -2275,13 +2312,13 @@ function setupIncomeHub() {
     .setFormula(
       '=IFERROR(' +
         'LET(d,MIN(' +
-          'MINIFS(\'2025 Funded\'!X$4:X$200,\'2025 Funded\'!AC$4:AC$200,1,\'2025 Funded\'!X$4:X$200,">0"),' +
-          'MINIFS(\'2026 Funded\'!X$4:X$200,\'2026 Funded\'!AC$4:AC$200,1,\'2026 Funded\'!X$4:X$200,">0")' +
+          'MINIFS(\'2025 Funded\'!X$4:X$500,\'2025 Funded\'!AC$4:AC$500,1,\'2025 Funded\'!X$4:X$500,">0"),' +
+          'MINIFS(\'2026 Funded\'!X$4:X$500,\'2026 Funded\'!AC$4:AC$500,1,\'2026 Funded\'!X$4:X$500,">0")' +
         '),' +
         'IF(d>0,' +
           'TEXT(d,"mmm d, yyyy")&CHAR(10)&"$"&TEXT(' +
-            'SUMPRODUCT(\'2025 Funded\'!AC$4:AC$200*(IFERROR(VALUE(\'2025 Funded\'!X$4:X$200),0)=d)*IFERROR(VALUE(\'2025 Funded\'!N$4:N$200),0))' +
-            '+SUMPRODUCT(\'2026 Funded\'!AC$4:AC$200*(IFERROR(VALUE(\'2026 Funded\'!X$4:X$200),0)=d)*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),' +
+            'SUMPRODUCT(\'2025 Funded\'!AC$4:AC$500*(IFERROR(VALUE(\'2025 Funded\'!X$4:X$500),0)=d)*IFERROR(VALUE(\'2025 Funded\'!N$4:N$500),0))' +
+            '+SUMPRODUCT(\'2026 Funded\'!AC$4:AC$500*(IFERROR(VALUE(\'2026 Funded\'!X$4:X$500),0)=d)*IFERROR(VALUE(\'2026 Funded\'!N$4:N$500),0)),' +
           '"#,##0.00"),' +
           '"No upcoming")' +
         '),"No upcoming")'
@@ -2328,16 +2365,16 @@ function setupIncomeHub() {
     '=IFERROR(' +
       'SORT(' +
         'FILTER(' +
-          '{\'2025 Funded\'!X$4:X$100,\'2025 Funded\'!B$4:B$100,' +
-           'IFERROR(VALUE(\'2025 Funded\'!N$4:N$100),0),' +
-           'IFERROR(VALUE(\'2025 Funded\'!X$4:X$100)-TODAY(),9999);' +
-           '\'2026 Funded\'!X$4:X$100,\'2026 Funded\'!B$4:B$100,' +
-           'IFERROR(VALUE(\'2026 Funded\'!N$4:N$100),0),' +
-           'IFERROR(VALUE(\'2026 Funded\'!X$4:X$100)-TODAY(),9999)},' +
-          '{\'2025 Funded\'!AC$4:AC$100=1;' +
-           '\'2026 Funded\'!AC$4:AC$100=1},' +
-          '{ISNUMBER(\'2025 Funded\'!X$4:X$100)*(\'2025 Funded\'!X$4:X$100>0);' +
-           'ISNUMBER(\'2026 Funded\'!X$4:X$100)*(\'2026 Funded\'!X$4:X$100>0)}' +
+          '{\'2025 Funded\'!X$4:X$500,\'2025 Funded\'!B$4:B$500,' +
+           'IFERROR(VALUE(\'2025 Funded\'!N$4:N$500),0),' +
+           'IFERROR(VALUE(\'2025 Funded\'!X$4:X$500)-TODAY(),9999);' +
+           '\'2026 Funded\'!X$4:X$500,\'2026 Funded\'!B$4:B$500,' +
+           'IFERROR(VALUE(\'2026 Funded\'!N$4:N$500),0),' +
+           'IFERROR(VALUE(\'2026 Funded\'!X$4:X$500)-TODAY(),9999)},' +
+          '{\'2025 Funded\'!AC$4:AC$500=1;' +
+           '\'2026 Funded\'!AC$4:AC$500=1},' +
+          '{ISNUMBER(\'2025 Funded\'!X$4:X$500)*(\'2025 Funded\'!X$4:X$500>0);' +
+           'ISNUMBER(\'2026 Funded\'!X$4:X$500)*(\'2026 Funded\'!X$4:X$500>0)}' +
         '),' +
         '1,TRUE' +  // sort by date column ascending
       '),' +
@@ -2422,26 +2459,26 @@ function setupIncomeHub() {
     // SUMPRODUCT for each status in 2026 Funded only (2026 YOY sheet)
     var paidFormula =
       '=IFERROR(SUMPRODUCT(' +
-        '\'2026 Funded\'!AB$4:AB$200' +
-        '*(MONTH(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))='+m+')' +
-        '*(YEAR(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))=2026)' +
-        '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),0)';
+        '\'2026 Funded\'!AB$4:AB$500' +
+        '*(MONTH(IF(\'2026 Funded\'!F$4:F$500="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$500))='+m+')' +
+        '*(YEAR(IF(\'2026 Funded\'!F$4:F$500="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$500))=2026)' +
+        '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$500),0)),0)';
 
     var awaitFormula =
       '=IFERROR(SUMPRODUCT(' +
-        '\'2026 Funded\'!AC$4:AC$200' +
-        '*(MONTH(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))='+m+')' +
-        '*(YEAR(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))=2026)' +
-        '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),0)';
+        '\'2026 Funded\'!AC$4:AC$500' +
+        '*(MONTH(IF(\'2026 Funded\'!F$4:F$500="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$500))='+m+')' +
+        '*(YEAR(IF(\'2026 Funded\'!F$4:F$500="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$500))=2026)' +
+        '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$500),0)),0)';
 
     var pendFormula =
       '=IFERROR(SUMPRODUCT(' +
-        '\'2026 Funded\'!AD$4:AD$200' +
-        '*(MONTH(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))='+m+')' +
-        '*(YEAR(IF(\'2026 Funded\'!F$4:F$200="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$200))=2026)' +
-        '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0)),0)';
+        '\'2026 Funded\'!AD$4:AD$500' +
+        '*(MONTH(IF(\'2026 Funded\'!F$4:F$500="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$500))='+m+')' +
+        '*(YEAR(IF(\'2026 Funded\'!F$4:F$500="",DATE(1900,1,1),\'2026 Funded\'!F$4:F$500))=2026)' +
+        '*IFERROR(VALUE(\'2026 Funded\'!N$4:N$500),0)),0)';
 
-    var isCurrentMonth = (m === new Date().getMonth() + 1);
+    var isCurrentMonth = (m === parseInt(Utilities.formatDate(new Date(), 'America/Toronto', 'M')));
     var rowBg = isCurrentMonth ? GOLD_LIGHT : (m % 2 === 0 ? WHITE : LIGHT_GREY);
 
     sheet.setRowHeight(monthRow, 22);
@@ -2527,7 +2564,7 @@ function setupIncomeHub() {
     .setFontFamily('Arial').setFontSize(10)
     .setHorizontalAlignment('left').setVerticalAlignment('middle');
   sheet.getRange(tRow, 5)
-    .setValue(150000)
+    .setValue(savedTarget)
     .setBackground(GOLD_LIGHT).setFontColor(TEXT_DARK)
     .setNumberFormat('"$"#,##0').setFontFamily('Arial Black').setFontSize(13).setFontWeight('bold')
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
@@ -2591,30 +2628,30 @@ function setupIncomeHub() {
 
   var metrics = [
     ['Avg Commission / Deal',
-      '=IFERROR(SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)<>"")*IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),0))/' +
-        'SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)<>"")*ISNUMBER(IFERROR(VALUE(\'2026 Funded\'!N$4:N$200),FALSE))),0)',
+      '=IFERROR(SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$500)<>"")*IFERROR(VALUE(\'2026 Funded\'!N$4:N$500),0))/' +
+        'SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$500)<>"")*ISNUMBER(IFERROR(VALUE(\'2026 Funded\'!N$4:N$500),FALSE))),0)',
       '"$"#,##0.00'],
     ['Avg Deal Size (Loan)',
-      '=IFERROR(SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)<>"")*IFERROR(VALUE(\'2026 Funded\'!G$4:G$200),0))/' +
-        'SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$200)<>"")*ISNUMBER(IFERROR(VALUE(\'2026 Funded\'!G$4:G$200),FALSE))),0)',
+      '=IFERROR(SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$500)<>"")*IFERROR(VALUE(\'2026 Funded\'!G$4:G$500),0))/' +
+        'SUMPRODUCT((TRIM(\'2026 Funded\'!T$4:T$500)<>"")*ISNUMBER(IFERROR(VALUE(\'2026 Funded\'!G$4:G$500),FALSE))),0)',
       '"$"#,##0'],
     ['Largest Commission',
-      '=IFERROR(MAX(\'2026 Funded\'!N$4:N$200),0)',
+      '=IFERROR(MAX(\'2026 Funded\'!N$4:N$500),0)',
       '"$"#,##0.00'],
     ['Total Deals (all statuses)',
-      '=IFERROR(COUNTA(\'2026 Funded\'!B$4:B$200),0)',
+      '=IFERROR(COUNTA(\'2026 Funded\'!B$4:B$500),0)',
       '0'],
     ['Deals — ✅ Paid',
-      '=IFERROR(SUM(\'2026 Funded\'!AB$4:AB$200),0)',
+      '=IFERROR(SUM(\'2026 Funded\'!AB$4:AB$500),0)',
       '0'],
     ['Deals — 🔄 Awaiting',
-      '=IFERROR(SUM(\'2026 Funded\'!AC$4:AC$200),0)',
+      '=IFERROR(SUM(\'2026 Funded\'!AC$4:AC$500),0)',
       '0'],
     ['Deals — ⏳ Pipeline',
-      '=IFERROR(SUM(\'2026 Funded\'!AD$4:AD$200),0)',
+      '=IFERROR(SUM(\'2026 Funded\'!AD$4:AD$500),0)',
       '0'],
     ['Self-Sourced Deals',
-      '=IFERROR(COUNTIF(\'2026 Funded\'!D$4:D$200,"Self"),0)',
+      '=IFERROR(COUNTIF(\'2026 Funded\'!D$4:D$500,"Self"),0)',
       '0'],
   ];
 
