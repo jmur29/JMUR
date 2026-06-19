@@ -13,14 +13,17 @@ var STATUS_PAID     = '✅ Paid';
 // ─── Menu ─────────────────────────────────────────────────────────────────────
 
 function onOpen() {
-  var ui = SpreadsheetApp.getUi();
-  ui.createMenu('🏦 JM Tracker')
-    .addItem('➕ Add Deal from Inbox',        'addDealFromInbox')
-    .addItem('🔄 Force Full Resync',           'fullSync_')
-    .addItem('🔔 Send Renewal Reminders',      'sendRenewalReminders')
-    .addItem('🔍 Run Sanity Check',            'runSanityCheck')
+  SpreadsheetApp.getUi()
+    .createMenu('🏦 JM Tracker')
+    .addItem('➕ Process Inbox (all rows)',      'addDealFromInbox')
+    .addItem('🔄 Force Full Resync',              'fullSync_')
+    .addItem('📋 Refresh Today\'s Actions',       'buildTodaysActions_')
+    .addItem('💎 Refresh Client Value',           'buildClientValueTab')
+    .addItem('🤝 Refresh Referral Partners',      'buildReferralPartnersTab')
+    .addItem('🔔 Send Renewal Reminders Now',     'sendRenewalReminders')
+    .addItem('🔍 Run Sanity Check',               'runSanityCheck')
     .addSeparator()
-    .addItem('⚙️  Install Triggers (run once)', 'installAllTriggers')
+    .addItem('⚙️  Install Triggers (run once)',   'installAllTriggers')
     .addToUi();
 }
 
@@ -44,8 +47,8 @@ function onEdit(e) {
 
   // Return immediately for formula columns — writing back to these fires onEdit
   // again; ignoring them here breaks the recursion.
-  // 12=L(Split) 13=M 14=N 18=R 19=S 24=X 25=Y 28=AB(IsPaid) 29=AC(IsAwaiting) 30=AD(IsPending)
-  var FORMULA_COLS = {12:1, 13:1, 14:1, 18:1, 19:1, 24:1, 25:1, 28:1, 29:1, 30:1};
+  // 12=L(Split) 13=M 14=N 18=R 19=S 24=X 25=Y 28=AB(IsPaid) 29=AC(IsAwaiting) 30=AD(IsPending) 31=AE(HealthFlag)
+  var FORMULA_COLS = {12:1, 13:1, 14:1, 18:1, 19:1, 24:1, 25:1, 28:1, 29:1, 30:1, 31:1};
   if (FORMULA_COLS[col]) return;
 
   // Nothing to do if borrower (col B) is empty
@@ -201,6 +204,7 @@ function onEditHandler(e) {
 function onOpenHandler() {
   try { refreshDealStatusesSilent_(); } catch(e) { logError_('onOpenHandler:refresh', e); }
   try { updateIncomeHub_(); }           catch(e) { logError_('onOpenHandler:hub', e); }
+  try { buildTodaysActions_(); }        catch(e) { logError_('onOpenHandler:actions', e); }
 }
 
 // ─── fullSync_ ────────────────────────────────────────────────────────────────
@@ -210,6 +214,10 @@ function fullSync_() {
     refreshDealStatusesSilent_();
     updateAllTotalsRows_();
     updateIncomeHub_();
+    flagAnomalies_();
+    buildClientValueTab();
+    buildReferralPartnersTab();
+    buildTodaysActions_();
     SpreadsheetApp.flush();
     SpreadsheetApp.getActiveSpreadsheet().toast('✅ Full sync complete.');
   } catch(e) {
@@ -447,9 +455,10 @@ function addDealFromInbox() {
   }
   if (added > 0) inbox.getRange(3, 1, lastRow - 2, 17).clearContent();
   if (errorMsgs.length) Logger.log('Inbox errors:\n' + errorMsgs.join('\n'));
+  if (added > 0) try { fullSync_(); } catch(e) { logError_('addDealFromInbox:fullSync', e); }
   ss.toast(
     added + ' deal(s) added' +
-    (errors > 0 ? ', ' + errors + ' skipped — check View → Logs for details.' : '.')
+    (errors > 0 ? ', ' + errors + ' skipped — check View → Logs for details.' : '. Sync complete.')
   );
 }
 
@@ -1758,6 +1767,25 @@ function rebuildFundedSheet_(ss, sheetName) {
   });
   var n = deduped.length;
 
+  // ── 2b. Preserve AG (col 33 = Referral Partner) values before clear ───────
+  // Keyed by borrowerLow|closingStr so they survive dedup/sort.
+  var agPreserved = {};
+  if (lastRow >= 4) {
+    var existAG = sheet.getRange(4, 33, lastRow - 3, 1).getValues();
+    var existBF = sheet.getRange(4, 2, lastRow - 3, 5).getValues(); // cols B-F
+    for (var ai = 0; ai < existBF.length; ai++) {
+      var agVal = existAG[ai][0];
+      if (!agVal) continue;
+      var agB = String(existBF[ai][0] || '').trim().toLowerCase();
+      if (!agB) continue;
+      var agCl = existBF[ai][4]; // col F (index 4 within B-F)
+      var agClStr = agCl instanceof Date
+        ? agCl.getFullYear() + '-' + pad2_(agCl.getMonth() + 1) + '-' + pad2_(agCl.getDate())
+        : String(agCl || '').trim();
+      agPreserved[agB + '|' + agClStr] = agVal;
+    }
+  }
+
   // ── 3. Clear sheet ────────────────────────────────────────────────────────
   sheet.clear();
   sheet.clearNotes();
@@ -1786,6 +1814,11 @@ function rebuildFundedSheet_(ss, sheetName) {
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
   // AB/AC/AD (28-30): Integer flag columns — hidden, used by cross-sheet SUMPRODUCT formulas
   sheet.getRange(2, 28, 1, 3).setValues([['IsPaid', 'IsAwaiting', 'IsPending']])
+    .setBackground(NAVY).setFontColor('#FFFFFF')
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  // AE/AF/AG (31-33): Intelligence columns — Health Flag, Anomaly Check, Referral Partner
+  sheet.getRange(2, 31, 1, 3).setValues([['Health Flag', 'Anomaly Check', 'Referral Partner']])
     .setBackground(NAVY).setFontColor('#FFFFFF')
     .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
@@ -1900,6 +1933,9 @@ function rebuildFundedSheet_(ss, sheetName) {
       sheet.getRange(rn, 29).setFormula('=IF(T'+r+'="'+STATUS_AWAITING+'",1,0)');
       sheet.getRange(rn, 30).setFormula('=IF(T'+r+'="'+STATUS_PENDING+'",1,0)');
 
+      // AE: Health Flag — live formula reading AB/AC/AD + AF (anomaly) + F/X dates
+      sheet.getRange(rn, 31).setFormula(healthFlagFormula_(r));
+
     }
 
     // Alternating row colours (batch setBackgrounds)
@@ -1927,6 +1963,21 @@ function rebuildFundedSheet_(ss, sheetName) {
 
     // Row heights
     for (var rh = 4; rh < 4 + n; rh++) sheet.setRowHeight(rh, 22);
+
+    // Write back preserved AG (Referral Partner) values
+    var agRestore = deduped.map(function(d) {
+      var b  = String(d[1] || '').trim().toLowerCase();
+      var cl = d[5];
+      var clStr = cl instanceof Date
+        ? cl.getFullYear() + '-' + pad2_(cl.getMonth() + 1) + '-' + pad2_(cl.getDate())
+        : String(cl || '').trim();
+      return [agPreserved[b + '|' + clStr] || ''];
+    });
+    sheet.getRange(4, 33, n, 1).setValues(agRestore);
+
+    // Conditional formatting for intelligence columns
+    applyHealthFlagCF_(sheet, n);
+    applyAnomalyCF_(sheet, n);
   }
 
   // ── 8. TOTALS row ─────────────────────────────────────────────────────────
@@ -2009,7 +2060,10 @@ function rebuildFundedSheet_(ss, sheetName) {
   // ── 9. Column widths ──────────────────────────────────────────────────────
   var widths = [36, 165, 95, 80, 115, 100, 110, 52, 90, 68, 58, 55, 112, 112, 120, 140, 105, 100, 78, 135, 100, 50, 50, 125, 78];
   for (var ci = 0; ci < widths.length; ci++) sheet.setColumnWidth(ci + 1, widths[ci]);
-  sheet.setColumnWidth(27, 90); // AA: Split Override
+  sheet.setColumnWidth(27, 90);  // AA: Split Override
+  sheet.setColumnWidth(31, 105); // AE: Health Flag
+  sheet.setColumnWidth(32, 155); // AF: Anomaly Check
+  sheet.setColumnWidth(33, 145); // AG: Referral Partner
 
   // ── 10. Freeze rows 1–2 and cols A–B; hide Email + Phone ─────────────────
   sheet.setFrozenRows(2);
@@ -2695,6 +2749,83 @@ function setupIncomeHub() {
   tRow++;
 
   // ══════════════════════════════════════════════════════════════════════════════
+  // SECTION 5b — WHAT IT TAKES TO HIT GOAL
+  // ══════════════════════════════════════════════════════════════════════════════
+  sheet.setRowHeight(tRow, 30);
+  sheet.getRange(tRow, 2, 1, 7).merge()
+    .setValue('  WHAT IT TAKES TO HIT GOAL')
+    .setBackground(GREEN).setFontColor(WHITE)
+    .setFontFamily('Arial').setFontSize(11).setFontWeight('bold')
+    .setHorizontalAlignment('left').setVerticalAlignment('middle');
+  tRow++;
+
+  var paidExpr    = 'C' + totalsRef2;
+  var remainExpr  = 'MAX(0,' + targetCell + '-' + paidExpr + ')';
+  var monthsRemEx = 'MAX(1,12-MONTH(TODAY()))';
+  var reqMoExpr   = 'IFERROR((' + remainExpr + ')/(' + monthsRemEx + '),0)';
+  var avgSelfFml  = 'IFERROR(AVERAGEIFS(\'2026 Funded\'!N$4:N$500,\'2026 Funded\'!D$4:D$500,"Self*",\'2026 Funded\'!N$4:N$500,">"&0),0)';
+  var paceExpr    = 'IFERROR(' + paidExpr + '/MAX(1,MONTH(TODAY()))*12,0)';
+
+  var goalRows = [
+    ['Remaining to Target',          '=' + remainExpr,                          '"$"#,##0',  GREEN_LIGHT, '#1E6B3C'],
+    ['Months Remaining in Year',     '=' + monthsRemEx,                         '0" months"',GREEN_LIGHT, '#1E6B3C'],
+    ['Required Per Month',           '=' + reqMoExpr,                           '"$"#,##0',  GOLD_LIGHT,  '#7A5000'],
+    ['Avg Self-Sourced Deal Comm',   '=' + avgSelfFml,                           '"$"#,##0',  GOLD_LIGHT,  '#7A5000'],
+    ['Self-Sourced Deals / Month',   '=IFERROR((' + reqMoExpr + ')/(' + avgSelfFml + '),0)', '0.0',       BLUE_LIGHT,  BLUE],
+    ['Annualized Pace',              '=' + paceExpr,                             '"$"#,##0',  LIGHT_GREY,  TEXT_DARK],
+  ];
+
+  goalRows.forEach(function(gr) {
+    sheet.setRowHeight(tRow, 24);
+    sheet.getRange(tRow, 2, 1, 3).merge()
+      .setValue(gr[0])
+      .setBackground(gr[3]).setFontColor(gr[4])
+      .setFontFamily('Arial').setFontSize(10)
+      .setHorizontalAlignment('left').setVerticalAlignment('middle');
+    sheet.getRange(tRow, 5, 1, 3).merge()
+      .setFormula(gr[1])
+      .setBackground(gr[3]).setFontColor(gr[4])
+      .setNumberFormat(gr[2]).setFontFamily('Arial Black').setFontSize(11)
+      .setHorizontalAlignment('right').setVerticalAlignment('middle');
+    tRow++;
+  });
+
+  // Narrative sentence with on-track / needs-acceleration logic
+  sheet.setRowHeight(tRow, 30);
+  var narrativeFml =
+    '=IFERROR(' +
+      'IF((' + paceExpr + ')>=' + targetCell + ',' +
+        '"✅ On track — annualized pace $"&TEXT(' + paceExpr + ',"#,##0")&" vs $"&TEXT(' + targetCell + ',"#,##0")&" goal",' +
+        '"⚡ Need to accelerate — pace $"&TEXT(' + paceExpr + ',"#,##0")&" · need $"&TEXT(' + reqMoExpr + ',"#,##0")&"/mo more"' +
+      '),' +
+    '"—")';
+  var narrativeRange = sheet.getRange(tRow, 2, 1, 7);
+  narrativeRange.merge()
+    .setFormula(narrativeFml)
+    .setBackground(BLUE_LIGHT).setFontColor(BLUE)
+    .setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle')
+    .setWrap(true);
+  // Traffic-light CF: green = on track, red = behind
+  var goalCFRules = sheet.getConditionalFormatRules().concat([
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=(' + paceExpr + ')>=' + targetCell)
+      .setBackground(GREEN_LIGHT).setFontColor('#1E6B3C')
+      .setRanges([narrativeRange]).build(),
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=(' + paceExpr + ')<' + targetCell)
+      .setBackground('#FFCCCC').setFontColor('#9C0006')
+      .setRanges([narrativeRange]).build(),
+  ]);
+  sheet.setConditionalFormatRules(goalCFRules);
+  tRow++;
+
+  // spacer
+  sheet.setRowHeight(tRow, 10);
+  sheet.getRange(tRow, 2, 1, 7).merge().setBackground(NAVY);
+  tRow++;
+
+  // ══════════════════════════════════════════════════════════════════════════════
   // SECTION 6 — DEAL METRICS
   // ══════════════════════════════════════════════════════════════════════════════
   var metricsStart = tRow;
@@ -3091,4 +3222,503 @@ function formatAllSheets() {
     applyStatusCF_(sheet);
   });
   ss.toast('All sheets formatted.');
+}
+
+// ─── healthFlagFormula_ ───────────────────────────────────────────────────────
+// AE column live formula:
+//   Paid  → 🟢 Healthy (unless AF has an anomaly warning → 🔴 Flag)
+//   Awaiting → 🟡 Check (if expectedPay > 60d overdue → 🔴 Flag)
+//   Pending  → ⏳ Normal (if closing + 90d has passed → 🔴 Flag = stale)
+function healthFlagFormula_(r) {
+  var ab = 'AB'+r, ac = 'AC'+r, ad = 'AD'+r;
+  var af = 'AF'+r, f  = 'F'+r,  x  = 'X'+r;
+  return (
+    '=IF('+ab+'=1,IF('+af+'<>"","🔴 Flag","🟢 Healthy"),' +
+    'IF('+ac+'=1,IF(AND('+x+'<>"",'+x+'-TODAY()>60),"🔴 Flag","🟡 Check"),' +
+    'IF('+ad+'=1,IF(AND('+f+'<>"",'+f+'+90<TODAY()),"🔴 Flag","⏳ Normal"),"")))'
+  );
+}
+
+// ─── applyHealthFlagCF_ ───────────────────────────────────────────────────────
+function applyHealthFlagCF_(sheet, n) {
+  if (!n || n < 1) return;
+  var cfRange = sheet.getRange(4, 31, n, 1);
+  var existing = sheet.getConditionalFormatRules().filter(function(rule) {
+    return rule.getRanges().every(function(rng) { return rng.getColumn() !== 31; });
+  });
+  sheet.setConditionalFormatRules(existing.concat([
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenTextContains('🟢 Healthy')
+      .setBackground('#C6EFCE').setFontColor('#276221')
+      .setRanges([cfRange]).build(),
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenTextContains('🟡 Check')
+      .setBackground('#FFEB9C').setFontColor('#7A5000')
+      .setRanges([cfRange]).build(),
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenTextContains('🔴 Flag')
+      .setBackground('#FFCCCC').setFontColor('#9C0006')
+      .setRanges([cfRange]).build(),
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenTextContains('⏳ Normal')
+      .setBackground('#E8F4FD').setFontColor('#1F4E79')
+      .setRanges([cfRange]).build(),
+  ]));
+}
+
+// ─── applyAnomalyCF_ ─────────────────────────────────────────────────────────
+function applyAnomalyCF_(sheet, n) {
+  if (!n || n < 1) return;
+  var cfRange = sheet.getRange(4, 32, n, 1);
+  var existing = sheet.getConditionalFormatRules().filter(function(rule) {
+    return rule.getRanges().every(function(rng) { return rng.getColumn() !== 32; });
+  });
+  sheet.setConditionalFormatRules(existing.concat([
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenTextStartsWith('⚠️')
+      .setBackground('#FFF2CC').setFontColor('#7A5000')
+      .setRanges([cfRange]).build(),
+  ]));
+}
+
+// ─── flagAnomalies_ ───────────────────────────────────────────────────────────
+// Computes avg BPS per deal Type across both funded sheets.
+// Any deal where |BPS - typeAvg| / typeAvg > 40% gets a warning written to AF (col 32).
+function flagAnomalies_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Pass 1: collect BPS values grouped by normalised Type
+  var typeBPS = {};
+  ['2025 Funded', '2026 Funded'].forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    var totalsRow = findTotalsRow_(sheet);
+    var lastData  = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+    if (lastData < 4) return;
+    var data = sheet.getRange(4, 1, lastData - 3, 11).getValues(); // cols A-K
+    data.forEach(function(row) {
+      var borrower = String(row[1] || '').trim();
+      var type     = String(row[2] || '').trim().toLowerCase();
+      var bps      = parseFloat(row[10]);
+      if (!borrower || !type || isNaN(bps) || bps <= 0) return;
+      if (!typeBPS[type]) typeBPS[type] = [];
+      typeBPS[type].push(bps);
+    });
+  });
+
+  // Compute per-type averages
+  var typeAvg = {};
+  Object.keys(typeBPS).forEach(function(type) {
+    var vals = typeBPS[type];
+    typeAvg[type] = vals.reduce(function(s, v) { return s + v; }, 0) / vals.length;
+  });
+
+  // Pass 2: write AF (col 32) anomaly flag per deal
+  ['2025 Funded', '2026 Funded'].forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    var totalsRow = findTotalsRow_(sheet);
+    var lastData  = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+    if (lastData < 4) return;
+    var n    = lastData - 3;
+    var data = sheet.getRange(4, 1, n, 11).getValues();
+    var afVals = data.map(function(row) {
+      var borrower = String(row[1] || '').trim();
+      var type     = String(row[2] || '').trim().toLowerCase();
+      var bps      = parseFloat(row[10]);
+      if (!borrower || !type || isNaN(bps) || bps <= 0) return [''];
+      var avg = typeAvg[type];
+      if (!avg || avg <= 0) return [''];
+      if (Math.abs(bps - avg) / avg > 0.40) {
+        return ['⚠️ BPS ' + Math.round(bps) + ' vs avg ' + Math.round(avg)];
+      }
+      return [''];
+    });
+    sheet.getRange(4, 32, n, 1).setValues(afVals);
+  });
+}
+
+// ─── normalizeClientName_ ─────────────────────────────────────────────────────
+// Returns "LastName, F" for household-level grouping.
+// Handles "John Smith" → "Smith, J" and "Smith, John" → "Smith, J"
+function normalizeClientName_(name) {
+  if (!name) return '';
+  name = name.trim();
+  if (name.indexOf(',') !== -1) {
+    var parts = name.split(',');
+    var last  = parts[0].trim();
+    var first = (parts[1] || '').trim();
+    return last + (first ? ', ' + first[0].toUpperCase() : '');
+  }
+  var words = name.trim().split(/\s+/);
+  if (words.length === 1) return words[0];
+  return words[words.length - 1] + ', ' + words[0][0].toUpperCase();
+}
+
+// ─── buildClientValueTab ──────────────────────────────────────────────────────
+function buildClientValueTab() {
+  var ss   = SpreadsheetApp.getActiveSpreadsheet();
+  var NAVY = '#1B3A6B';
+  var GOLD = '#C9A84C';
+  var TAB  = '💎 Client Value';
+
+  var clients = {};
+  ['2025 Funded', '2026 Funded'].forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    var totalsRow = findTotalsRow_(sheet);
+    var lastData  = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+    if (lastData < 4) return;
+    var data = sheet.getRange(4, 1, lastData - 3, 14).getValues(); // A-N
+    data.forEach(function(row) {
+      var borrower = String(row[1] || '').trim();
+      if (!borrower) return;
+      var key  = normalizeClientName_(borrower);
+      var comm = parseFloat(row[13]) || 0;
+      var d    = parseDateVal_(row[5]);
+      if (!clients[key]) clients[key] = { displayName: borrower, deals: 0, totalComm: 0, firstClose: null, lastClose: null };
+      clients[key].deals++;
+      clients[key].totalComm += comm;
+      if (d instanceof Date && !isNaN(d)) {
+        if (!clients[key].firstClose || d < clients[key].firstClose) clients[key].firstClose = d;
+        if (!clients[key].lastClose  || d > clients[key].lastClose)  clients[key].lastClose  = d;
+      }
+    });
+  });
+
+  var rows = Object.keys(clients).map(function(k) { return clients[k]; });
+  rows.sort(function(a, b) { return b.totalComm - a.totalComm; });
+
+  var sheet = ss.getSheetByName(TAB);
+  if (!sheet) sheet = ss.insertSheet(TAB);
+  else sheet.clear();
+  sheet.setTabColor('#A8D8EA');
+
+  sheet.getRange(1, 1, 1, 6).merge()
+    .setValue('💎 CLIENT LIFETIME VALUE')
+    .setBackground(NAVY).setFontColor(GOLD)
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(14)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 36);
+
+  sheet.getRange(2, 1, 1, 6).merge()
+    .setValue('Built: ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'MMMM d, yyyy'))
+    .setBackground(NAVY).setFontColor('#8899BB').setFontStyle('italic').setFontFamily('Arial').setFontSize(9)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(2, 20);
+
+  sheet.getRange(3, 1, 1, 6).setValues([['Client', 'Deals', 'Total Commission', 'Avg Commission', 'First Deal', 'Last Deal']])
+    .setBackground('#2C5F9E').setFontColor('#FFFFFF')
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(3, 26);
+
+  if (rows.length > 0) {
+    var tz = Session.getScriptTimeZone();
+    var data = rows.map(function(c) {
+      return [
+        c.displayName,
+        c.deals,
+        c.totalComm,
+        c.deals > 0 ? c.totalComm / c.deals : 0,
+        c.firstClose ? Utilities.formatDate(c.firstClose, tz, 'yyyy-MM-dd') : '',
+        c.lastClose  ? Utilities.formatDate(c.lastClose,  tz, 'yyyy-MM-dd') : '',
+      ];
+    });
+    sheet.getRange(4, 1, rows.length, 6).setValues(data)
+      .setFontFamily('Arial').setFontSize(10).setVerticalAlignment('middle');
+    sheet.getRange(4, 3, rows.length, 2).setNumberFormat('"$"#,##0.00');
+    sheet.getRange(4, 2, rows.length, 1).setHorizontalAlignment('center');
+    sheet.getRange(4, 3, rows.length, 2).setHorizontalAlignment('right');
+    for (var i = 0; i < rows.length; i++) {
+      var bg = i % 2 === 0 ? '#FFFFFF' : '#F2F5FA';
+      sheet.getRange(4 + i, 1, 1, 6).setBackground(bg);
+      sheet.setRowHeight(4 + i, 22);
+      if (rows[i].deals > 1) {
+        sheet.getRange(4 + i, 1).setFontWeight('bold').setFontColor('#9C6500');
+        sheet.getRange(4 + i, 2).setFontWeight('bold').setFontColor('#9C6500');
+      }
+    }
+  }
+
+  [180, 60, 140, 140, 100, 100].forEach(function(w, i) { sheet.setColumnWidth(i + 1, w); });
+  sheet.setFrozenRows(3);
+  SpreadsheetApp.flush();
+}
+
+// ─── backfillReferralPartners_ ────────────────────────────────────────────────
+// Scans col O (Notes) for known referral partner names; writes to AG (col 33).
+// Non-destructive: skips any row where AG is already set.
+function backfillReferralPartners_() {
+  var ss       = SpreadsheetApp.getActiveSpreadsheet();
+  var PARTNERS = ['Chad Burrows', 'Mary Rombis', 'Melissa Thompson'];
+  ['2025 Funded', '2026 Funded'].forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    var totalsRow = findTotalsRow_(sheet);
+    var lastData  = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+    if (lastData < 4) return;
+    var n       = lastData - 3;
+    var notes   = sheet.getRange(4, 15, n, 1).getValues(); // col O
+    var agVals  = sheet.getRange(4, 33, n, 1).getValues(); // col AG
+    var updated = false;
+    for (var i = 0; i < n; i++) {
+      if (String(agVals[i][0] || '').trim()) continue; // already tagged
+      var note = String(notes[i][0] || '').toLowerCase();
+      for (var p = 0; p < PARTNERS.length; p++) {
+        if (note.indexOf(PARTNERS[p].toLowerCase()) !== -1) {
+          agVals[i][0] = PARTNERS[p];
+          updated = true;
+          break;
+        }
+      }
+    }
+    if (updated) sheet.getRange(4, 33, n, 1).setValues(agVals);
+  });
+}
+
+// ─── buildReferralPartnersTab ─────────────────────────────────────────────────
+function buildReferralPartnersTab() {
+  var ss   = SpreadsheetApp.getActiveSpreadsheet();
+  var NAVY = '#1B3A6B';
+  var GOLD = '#C9A84C';
+  var TAB  = '🤝 Referral Partners';
+
+  try { backfillReferralPartners_(); } catch(e) { logError_('buildReferralPartnersTab:backfill', e); }
+
+  var partners = {};
+  ['2025 Funded', '2026 Funded'].forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    var totalsRow = findTotalsRow_(sheet);
+    var lastData  = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+    if (lastData < 4) return;
+    var n           = lastData - 3;
+    var commData    = sheet.getRange(4, 2, n, 13).getValues(); // B-N
+    var partnerData = sheet.getRange(4, 33, n, 1).getValues(); // AG
+    for (var i = 0; i < n; i++) {
+      var borrower = String(commData[i][0] || '').trim();
+      if (!borrower) continue;
+      var partner = String(partnerData[i][0] || '').trim();
+      if (!partner) continue;
+      var comm = parseFloat(commData[i][12]) || 0; // N is index 12 within B-N
+      if (!partners[partner]) partners[partner] = { deals: 0, totalComm: 0 };
+      partners[partner].deals++;
+      partners[partner].totalComm += comm;
+    }
+  });
+
+  var rows = Object.keys(partners).map(function(k) {
+    return { name: k, deals: partners[k].deals, totalComm: partners[k].totalComm };
+  });
+  rows.sort(function(a, b) { return b.totalComm - a.totalComm; });
+
+  var sheet = ss.getSheetByName(TAB);
+  if (!sheet) sheet = ss.insertSheet(TAB);
+  else sheet.clear();
+  sheet.setTabColor('#95D5B2');
+
+  sheet.getRange(1, 1, 1, 4).merge()
+    .setValue('🤝 REFERRAL PARTNER ROI')
+    .setBackground(NAVY).setFontColor(GOLD)
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(14)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 36);
+
+  sheet.getRange(2, 1, 1, 4).merge()
+    .setValue('Built: ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'MMMM d, yyyy'))
+    .setBackground(NAVY).setFontColor('#8899BB').setFontStyle('italic').setFontFamily('Arial').setFontSize(9)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(2, 20);
+
+  sheet.getRange(3, 1, 1, 4).setValues([['Partner', 'Deals Referred', 'Total Commission', 'Avg Commission']])
+    .setBackground('#2C5F9E').setFontColor('#FFFFFF')
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(3, 26);
+
+  if (rows.length > 0) {
+    var data = rows.map(function(r) {
+      return [r.name, r.deals, r.totalComm, r.deals > 0 ? r.totalComm / r.deals : 0];
+    });
+    sheet.getRange(4, 1, rows.length, 4).setValues(data)
+      .setFontFamily('Arial').setFontSize(10).setVerticalAlignment('middle');
+    sheet.getRange(4, 3, rows.length, 2).setNumberFormat('"$"#,##0.00').setHorizontalAlignment('right');
+    sheet.getRange(4, 2, rows.length, 1).setHorizontalAlignment('center');
+    for (var i = 0; i < rows.length; i++) {
+      sheet.getRange(4 + i, 1, 1, 4).setBackground(i % 2 === 0 ? '#FFFFFF' : '#F2F5FA');
+      sheet.setRowHeight(4 + i, 22);
+    }
+  } else {
+    sheet.getRange(4, 1, 1, 4).merge()
+      .setValue('No referral partner data yet. Tag deals via col AG in the funded sheets.')
+      .setFontStyle('italic').setFontColor('#999999').setFontFamily('Arial').setFontSize(10)
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sheet.setRowHeight(4, 26);
+  }
+
+  [180, 100, 140, 140].forEach(function(w, i) { sheet.setColumnWidth(i + 1, w); });
+  sheet.setFrozenRows(3);
+  SpreadsheetApp.flush();
+}
+
+// ─── parseDate_ ──────────────────────────────────────────────────────────────
+// Safe date parsing — returns a Date or null. Handles Date objects,
+// "yyyy-MM-dd" strings, and other JS Date-parseable strings.
+function parseDate_(v) {
+  if (!v && v !== 0) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  var s = String(v).trim();
+  if (!s) return null;
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// ─── buildTodaysActions_ ─────────────────────────────────────────────────────
+// Builds the "📋 Today's Actions" tab with four action categories:
+//   1. Overdue / due commissions (Awaiting + expectedPay ≤ today)
+//   2. Renewals due within 30 days
+//   3. Stale pending deals (Pending + closing ≥ 14 days ago)
+//   4. Deals closing within the next 7 days
+function buildTodaysActions_() {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var NAVY  = '#1B3A6B';
+  var GOLD  = '#C9A84C';
+  var TAB   = '📋 Today\'s Actions';
+  var now   = new Date();
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  var actions = [];
+
+  ['2025 Funded', '2026 Funded'].forEach(function(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    var totalsRow = findTotalsRow_(sheet);
+    var lastData  = totalsRow === -1 ? sheet.getLastRow() : totalsRow - 1;
+    if (lastData < 4) return;
+    var n    = lastData - 3;
+    // Read B(0) F(4) R(16) S(17) T(18) U(19) X(22) — cols B to X = 23 cols
+    var data = sheet.getRange(4, 2, n, 23).getValues();
+
+    data.forEach(function(row) {
+      var borrower    = String(row[0]  || '').trim(); // B
+      if (!borrower) return;
+      var closing     = parseDate_(row[4]);  // F
+      var renewal     = parseDate_(row[16]); // R
+      var alert       = String(row[17] || '').trim(); // S
+      var status      = String(row[18] || '').trim(); // T
+      var expectedPay = parseDate_(row[22]); // X
+
+      // 1. Overdue or due commissions
+      if (status === STATUS_AWAITING && expectedPay) {
+        var days = Math.round((expectedPay - today) / 86400000);
+        if (days <= 0) {
+          actions.push({
+            priority: 1,
+            type: days < 0 ? '🔴 Overdue' : '🟡 Due Today',
+            borrower: borrower,
+            detail: days === 0 ? 'Commission due today' : 'Commission ' + Math.abs(days) + 'd overdue',
+            days: days,
+            sheet: sheetName,
+          });
+        }
+      }
+
+      // 2. Renewals within 30 days
+      if (alert && alert.indexOf('RENEW NOW') !== -1) {
+        var renewDays = renewal ? Math.round((renewal - today) / 86400000) : 0;
+        actions.push({
+          priority: 2,
+          type: '🔴 Renewal Due',
+          borrower: borrower,
+          detail: renewal ? 'Maturity ' + (renewDays <= 0 ? 'passed' : 'in ' + renewDays + 'd') : 'Renew now',
+          days: renewDays,
+          sheet: sheetName,
+        });
+      }
+
+      // 3. Stale pending (closing ≥ 14d ago, still Pending)
+      if (status === STATUS_PENDING && closing) {
+        var staleDays = Math.round((today - closing) / 86400000);
+        if (staleDays >= 14) {
+          actions.push({
+            priority: 3,
+            type: '⏳ Follow Up',
+            borrower: borrower,
+            detail: 'Closing was ' + staleDays + 'd ago — check status',
+            days: -staleDays,
+            sheet: sheetName,
+          });
+        }
+      }
+
+      // 4. Closing within next 7 days
+      if (status === STATUS_PENDING && closing) {
+        var closeDays = Math.round((closing - today) / 86400000);
+        if (closeDays >= 0 && closeDays <= 7) {
+          actions.push({
+            priority: 4,
+            type: '📅 Closing Soon',
+            borrower: borrower,
+            detail: closeDays === 0 ? 'Closing today' : 'Closing in ' + closeDays + 'd',
+            days: closeDays,
+            sheet: sheetName,
+          });
+        }
+      }
+    });
+  });
+
+  // Sort: priority first, then by days ascending
+  actions.sort(function(a, b) {
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    return a.days - b.days;
+  });
+
+  var sheet = ss.getSheetByName(TAB);
+  if (!sheet) sheet = ss.insertSheet(TAB);
+  else sheet.clear();
+  sheet.setTabColor('#FF6B35');
+
+  var todayStr = Utilities.formatDate(today, Session.getScriptTimeZone(), 'MMMM d, yyyy');
+  sheet.getRange(1, 1, 1, 5).merge()
+    .setValue('📋 TODAY\'S ACTIONS  —  ' + todayStr)
+    .setBackground(NAVY).setFontColor(GOLD)
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(14)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 36);
+
+  var hasActions = actions.length > 0;
+  sheet.getRange(2, 1, 1, 5).merge()
+    .setValue(hasActions ? actions.length + ' item(s) need attention' : '✅ Nothing urgent — you\'re all clear!')
+    .setBackground(hasActions ? '#FFEB9C' : '#C6EFCE')
+    .setFontColor(hasActions ? '#7A5000' : '#276221')
+    .setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(2, 26);
+
+  sheet.getRange(3, 1, 1, 5).setValues([['Action', 'Borrower', 'Detail', 'Days', 'Sheet']])
+    .setBackground('#2C5F9E').setFontColor('#FFFFFF')
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(3, 26);
+
+  if (hasActions) {
+    var tableData = actions.map(function(a) {
+      return [a.type, a.borrower, a.detail, a.days, a.sheet];
+    });
+    sheet.getRange(4, 1, actions.length, 5).setValues(tableData)
+      .setFontFamily('Arial').setFontSize(10).setVerticalAlignment('middle');
+    sheet.getRange(4, 4, actions.length, 1).setNumberFormat('0').setHorizontalAlignment('center');
+    for (var i = 0; i < actions.length; i++) {
+      sheet.getRange(4 + i, 1, 1, 5).setBackground(i % 2 === 0 ? '#FFFFFF' : '#F2F5FA');
+      sheet.setRowHeight(4 + i, 22);
+    }
+  }
+
+  [140, 165, 230, 55, 105].forEach(function(w, i) { sheet.setColumnWidth(i + 1, w); });
+  sheet.setFrozenRows(3);
+  SpreadsheetApp.flush();
 }
