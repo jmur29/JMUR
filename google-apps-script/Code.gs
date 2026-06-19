@@ -14,20 +14,13 @@ var STATUS_PAID     = '✅ Paid';
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
-  var adv = ui.createMenu('⚙️ Rebuild & Tools')
-    .addItem('💼 Rebuild Income Hub',            'setupIncomeHub')
-    .addItem('✦ Overhaul All Sheets',            'overhaulSheet')
-    .addItem('📊 Rebuild Month vs Month',        'setupMonthVsMonth')
-    .addItem('📈 Rebuild Year Over Year',        'rebuildYearOverYear')
-    .addItem('🏳 Backfill Flag Columns',         'fixAllFlagColumns')
-    .addSeparator()
-    .addItem('🔔 Send Renewal Reminders Now',    'sendRenewalReminders')
-    .addItem('⚙️  Install Triggers (run once)',  'installAllTriggers')
-    .addItem('🐛 Run Diagnostic',               'runDiagnostic');
   ui.createMenu('🏦 JM Tracker')
-    .addItem('➕ Add Deal from Inbox',           'addDealFromInbox')
-    .addItem('🔄 Force Full Sync',               'fullSync_')
-    .addSubMenu(adv)
+    .addItem('➕ Add Deal from Inbox',        'addDealFromInbox')
+    .addItem('🔄 Force Full Resync',           'fullSync_')
+    .addItem('🔔 Send Renewal Reminders',      'sendRenewalReminders')
+    .addItem('🔍 Run Sanity Check',            'runSanityCheck')
+    .addSeparator()
+    .addItem('⚙️  Install Triggers (run once)', 'installAllTriggers')
     .addToUi();
 }
 
@@ -51,8 +44,8 @@ function onEdit(e) {
 
   // Return immediately for formula columns — writing back to these fires onEdit
   // again; ignoring them here breaks the recursion.
-  // 13=M 14=N 18=R 19=S 24=X 25=Y 28=AB(IsPaid) 29=AC(IsAwaiting) 30=AD(IsPending)
-  var FORMULA_COLS = {13:1, 14:1, 18:1, 19:1, 24:1, 25:1, 28:1, 29:1, 30:1};
+  // 12=L(Split) 13=M 14=N 18=R 19=S 24=X 25=Y 28=AB(IsPaid) 29=AC(IsAwaiting) 30=AD(IsPending)
+  var FORMULA_COLS = {12:1, 13:1, 14:1, 18:1, 19:1, 24:1, 25:1, 28:1, 29:1, 30:1};
   if (FORMULA_COLS[col]) return;
 
   // Nothing to do if borrower (col B) is empty
@@ -103,6 +96,20 @@ function onEdit(e) {
       .setNumberFormat('0').setHorizontalAlignment('center');
   }
 
+  // ── Split Override (AA=27) → col L re-computed automatically via formula;
+  // also refresh M and N since N = M × L
+  if (col === 27) {
+    sheet.getRange(row, 12)
+      .setFormula(splitFormula_(r))
+      .setNumberFormat('0%');
+    sheet.getRange(row, 13)
+      .setFormula('=IF(G'+r+'="","",IFERROR(ROUND(G'+r+'*(K'+r+'/10000),2),0))')
+      .setNumberFormat('$#,##0.00');
+    sheet.getRange(row, 14)
+      .setFormula('=IF(M'+r+'="","",IFERROR(ROUND(M'+r+'*L'+r+',2),0))')
+      .setNumberFormat('$#,##0.00');
+  }
+
   // ── First entry: seed any missing formula columns when borrower is first typed
   if (col === 2) {
     if (!sheet.getRange(row, 18).getFormula())
@@ -127,6 +134,9 @@ function onEdit(e) {
       applyStatusValidation_(sheet, row);
     }
     sheet.getRange(row, 6).setNumberFormat('yyyy-mm-dd');
+    // Seed col L (Split) formula if not present — uses AA override → Settings VLOOKUP
+    if (!sheet.getRange(row, 12).getFormula())
+      sheet.getRange(row, 12).setFormula(splitFormula_(r)).setNumberFormat('0%');
     // Seed integer flag columns (AB=28 IsPaid, AC=29 IsAwaiting, AD=30 IsPending)
     // These are live formulas — auto-update when T changes, eliminate emoji matching.
     if (!sheet.getRange(row, 28).getFormula())
@@ -138,8 +148,11 @@ function onEdit(e) {
   }
 
   // ── Auto-apply number format for commonly-misformatted input columns ──────────
-  var FMT = {6:'yyyy-mm-dd', 7:'"$"#,##0.00', 10:'0.00"%"', 11:'0" bps"', 12:'0%', 21:'yyyy-mm-dd'};
+  var FMT = {6:'yyyy-mm-dd', 7:'"$"#,##0.00', 10:'0.00"%"', 11:'0" bps"', 21:'yyyy-mm-dd', 27:'0%'};
   if (FMT[col]) sheet.getRange(row, col).setNumberFormat(FMT[col]);
+
+  // ── Keep TOTALS row in sync after any data edit ──────────────────────────────
+  try { fixTotalsAndRefs_(sheet); } catch(e) {}
 }
 
 // ─── logError_ ───────────────────────────────────────────────────────────────
@@ -166,12 +179,20 @@ function installAllTriggers() {
   ScriptApp.getProjectTriggers().forEach(function(t) { ScriptApp.deleteTrigger(t); });
   var ss = SpreadsheetApp.getActive();
   ScriptApp.newTrigger('onOpenHandler').forSpreadsheet(ss).onOpen().create();
+  ScriptApp.newTrigger('onEditHandler').forSpreadsheet(ss).onEdit().create();
   ScriptApp.newTrigger('refreshDealStatuses').timeBased().everyDays(1).atHour(7)
     .inTimezone('America/Toronto').create();
   ScriptApp.newTrigger('sendRenewalReminders').timeBased().everyDays(1).atHour(8)
     .inTimezone('America/Toronto').create();
   SpreadsheetApp.getActiveSpreadsheet()
-    .toast('Triggers installed: onOpen refresh + daily 7am status + daily 8am renewals.');
+    .toast('Triggers installed: onOpen + onEdit (installable) + daily 7am status + daily 8am renewals.');
+}
+
+// ─── onEditHandler ────────────────────────────────────────────────────────────
+// Installable onEdit trigger — runs with full permissions (no 30s limit,
+// can use Session.getActiveUser()). Delegates to onEdit for all core logic.
+function onEditHandler(e) {
+  onEdit(e);
 }
 
 // ─── onOpenHandler ────────────────────────────────────────────────────────────
@@ -237,10 +258,17 @@ function fixDataIssues_() {
   }
 
   if (f25) {
-    // Rows 4-8: override Net Comm with known-correct values
-    var nets = [[2538.20], [4619.84], [4561.44], [2424.00], [6500.00]];
-    f25.getRange(4, 14, 5, 1).setValues(nets);
-    msg.push('2025 Funded: Net Comm corrected rows 4-8');
+    // Rows 4-8: prior-brokerage deals with no BPS/Amount data.
+    // Set BOTH Gross Comm and Net Comm to the known net values so that
+    // Net ≤ Gross (they're equal) and the TOTALS row is mathematically correct.
+    // These deals are 100% yours (no brokerage split) so Gross = Net.
+    var knownComm = [[2538.20], [4619.84], [4561.44], [2424.00], [6500.00]];
+    f25.getRange(4, 13, 5, 1).setValues(knownComm); // M: Gross Comm = Net
+    f25.getRange(4, 14, 5, 1).setValues(knownComm); // N: Net Comm
+    // Also set Split Override (col AA = 27) to 1.0 so formula N=M×L stays consistent
+    var splitOverrides = [[1.0],[1.0],[1.0],[1.0],[1.0]];
+    f25.getRange(4, 27, 5, 1).setValues(splitOverrides).setNumberFormat('0%');
+    msg.push('2025 Funded: Gross Comm = Net Comm set for rows 4-8 (prior-brokerage deals)');
   }
 
   SpreadsheetApp.flush();
@@ -299,14 +327,22 @@ function writeDeal(params) {
   sheet.getRange(insertRow, 1, 1, 17).setValues([[
     dealNum, borrower, dealType, source, lender,
     closing, amt, term, rateType, rate,
-    bps, split, '', '', notes,
+    bps, '', '', '', notes,   // col L = blank (formula below); M and N = blank (formula below)
     email, phone
   ]]);
+
+  // Col AA (27): Split Override — manual split from Inbox or writeDeal params
+  if (split !== '') {
+    sheet.getRange(insertRow, 27).setValue(split).setNumberFormat('0%');
+  }
+  // Col L (12): Split — live formula: AA override → Settings VLOOKUP → blank
+  sheet.getRange(insertRow, 12)
+    .setFormula(splitFormula_(r))
+    .setNumberFormat('0%');
 
   sheet.getRange(insertRow, 7 ).setNumberFormat('$#,##0.00');
   sheet.getRange(insertRow, 10).setNumberFormat('0.00"%"');
   sheet.getRange(insertRow, 11).setNumberFormat('0" bps"');
-  sheet.getRange(insertRow, 12).setNumberFormat('0%');
 
   // M: Gross Comm — always a live formula so editing BPS or Amount auto-recalculates
   sheet.getRange(insertRow, 13)
@@ -983,6 +1019,14 @@ function dExpr_(sheetName, colF) {
 
 // Status flag column helpers — use integer AB/AC/AD columns instead of emoji TRIM matching.
 // This eliminates silent failures from whitespace/encoding differences in status strings.
+// ─── splitFormula_ ────────────────────────────────────────────────────────────
+// Builds the col-L (Split%) formula for a given row reference string.
+// AA (col 27) = Split Override: if populated, that value wins.
+// Otherwise, VLOOKUP from Settings!$B$3:$C$30 keyed on Source|Type.
+function splitFormula_(r) {
+  return '=IFERROR(IF(AA'+r+'<>"",AA'+r+',IFERROR(VLOOKUP(D'+r+'&"|"&C'+r+',Settings!$B$3:$C$30,2,FALSE),"")),\"\")';
+}
+
 function isPaid_(sheetName) {
   return "'"+sheetName+"'!AB$4:AB$500";
 }
@@ -1088,7 +1132,7 @@ function setupMvMSummaryBlock_(sheet, NAVY, GOLD) {
     '⏳ Pending Close — Volume (2026)',
     '⏳ Pending Close — Comm (2026)',
     'Combined Total Comm — Full Pipeline (2026)',
-    '2025 Full Year Comm (all deals)',
+    '2025 Full Year Comm (✅ Paid only)',
     'YTD Pace vs 2025  (Paid comm only)',
   ];
   var formats = [
@@ -1110,8 +1154,10 @@ function setupMvMSummaryBlock_(sheet, NAVY, GOLD) {
     '=SUMPRODUCT('+peCond+'*'+gV+')',
     '=SUMPRODUCT('+peCond+'*'+nV+')',       // G28
     '=G22+G25+G28',                         // G29 Combined
-    '=SUMPRODUCT('+n25+')',                 // G30 2025 FY
-    '=IF(G30=0,"—",G22/G30)',              // G31 YTD Pace
+    // G30: 2025 Full Year — PAID deals only (flag column AB) so the number
+    // matches YoY and doesn't inflate the YTD Pace denominator with pipeline.
+    '=SUMPRODUCT('+isPaid_('2025 Funded')+'*'+n25+')',
+    '=IF(G30=0,"—",G22/G30)',              // G31 YTD Pace vs 2025 Paid
   ];
 
   var cfRules = [];
@@ -1229,10 +1275,9 @@ function setupMonthVsMonth() {
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
   sheet.setRowHeight(1, 48);
 
-  // Row 2: Subtitle
+  // Row 2: Subtitle — live formula so the date always reflects today
   sheet.getRange(2, 2, 1, NC).merge()
-    .setValue('Live data  •  ✅ Paid | 🔄 Awaiting | ⏳ Pending  •  Today: ' +
-      Utilities.formatDate(new Date(), 'America/Toronto', 'MMMM d, yyyy'))
+    .setFormula('="Live data  •  ✅ Paid | 🔄 Awaiting | ⏳ Pending  •  Today: "&TEXT(TODAY(),"MMMM d, yyyy")')
     .setBackground(LGOLD).setFontColor(GOLD).setFontStyle('italic')
     .setFontSize(10).setFontFamily('Arial')
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
@@ -1275,23 +1320,23 @@ function setupMonthVsMonth() {
 
     sheet.getRange(r, 2).setValue(MONTHS_[mo-1]).setFontWeight('bold').setHorizontalAlignment('left');
 
-    // C–E: 2025 Paid
-    sheet.getRange(r, 3).setFormula(mvs2025Count_(mo, STATUS_PAID)).setHorizontalAlignment('center');
+    // C–E: 2025 Paid  (C=count → '0' not currency)
+    sheet.getRange(r, 3).setFormula(mvs2025Count_(mo, STATUS_PAID)).setNumberFormat('0').setHorizontalAlignment('center');
     sheet.getRange(r, 4).setFormula(mvs2025Sum_(mo, 7, STATUS_PAID)).setNumberFormat('$#,##0');
     sheet.getRange(r, 5).setFormula(mvs2025Sum_(mo, 14, STATUS_PAID)).setNumberFormat('$#,##0.00');
 
-    // F–H: 2026 Paid
-    sheet.getRange(r, 6).setFormula(mvs2026Count_(mo, STATUS_PAID)).setHorizontalAlignment('center');
+    // F–H: 2026 Paid  (F=count)
+    sheet.getRange(r, 6).setFormula(mvs2026Count_(mo, STATUS_PAID)).setNumberFormat('0').setHorizontalAlignment('center');
     sheet.getRange(r, 7).setFormula(mvs2026Sum_(mo, 7, STATUS_PAID)).setNumberFormat('$#,##0');
     sheet.getRange(r, 8).setFormula(mvs2026Sum_(mo, 14, STATUS_PAID)).setNumberFormat('$#,##0.00');
 
-    // I–K: 2026 Awaiting (date-based)
-    sheet.getRange(r, 9).setFormula(mvs2026Count_(mo, STATUS_AWAITING)).setHorizontalAlignment('center');
+    // I–K: 2026 Awaiting  (I=count)
+    sheet.getRange(r, 9).setFormula(mvs2026Count_(mo, STATUS_AWAITING)).setNumberFormat('0').setHorizontalAlignment('center');
     sheet.getRange(r, 10).setFormula(mvs2026Sum_(mo, 7, STATUS_AWAITING)).setNumberFormat('$#,##0');
     sheet.getRange(r, 11).setFormula(mvs2026Sum_(mo, 14, STATUS_AWAITING)).setNumberFormat('$#,##0.00');
 
-    // L–N: 2026 Pending (date-based)
-    sheet.getRange(r, 12).setFormula(mvs2026Count_(mo, STATUS_PENDING)).setHorizontalAlignment('center');
+    // L–N: 2026 Pending  (L=count)
+    sheet.getRange(r, 12).setFormula(mvs2026Count_(mo, STATUS_PENDING)).setNumberFormat('0').setHorizontalAlignment('center');
     sheet.getRange(r, 13).setFormula(mvs2026Sum_(mo, 7, STATUS_PENDING)).setNumberFormat('$#,##0');
     sheet.getRange(r, 14).setFormula(mvs2026Sum_(mo, 14, STATUS_PENDING)).setNumberFormat('$#,##0.00');
 
@@ -1307,6 +1352,7 @@ function setupMonthVsMonth() {
   sheet.getRange(17, 2, 1, NC).setBackground(NAVY).setFontColor('#FFFFFF')
     .setFontWeight('bold').setFontFamily('Arial').setFontSize(9);
   sheet.getRange(17, 2).setValue('TOTALS').setHorizontalAlignment('center');
+  // totFmts index aligns with totCols: count cols (C,F,I,L) always '0', never currency
   var totCols = [3,4,5,6,7,8,9,10,11,12,13,14,15];
   var totFmts = ['0','$#,##0','$#,##0.00','0','$#,##0','$#,##0.00','0','$#,##0','$#,##0.00','0','$#,##0','$#,##0.00','$#,##0.00'];
   var totLets = ['C','D','E','F','G','H','I','J','K','L','M','N','O'];
@@ -1353,18 +1399,22 @@ function overhaulSheet() {
   var ui   = SpreadsheetApp.getUi();
   var resp = ui.alert(
     'Overhaul All Sheets',
-    'This will CLEAR and REBUILD both funded sheets, Month vs Month, and Year Over Year.\n\n' +
+    'This will CLEAR and REBUILD both funded sheets, Month vs Month, Year Over Year, ' +
+    'Settings, and Sanity Check.\n\n' +
     'Your data is safe — the rebuild reads existing rows, deduplicates, sorts by date, ' +
     'and rewrites all formula columns cleanly.\n\nContinue?',
     ui.ButtonSet.YES_NO
   );
   if (resp !== ui.Button.YES) return;
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  buildSettingsTab_(ss);
   rebuildFundedSheet_(ss, '2025 Funded');
   rebuildFundedSheet_(ss, '2026 Funded');
   setupMonthVsMonth();
   rebuildYearOverYear_(ss);
-  ss.toast('Overhaul complete — duplicates removed, all sheets rebuilt cleanly.');
+  setupIncomeHub();
+  buildSanityCheck_(ss);
+  ss.toast('Overhaul complete — duplicates removed, all sheets rebuilt cleanly. Run Sanity Check to verify.');
 }
 
 // ─── rebuildYearOverYear (public) ────────────────────────────────────────────
@@ -1530,6 +1580,9 @@ function rebuildYearOverYear_(ss) {
 
   var c25 = "'2025 Funded'!C$4:C$500";
   var c26 = "'2026 Funded'!C$4:C$500";
+  // Deal counts: ALL deals regardless of status (COUNTIF — no flag filter)
+  // Volume: ALL funded volume (no flag filter)
+  // Comm: Paid only (flag × N) so it reflects actual earned income
   ['Purchase','Refinance','Switch/Transfer','Renewal'].forEach(function(dt, i) {
     var r  = 13 + i;
     var bg = i % 2 === 0 ? '#FFFFFF' : '#F2F5FA';
@@ -1538,16 +1591,16 @@ function rebuildYearOverYear_(ss) {
     sheet.getRange(r, 2).setValue(dt).setBackground(bg)
       .setFontWeight('bold').setFontFamily('Arial').setFontSize(10).setVerticalAlignment('middle');
     sheet.getRange(r, 3)
-      .setFormula('=IFERROR(SUMPRODUCT('+ab25+'*('+c25+'='+q+')),0)').setNumberFormat('0')
+      .setFormula('=IFERROR(COUNTIF('+c25+','+q+'),0)').setNumberFormat('0')
       .setBackground(bg).setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('center').setVerticalAlignment('middle');
     sheet.getRange(r, 4)
-      .setFormula('=IFERROR(SUMPRODUCT('+ab26+'*('+c26+'='+q+')),0)').setNumberFormat('0')
+      .setFormula('=IFERROR(COUNTIF('+c26+','+q+'),0)').setNumberFormat('0')
       .setBackground(bg).setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('center').setVerticalAlignment('middle');
     sheet.getRange(r, 5)
-      .setFormula('=IFERROR(SUMPRODUCT('+ab25+'*('+c25+'='+q+')*IFERROR(VALUE('+g25+'),0)),0)').setNumberFormat('$#,##0')
+      .setFormula('=IFERROR(SUMPRODUCT(('+c25+'='+q+')*IFERROR(VALUE('+g25+'),0)),0)').setNumberFormat('$#,##0')
       .setBackground(bg).setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('right').setVerticalAlignment('middle');
     sheet.getRange(r, 6)
-      .setFormula('=IFERROR(SUMPRODUCT('+ab26+'*('+c26+'='+q+')*IFERROR(VALUE('+g26+'),0)),0)').setNumberFormat('$#,##0')
+      .setFormula('=IFERROR(SUMPRODUCT(('+c26+'='+q+')*IFERROR(VALUE('+g26+'),0)),0)').setNumberFormat('$#,##0')
       .setBackground(bg).setFontFamily('Arial').setFontSize(10).setHorizontalAlignment('right').setVerticalAlignment('middle');
     sheet.getRange(r, 7)
       .setFormula('=IFERROR(SUMPRODUCT('+ab26+'*('+c26+'='+q+')*IFERROR(VALUE('+n26+'),0)),0)').setNumberFormat('$#,##0')
@@ -1630,7 +1683,7 @@ function rebuildYearOverYear_(ss) {
     ['🔄 Comm Due (Awaiting)',      '=IFERROR(SUMPRODUCT('+ac26+'*IFERROR(VALUE('+n26+'),0)),0)',           '$#,##0.00', '#FFFDE7', '#9C6500'],
     ['⏳ Projected if Closed',      '=IFERROR(SUMPRODUCT('+ad26+'*IFERROR(VALUE('+n26+'),0)),0)',           '$#,##0.00', '#E8F4FD', '#1F4E79'],
     ['💰 Total Pipeline',           '=IFERROR(E27+E28+E29,0)',                                            '$#,##0.00', '#F5F5F5', '#333333'],
-    ['📈 2025 Full Year Comm',      '=IFERROR(SUM('+n25+'),0)',                                           '$#,##0.00', '#FFFFFF', '#333333'],
+    ['📈 2025 Full Year Comm (✅ Paid)','=IFERROR(SUMPRODUCT('+ab25+'*IFERROR(VALUE('+n25+'),0)),0)',      '$#,##0.00', '#FFFFFF', '#333333'],
     ['🔄 YTD Pace vs 2025',        '=IFERROR(IF(E31=0,"—",E27/E31),"—")',                               '0.0%',      '#FFFFFF', '#333333'],
     ['📋 Deals Pending Close',     '=IFERROR(SUM('+ad26+'),0)',                                           '0',         '#E8F4FD', '#1F4E79'],
     ['🔄 Deals Awaiting Payment',  '=IFERROR(SUM('+ac26+'),0)',                                           '0',         '#FFFDE7', '#9C6500'],
@@ -1736,6 +1789,11 @@ function rebuildFundedSheet_(ss, sheetName) {
     .setBackground(NAVY).setFontColor('#FFFFFF')
     .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  // AA (27): Split Override — editable cell that overrides auto-computed col L
+  sheet.getRange(2, 27).setValue('Split Override')
+    .setBackground(NAVY).setFontColor('#FFFFFF')
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
   sheet.setRowHeight(2, 30);
 
   // ── 6. Row 3: gold accent line ────────────────────────────────────────────
@@ -1744,7 +1802,7 @@ function rebuildFundedSheet_(ss, sheetName) {
 
   // ── 7. Write data rows ────────────────────────────────────────────────────
   if (n > 0) {
-    // Cols A–Q batch write
+    // Cols A–Q batch write — col L (split) left blank; formula fills it from col AA
     var aToQ = deduped.map(function(d, i) {
       return [
         i + 1,
@@ -1756,12 +1814,20 @@ function rebuildFundedSheet_(ss, sheetName) {
         d[8]  || '',                               // Rate Type
         d[9]  !== '' ? d[9]  : '',                 // Rate
         d[10] !== '' ? d[10] : '',                 // BPS
-        d[11] !== '' ? d[11] : '',                 // Split
+        '',                                        // L: Split — written as formula below
         '', '',                                    // Gross Comm + Net Comm set below
         d[14] || '', d[15] || '', d[16] || '',     // Notes, Email, Phone
       ];
     });
     sheet.getRange(4, 1, n, 17).setValues(aToQ);
+
+    // Col AA (27): Split Override — preserve existing split values so the col-L
+    // formula has an override to fall back on for deals where VLOOKUP can't infer it.
+    var aaVals = deduped.map(function(d) {
+      var sp = d[11]; // original col L value
+      return [sp !== '' && sp !== null && sp !== undefined ? sp : ''];
+    });
+    sheet.getRange(4, 27, n, 1).setValues(aaVals).setNumberFormat('0%');
 
     // Status (col T) and Pay Date (col U) batch write
     var VALID_STATUSES = [STATUS_PAID, STATUS_AWAITING, STATUS_PENDING];
@@ -1785,6 +1851,11 @@ function rebuildFundedSheet_(ss, sheetName) {
       var rn = i + 4;
       var r  = String(rn);
       var d  = deduped[i];
+
+      // L: Split — formula: AA override, then Settings VLOOKUP, then blank
+      sheet.getRange(rn, 12)
+        .setFormula(splitFormula_(r))
+        .setNumberFormat('0%');
 
       // M: Gross Comm — explicit value if present, else formula: Amount × (BPS/10000)
       var gc = parseFloat(d[12]);
@@ -1914,9 +1985,17 @@ function rebuildFundedSheet_(ss, sheetName) {
         .setBackground(bg).setFontColor(fc)
         .setFontWeight('bold').setFontFamily('Arial').setFontSize(10)
         .setHorizontalAlignment('left').setVerticalAlignment('middle');
-      var fml = status
-        ? '=IFERROR(SUMIF(T4:T' + lastData + ',"' + status + '",N4:N' + lastData + '),0)'
-        : '=IFERROR(SUM(N4:N' + lastData + '),0)';
+      // Use flag columns (AB/AC/AD) instead of fragile emoji SUMIF matching
+      var fml;
+      if (status === STATUS_PAID) {
+        fml = '=IFERROR(SUMPRODUCT(AB4:AB'+lastData+'*IFERROR(VALUE(N4:N'+lastData+'),0)),0)';
+      } else if (status === STATUS_AWAITING) {
+        fml = '=IFERROR(SUMPRODUCT(AC4:AC'+lastData+'*IFERROR(VALUE(N4:N'+lastData+'),0)),0)';
+      } else if (status === STATUS_PENDING) {
+        fml = '=IFERROR(SUMPRODUCT(AD4:AD'+lastData+'*IFERROR(VALUE(N4:N'+lastData+'),0)),0)';
+      } else {
+        fml = '=IFERROR(SUMPRODUCT(IFERROR(VALUE(N4:N'+lastData+'),0)),0)';
+      }
       sheet.getRange(rn, 14)
         .setFormula(fml)
         .setNumberFormat('$#,##0.00')
@@ -1930,6 +2009,7 @@ function rebuildFundedSheet_(ss, sheetName) {
   // ── 9. Column widths ──────────────────────────────────────────────────────
   var widths = [36, 165, 95, 80, 115, 100, 110, 52, 90, 68, 58, 55, 112, 112, 120, 140, 105, 100, 78, 135, 100, 50, 50, 125, 78];
   for (var ci = 0; ci < widths.length; ci++) sheet.setColumnWidth(ci + 1, widths[ci]);
+  sheet.setColumnWidth(27, 90); // AA: Split Override
 
   // ── 10. Freeze rows 1–2 and cols A–B; hide Email + Phone ─────────────────
   sheet.setFrozenRows(2);
@@ -2651,7 +2731,7 @@ function setupIncomeHub() {
       '=IFERROR(SUM(\'2026 Funded\'!AD$4:AD$500),0)',
       '0'],
     ['Self-Sourced Deals',
-      '=IFERROR(COUNTIF(\'2026 Funded\'!D$4:D$500,"Self"),0)',
+      '=IFERROR(COUNTIF(\'2026 Funded\'!D$4:D$500,"Self")+COUNTIF(\'2026 Funded\'!D$4:D$500,"Self-sourced"),0)',
       '0'],
   ];
 
@@ -2731,6 +2811,250 @@ function buildPaymentGroups_(ss) {
   });
 
   return sorted;
+}
+
+// ─── buildSettingsTab_ ────────────────────────────────────────────────────────
+// Creates (or rebuilds) a Settings sheet containing the SPLIT_TABLE used by the
+// col-L formula in both funded sheets.
+// Layout: col B = lookup key (Source|Type), col C = Split %
+// Rows 1-2: title + headers. Data starts at row 3.
+function buildSettingsTab_(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  var NAVY = '#1B3A6B';
+  var GOLD = '#C9A84C';
+  var sheet = ss.getSheetByName('Settings');
+  if (!sheet) sheet = ss.insertSheet('Settings');
+  else sheet.clear();
+
+  sheet.setTabColor(GOLD);
+  sheet.setColumnWidth(1, 24);
+  sheet.setColumnWidth(2, 220);
+  sheet.setColumnWidth(3, 100);
+  sheet.setColumnWidth(4, 280);
+
+  sheet.getRange(1, 2, 1, 3).merge()
+    .setValue('JM TRACKER — SETTINGS')
+    .setBackground(NAVY).setFontColor('#FFFFFF')
+    .setFontWeight('bold').setFontFamily('Arial').setFontSize(13)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 36);
+
+  sheet.getRange(2, 2).setValue('Source|Type Key').setBackground('#2C5F9E').setFontColor('#FFFFFF').setFontWeight('bold').setFontFamily('Arial').setFontSize(9).setHorizontalAlignment('center');
+  sheet.getRange(2, 3).setValue('Split %').setBackground('#2C5F9E').setFontColor('#FFFFFF').setFontWeight('bold').setFontFamily('Arial').setFontSize(9).setHorizontalAlignment('center');
+  sheet.getRange(2, 4).setValue('Description').setBackground('#2C5F9E').setFontColor('#FFFFFF').setFontWeight('bold').setFontFamily('Arial').setFontSize(9).setHorizontalAlignment('center');
+  sheet.setRowHeight(2, 24);
+
+  // Split lookup table — key = Source|Type (both columns from funded sheet, joined with |)
+  // These values auto-populate col L via VLOOKUP when Source and Type are recognised.
+  // Add a row with col AA Split Override to hard-code a specific split for any deal.
+  var rows = [
+    // Self-sourced (any type) → 90%
+    ['Self|Purchase',        0.90, 'Self-sourced purchase'],
+    ['Self|Refinance',       0.90, 'Self-sourced refi'],
+    ['Self|Switch/Transfer', 0.90, 'Self-sourced switch'],
+    ['Self|Renewal',         0.90, 'Self-sourced renewal'],
+    ['Self|Self-Sourced',    0.90, 'Self-sourced (type also labelled self)'],
+    ['Self-sourced|Purchase',        0.90, 'Self-sourced (alt spelling) purchase'],
+    ['Self-sourced|Refinance',       0.90, 'Self-sourced (alt spelling) refi'],
+    ['Self-sourced|Switch/Transfer', 0.90, 'Self-sourced (alt spelling) switch'],
+    ['Self-sourced|Renewal',         0.90, 'Self-sourced (alt spelling) renewal'],
+    // Homewise (blank source) → 40% for Purchase/Renewal, 35% for Switch/Refi
+    ['|Purchase',        0.40, 'Homewise pre-approval / purchase'],
+    ['|Renewal',         0.40, 'Homewise renewal'],
+    ['|Switch/Transfer', 0.35, 'Homewise switch / transfer'],
+    ['|Refinance',       0.35, 'Homewise refinance'],
+    // Homewise (explicit source) → same rates
+    ['Homewise|Purchase',        0.40, 'Homewise purchase (explicit)'],
+    ['Homewise|Renewal',         0.40, 'Homewise renewal (explicit)'],
+    ['Homewise|Switch/Transfer', 0.35, 'Homewise switch (explicit)'],
+    ['Homewise|Refinance',       0.35, 'Homewise refi (explicit)'],
+    // Referral sources — typically treated as Homewise-equivalent splits
+    ['Realtor|Purchase',        0.40, 'Realtor referral purchase'],
+    ['Realtor|Refinance',       0.35, 'Realtor referral refi'],
+    ['Realtor|Switch/Transfer', 0.35, 'Realtor referral switch'],
+    ['Network|Purchase',        0.40, 'Network referral purchase'],
+    ['Network|Refinance',       0.35, 'Network referral refi'],
+    ['Family|Purchase',         0.40, 'Family referral purchase'],
+    ['Family|Refinance',        0.35, 'Family referral refi'],
+    ['Social Media|Purchase',   0.40, 'Social media lead purchase'],
+    ['Social Media|Refinance',  0.35, 'Social media lead refi'],
+  ];
+
+  for (var ri = 0; ri < rows.length; ri++) {
+    var rn  = ri + 3;
+    var bg  = ri % 2 === 0 ? '#FFFFFF' : '#F2F5FA';
+    sheet.getRange(rn, 2).setValue(rows[ri][0]).setBackground(bg).setFontFamily('Arial').setFontSize(10);
+    sheet.getRange(rn, 3).setValue(rows[ri][1]).setBackground(bg).setFontFamily('Arial').setFontSize(10)
+      .setNumberFormat('0%').setHorizontalAlignment('center');
+    sheet.getRange(rn, 4).setValue(rows[ri][2]).setBackground(bg).setFontFamily('Arial').setFontSize(9)
+      .setFontColor('#666666').setFontStyle('italic');
+    sheet.setRowHeight(rn, 20);
+  }
+
+  // Instruction footer
+  var noteRow = rows.length + 4;
+  sheet.getRange(noteRow, 2, 1, 3).merge()
+    .setValue('To override split for a specific deal: enter the split % in col AA (Split Override) of the funded sheet row.')
+    .setFontFamily('Arial').setFontSize(9).setFontStyle('italic').setFontColor('#888888');
+
+  SpreadsheetApp.flush();
+  ss.toast('Settings tab built with ' + rows.length + ' split rules.');
+}
+
+// ─── runSanityCheck (public) ──────────────────────────────────────────────────
+function runSanityCheck() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  buildSanityCheck_(ss);
+  var tab = ss.getSheetByName('🔍 Sanity Check');
+  if (tab) ss.setActiveSheet(tab);
+  ss.toast('Sanity Check tab rebuilt. Red rows = issues to fix.');
+}
+
+// ─── buildSanityCheck_ ────────────────────────────────────────────────────────
+// Creates (or rebuilds) a live self-audit tab with 8 checks.
+// Each check has a live formula, expected value, and PASS/FAIL traffic-light CF.
+function buildSanityCheck_(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  var NAVY  = '#1B3A6B';
+  var GOLD  = '#C9A84C';
+  var GREEN = '#C6EFCE';
+  var RED   = '#FFCCCC';
+  var TAB   = '🔍 Sanity Check';
+
+  var sheet = ss.getSheetByName(TAB);
+  if (!sheet) sheet = ss.insertSheet(TAB);
+  else { sheet.clear(); sheet.clearConditionalFormatRules(); }
+
+  sheet.setTabColor('#FF6B35');
+  sheet.setColumnWidth(1, 24);
+  sheet.setColumnWidth(2, 280);
+  sheet.setColumnWidth(3, 160);
+  sheet.setColumnWidth(4, 120);
+  sheet.setColumnWidth(5, 90);
+
+  // Title
+  sheet.getRange(1, 2, 1, 4).merge()
+    .setValue('🔍 JM TRACKER — SANITY CHECK')
+    .setBackground(NAVY).setFontColor(GOLD).setFontWeight('bold').setFontFamily('Arial').setFontSize(14)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 40);
+
+  // Sub-header
+  sheet.getRange(2, 2, 1, 4).merge()
+    .setFormula('="Last checked: "&TEXT(NOW(),"MMMM d, yyyy h:mm AM/PM")')
+    .setBackground(NAVY).setFontColor('#8899BB').setFontStyle('italic').setFontFamily('Arial').setFontSize(9)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(2, 22);
+
+  // Column headers
+  ['CHECK', 'LIVE VALUE', 'EXPECTED', 'RESULT'].forEach(function(h, i) {
+    sheet.getRange(3, 2 + i).setValue(h)
+      .setBackground('#2C5F9E').setFontColor('#FFFFFF').setFontWeight('bold').setFontFamily('Arial').setFontSize(9)
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  });
+  sheet.setRowHeight(3, 26);
+
+  // 8 checks: [description, liveFormula, expectedFormula, passCriterionFormula]
+  // passCriterion: formula referencing the live value cell (C-column, i.e. col 3)
+  var checks = [
+    [
+      '2025: Net Comm ≤ Gross Comm on all rows (count violations)',
+      '=SUMPRODUCT((IFERROR(VALUE(\'2025 Funded\'!N$4:N$500),0)>IFERROR(VALUE(\'2025 Funded\'!M$4:M$500),0))*(\'2025 Funded\'!B$4:B$500<>""))',
+      '"0 violations"',
+      '=C{r}=0'
+    ],
+    [
+      '2026: Net Comm ≤ Gross Comm on all rows (count violations)',
+      '=SUMPRODUCT((IFERROR(VALUE(\'2026 Funded\'!N$4:N$500),0)>IFERROR(VALUE(\'2026 Funded\'!M$4:M$500),0))*(\'2026 Funded\'!B$4:B$500<>""))',
+      '"0 violations"',
+      '=C{r}=0'
+    ],
+    [
+      '2025: Flag column integrity  (AB+AC+AD = deal count)',
+      '=ABS(SUM(\'2025 Funded\'!AB$4:AB$500)+SUM(\'2025 Funded\'!AC$4:AC$500)+SUM(\'2025 Funded\'!AD$4:AD$500)-COUNTA(\'2025 Funded\'!B$4:B$500))',
+      '"0 discrepancy"',
+      '=C{r}=0'
+    ],
+    [
+      '2026: Flag column integrity  (AB+AC+AD = deal count)',
+      '=ABS(SUM(\'2026 Funded\'!AB$4:AB$500)+SUM(\'2026 Funded\'!AC$4:AC$500)+SUM(\'2026 Funded\'!AD$4:AD$500)-COUNTA(\'2026 Funded\'!B$4:B$500))',
+      '"0 discrepancy"',
+      '=C{r}=0'
+    ],
+    [
+      '2025 FY Paid Comm: MvM G30 = YoY C7  (both read same source)',
+      '=ABS(IFERROR(\'Month vs Month\'!G30,0)-IFERROR(\'Year Over Year\'!C7,0))',
+      '"< $0.02 difference"',
+      '=C{r}<0.02'
+    ],
+    [
+      '2026 Paid Comm: MvM G22 = YoY D7  (both read same source)',
+      '=ABS(IFERROR(\'Month vs Month\'!G22,0)-IFERROR(\'Year Over Year\'!D7,0))',
+      '"< $0.02 difference"',
+      '=C{r}<0.02'
+    ],
+    [
+      'Self-sourced deals count  (Source = "Self" or "Self-sourced")',
+      '=IFERROR(COUNTIF(\'2026 Funded\'!D$4:D$500,"Self")+COUNTIF(\'2026 Funded\'!D$4:D$500,"Self-sourced"),0)',
+      '">0 deals"',
+      '=C{r}>0'
+    ],
+    [
+      'Awaiting deals with valid Expected Pay Date (col X)',
+      '=SUMPRODUCT((\'2025 Funded\'!AC$4:AC$500=1)*ISNUMBER(\'2025 Funded\'!X$4:X$500)*(\'2025 Funded\'!X$4:X$500>0))' +
+      '+SUMPRODUCT((\'2026 Funded\'!AC$4:AC$500=1)*ISNUMBER(\'2026 Funded\'!X$4:X$500)*(\'2026 Funded\'!X$4:X$500>0))',
+      '="= " & TEXT(SUMPRODUCT((\'2025 Funded\'!AC$4:AC$500=1)*(\'2025 Funded\'!B$4:B$500<>""))+SUMPRODUCT((\'2026 Funded\'!AC$4:AC$500=1)*(\'2026 Funded\'!B$4:B$500<>"")),  "0") & " awaiting deals"',
+      '=C{r}>=SUMPRODUCT((\'2025 Funded\'!AC$4:AC$500=1)*(\'2025 Funded\'!B$4:B$500<>""))+SUMPRODUCT((\'2026 Funded\'!AC$4:AC$500=1)*(\'2026 Funded\'!B$4:B$500<>""))'
+    ],
+  ];
+
+  var cfRules = [];
+  for (var ci = 0; ci < checks.length; ci++) {
+    var rn  = 4 + ci;
+    var bg  = ci % 2 === 0 ? '#FFFFFF' : '#F2F5FA';
+    sheet.setRowHeight(rn, 26);
+
+    var checkDesc    = checks[ci][0];
+    var liveFml      = checks[ci][1];
+    var expectedFml  = checks[ci][2];
+    var passCriterion= checks[ci][3].replace('{r}', String(rn)); // sub row number
+
+    sheet.getRange(rn, 2).setValue(checkDesc).setBackground(bg)
+      .setFontFamily('Arial').setFontSize(10).setVerticalAlignment('middle');
+    sheet.getRange(rn, 3).setFormula(liveFml).setBackground(bg)
+      .setFontFamily('Arial').setFontSize(11).setFontWeight('bold').setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sheet.getRange(rn, 4).setFormula(expectedFml).setBackground(bg)
+      .setFontFamily('Arial').setFontSize(9).setFontStyle('italic').setFontColor('#666666')
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+
+    var resultRange = sheet.getRange(rn, 5);
+    resultRange.setFormula('=IF('+passCriterion+',"✅ PASS","❌ FAIL")')
+      .setFontFamily('Arial').setFontSize(10).setFontWeight('bold')
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+
+    // Traffic light CF on the full row (cols B-E)
+    var rowRange = sheet.getRange(rn, 2, 1, 4);
+    cfRules.push(SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('='+passCriterion)
+      .setBackground(GREEN).setFontColor('#276221')
+      .setRanges([rowRange]).build());
+    cfRules.push(SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=NOT('+passCriterion+')')
+      .setBackground('#FFCCCC').setFontColor('#9C0006')
+      .setRanges([rowRange]).build());
+  }
+
+  sheet.setConditionalFormatRules(cfRules);
+
+  // Summary row
+  var sumRow = checks.length + 5;
+  sheet.setRowHeight(sumRow, 30);
+  sheet.getRange(sumRow, 2, 1, 4).merge()
+    .setFormula('=COUNTIF(E4:E' + (checks.length + 3) + ',"✅ PASS")&" / ' + checks.length + ' checks passing  —  "&IF(COUNTIF(E4:E' + (checks.length + 3) + ',"❌ FAIL")=0,"✅ All clear","❌ "&COUNTIF(E4:E' + (checks.length + 3) + ',"❌ FAIL")&" issue(s) to fix")')
+    .setBackground(NAVY).setFontColor(GOLD).setFontWeight('bold').setFontFamily('Arial').setFontSize(12)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+
+  SpreadsheetApp.flush();
 }
 
 // ─── formatAllSheets (public) ─────────────────────────────────────────────────
