@@ -177,13 +177,21 @@ function restripe_(sh) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ONE-TIME MIGRATION — run runFullMigration_() once, verify numbers, done.
+// ONE-TIME MIGRATION
+// Select "MIGRATE" from the function dropdown and click Run.
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// Public entry point — visible in the Apps Script function dropdown.
+function MIGRATE() { runFullMigration_(); }
 
 function runFullMigration_() {
   var ss   = SpreadsheetApp.getActive();
   var NAVY = '#1B3A6B';
   var GOLD = '#C9A84C';
+
+  // Show all existing tab names so you can spot name mismatches
+  var allNames = ss.getSheets().map(function(s) { return s.getName(); });
+  Logger.log('Existing tabs: ' + allNames.join(' | '));
 
   ss.toast('Step 1/5: Reading deal data...');
   var deals25 = readFundedSheet_(ss, '2025 Funded', 2025);
@@ -258,7 +266,9 @@ function runFullMigration_() {
 //   S=Alert | T=Status | U=PayDate
 function readFundedSheet_(ss, sheetName, year) {
   var sh = ss.getSheetByName(sheetName);
-  if (!sh || sh.getLastRow() < 4) return [];
+  if (!sh) { Logger.log('Sheet not found: "' + sheetName + '"'); return []; }
+  if (sh.getLastRow() < 4) { Logger.log('Sheet "' + sheetName + '" has fewer than 4 rows'); return []; }
+  Logger.log('Reading "' + sheetName + '": ' + sh.getLastRow() + ' rows, ' + sh.getLastColumn() + ' cols');
   var raw = sh.getRange(4, 1, sh.getLastRow() - 3, 21).getValues();
   var out = [];
   raw.forEach(function(r) {
@@ -317,23 +327,48 @@ function buildDealsTab_(ss, deals, NAVY, GOLD) {
   sh.setRowHeight(1, 30);
   sh.setFrozenRows(1);
 
-  deals.forEach(function(d, i) {
-    var row  = i + 2;
-    // B (Repeat) is blank — formula set below
-    var vals = [
-      d.borrower, '',
-      d.year, d.type, d.source, d.lender, d.closing,
-      d.amount, d.term, d.bps, d.split,
-      d.hasFormula ? '' : d.net,
-      d.status, d.payDate, '', '', d.notes || ''
-    ];
-    sh.getRange(row, 1, 1, NCOLS).setValues([vals]);
-    sh.getRange(row, CC.REPEAT).setFormula(repeatF_(row));
-    if (d.hasFormula) sh.getRange(row, CC.NETCOMM).setFormula(netCommF_(row));
-    sh.getRange(row, CC.EXPDATE).setFormula(expDateF_(row));
-    sh.getRange(row, CC.MATURITY).setFormula(maturityF_(row));
-    applyRowFmt_(sh, row);
-  });
+  if (deals.length) {
+    var n = deals.length;
+
+    // ── 1. Write all values in a single call ─────────────────────────────────
+    var vals = deals.map(function(d) {
+      return [
+        d.borrower, '',
+        d.year, d.type, d.source, d.lender, d.closing,
+        d.amount, d.term, d.bps, d.split,
+        d.hasFormula ? '' : (d.net || ''),
+        d.status, d.payDate, '', '', d.notes || ''
+      ];
+    });
+    sh.getRange(2, 1, n, NCOLS).setValues(vals);
+
+    // ── 2. Set formula columns in bulk ───────────────────────────────────────
+    sh.getRange(2, CC.REPEAT,   n, 1).setFormulas(deals.map(function(d, i) { return [repeatF_(i+2)];  }));
+    sh.getRange(2, CC.EXPDATE,  n, 1).setFormulas(deals.map(function(d, i) { return [expDateF_(i+2)]; }));
+    sh.getRange(2, CC.MATURITY, n, 1).setFormulas(deals.map(function(d, i) { return [maturityF_(i+2)]; }));
+    // Net comm: only rows where all three inputs exist
+    deals.forEach(function(d, i) {
+      if (d.hasFormula) sh.getRange(i+2, CC.NETCOMM).setFormula(netCommF_(i+2));
+    });
+
+    // ── 3. Batch formatting ───────────────────────────────────────────────────
+    var bgs = deals.map(function(d, i) {
+      var bg = (i+2) % 2 === 0 ? '#EEF2F7' : '#FFFFFF';
+      var row = []; for (var c = 0; c < NCOLS; c++) row.push(bg); return row;
+    });
+    sh.getRange(2, 1, n, NCOLS).setBackgrounds(bgs).setFontFamily('Arial').setFontSize(10);
+    sh.getRange(2, CC.CLOSING,  n, 1).setNumberFormat('yyyy-mm-dd');
+    sh.getRange(2, CC.AMOUNT,   n, 1).setNumberFormat('"$"#,##0');
+    sh.getRange(2, CC.BPS,      n, 1).setNumberFormat('0');
+    sh.getRange(2, CC.SPLIT,    n, 1).setNumberFormat('0%');
+    sh.getRange(2, CC.NETCOMM,  n, 1).setNumberFormat('"$"#,##0.00');
+    sh.getRange(2, CC.PAYDATE,  n, 1).setNumberFormat('yyyy-mm-dd');
+    sh.getRange(2, CC.EXPDATE,  n, 1).setNumberFormat('yyyy-mm-dd');
+    sh.getRange(2, CC.MATURITY, n, 1).setNumberFormat('yyyy-mm-dd');
+    sh.getRange(2, CC.STATUS,   n, 1).setHorizontalAlignment('center');
+    sh.getRange(2, CC.REPEAT,   n, 1).setHorizontalAlignment('center');
+    sh.getRange(2, CC.YEAR,     n, 1).setNumberFormat('0').setHorizontalAlignment('center');
+  }
 
   var statusDV = SpreadsheetApp.newDataValidation()
     .requireValueInList([S_PAID, S_AWAIT, S_PEND], true).setAllowInvalid(false).build();
