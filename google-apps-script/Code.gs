@@ -156,6 +156,16 @@ function repeatF_(r) {
   var f = String(r);
   return '=IF(A'+f+'="","",IF(COUNTIFS($A$2:$A$500,A'+f+')>1,"🔁",""))';
 }
+// Alert if a UI is available, otherwise toast + log (getUi() throws in some
+// run contexts, e.g. when the sheet isn't open in a browser tab).
+function say_(msg) {
+  Logger.log(msg);
+  try {
+    SpreadsheetApp.getUi().alert(msg);
+  } catch (e) {
+    try { SpreadsheetApp.getActive().toast(msg.split('\n')[0] + ' — details in Execution log'); } catch (e2) {}
+  }
+}
 function applyRowFmt_(sh, row) {
   var bg = row % 2 === 0 ? '#EEF2F7' : '#FFFFFF';
   sh.getRange(row, 1, 1, NCOLS).setBackground(bg).setFontFamily('Arial').setFontSize(10);
@@ -245,7 +255,7 @@ function REPAIR() {
   buildDashboardTab_(ss, '#1B3A6B', '#C9A84C');
 
   SpreadsheetApp.flush();
-  SpreadsheetApp.getUi().alert(
+  say_(
     'REPAIR COMPLETE ✅\n\n'
     + 'Closing dates fixed: ' + fixedDates + '\n'
     + 'Formulas re-applied on ' + n + ' rows\n'
@@ -271,7 +281,7 @@ function runFullMigration_() {
 
   // Guard: once the old source tabs are gone, re-running would wipe Deals.
   if (!ss.getSheetByName('2025 Funded') && !ss.getSheetByName('2026 Funded')) {
-    SpreadsheetApp.getUi().alert(
+    say_(
       'Migration already completed — old source tabs no longer exist.\n'
       + 'Re-running would erase your Deals data.\n\n'
       + 'To fix data or rebuild the report, run REPAIR instead.');
@@ -341,7 +351,7 @@ function runFullMigration_() {
     + 'Expected: 2025=17, 2026=28\n'
     + 'Run installTriggers() next.';
   Logger.log(msg);
-  SpreadsheetApp.getUi().alert(msg);
+  say_(msg);
 }
 
 // ─── readFundedSheet_ ─────────────────────────────────────────────────────────
@@ -940,5 +950,5 @@ function UPDATE_COMMISSIONS() {
         : '—')
     + '\n\nExpected: next cheque run $12,685.94 (Jul 14–15, 6 deals)';
   Logger.log(msg);
-  SpreadsheetApp.getUi().alert(msg);
+  say_(msg);
 }
