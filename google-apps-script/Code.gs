@@ -952,3 +952,44 @@ function UPDATE_COMMISSIONS() {
   Logger.log(msg);
   say_(msg);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ONE-TIME (2026-07-16) — next cheque run pushed to Jul 30.
+// Select "MOVE_CHEQUE_TO_JUL30" from the dropdown and click Run.
+// Moves Expected Pay Date to 2026-07-30 for the six Awaiting deals.
+// ═══════════════════════════════════════════════════════════════════════════════
+function MOVE_CHEQUE_TO_JUL30() {
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName('Deals');
+  if (!sh || sh.getLastRow() < 2) { ss.toast('⚠️ Deals sheet not found or empty.'); return; }
+  var n = sh.getLastRow() - 1;
+  var names = sh.getRange(2, CC.BORROWER, n, 1).getValues();
+  var newDate = new Date(2026, 6, 30);  // 2026-07-30
+
+  var keys = ['derek duffield','eric cole','van zutphen','szemberg','joe palma','owen burrows'];
+  var applied = [], missing = [];
+  keys.forEach(function(key) {
+    var row = -1;
+    for (var i = 0; i < n; i++) {
+      if (String(names[i][0]).toLowerCase().indexOf(key) > -1) { row = i + 2; break; }
+    }
+    if (row === -1) { missing.push(key); return; }
+    sh.getRange(row, CC.EXPDATE).setValue(newDate);
+    applied.push(key);
+  });
+  SpreadsheetApp.flush();
+
+  // Verify: total awaiting commission now expected on Jul 30
+  var data = sh.getRange(2, 1, n, NCOLS).getValues();
+  var total = 0;
+  data.forEach(function(r) {
+    if (r[CC.STATUS-1] === S_AWAIT && r[CC.EXPDATE-1] instanceof Date
+        && r[CC.EXPDATE-1].getTime() === newDate.getTime())
+      total += parseFloat(r[CC.NETCOMM-1]) || 0;
+  });
+  say_('CHEQUE DATE MOVED ✅\n\n'
+    + 'Updated: ' + applied.length + ' / ' + keys.length + ' deals → 2026-07-30'
+    + (missing.length ? '\n⚠️ NOT FOUND: ' + missing.join(', ') : '')
+    + '\n\nAwaiting commission expected Jul 30: $' + total.toFixed(2)
+    + '\nExpected: $12,685.94');
+}
