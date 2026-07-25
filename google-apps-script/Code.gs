@@ -223,6 +223,19 @@ function REPAIR() {
   });
   sh.getRange(2, CC.SOURCE, n, 1).setValues(eVals);
 
+  // Normalize lender spelling so the lender table groups correctly
+  var lVals = sh.getRange(2, CC.LENDER, n, 1).getValues();
+  lVals.forEach(function(r, i) {
+    var s = String(r[0] || '').trim();
+    if (/^scotia/i.test(s)) s = 'Scotia';
+    else if (/^pine/i.test(s)) s = 'Pine';
+    else if (/^first national/i.test(s)) s = 'First National';
+    else if (/^strive/i.test(s)) s = 'Strive';
+    else if (/^hosper/i.test(s)) s = 'Hosper';
+    lVals[i][0] = s;
+  });
+  sh.getRange(2, CC.LENDER, n, 1).setValues(lVals);
+
   // Fix Type typos (e.g. "Refiance")
   var tVals = sh.getRange(2, CC.TYPE, n, 1).getValues();
   tVals.forEach(function(r, i) {
@@ -632,9 +645,24 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
   });
   sh.setRowHeight(26, 14);
 
-  // ── Rows 27–30: year over year (same calendar window both years) ───────────
-  hdr(27, 'YEAR OVER YEAR — SAME PERIOD (JAN 1 → TODAY)');
-  heads(28, ['Metric',
+  // ── Rows 27–28: monthly averages ───────────────────────────────────────────
+  hdr(27, 'MONTHLY AVERAGES');
+  sh.setRowHeight(28, 26);
+  sh.getRange(28,2).setValue('Avg / month (actual YTD)').setFontColor(MUT);
+  sh.getRange(28,3).setFormula('=IFERROR(B4/MONTH(TODAY()),0)')
+    .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
+  sh.getRange(28,4).setValue('Avg / month (annual pace)').setFontColor(MUT).setHorizontalAlignment('right');
+  sh.getRange(28,5).setFormula('=IFERROR((B4*365/((TODAY()-DATE(YEAR(TODAY()),1,1))+1))/12,0)')
+    .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
+  sh.getRange(28,6).setFormula('="Avg / month ("&(YEAR(TODAY())-1)&" full yr)"')
+    .setFontColor(MUT).setHorizontalAlignment('right');
+  sh.getRange(28,7).setFormula('=SUMIFS('+D+'!L:L,'+D+'!C:C,YEAR(TODAY())-1,'+D+'!M:M,"'+S_PAID+'")/12')
+    .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
+  sh.setRowHeight(29, 14);
+
+  // ── Rows 30–33: year over year (same calendar window both years) ───────────
+  hdr(30, 'YEAR OVER YEAR — SAME PERIOD (JAN 1 → TODAY)');
+  heads(31, ['Metric',
     '=(YEAR(TODAY())-1)&" (thru today)"', '=YEAR(TODAY())&" (thru today)"',
     'Δ','% Change','=YEAR(TODAY())&" On-Pace"']);
 
@@ -653,7 +681,7 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
       fCY:'=SUMPRODUCT(('+D+'!C$2:C$500=YEAR(TODAY()))'+cyWin+'*('+D+'!M$2:M$500="'+S_PAID+'")*IFERROR(N('+D+'!L$2:L$500),0))',
       fmt:'"$"#,##0', round:false },
   ].forEach(function(m, i) {
-    var r = 29 + i;
+    var r = 32 + i;
     sh.setRowHeight(r, 21);
     sh.getRange(r,2).setValue(m.label);
     sh.getRange(r,3).setFormula(m.fPY).setNumberFormat(m.fmt).setHorizontalAlignment('right');
@@ -670,66 +698,78 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
     sh.getRange(r,2,1,NC)
       .setBorder(null,null,true,null,null,null,'#EEF1F6',SpreadsheetApp.BorderStyle.SOLID);
   });
-  sh.setRowHeight(31, 14);
+  sh.setRowHeight(34, 14);
 
-  // ── Rows 32–50: source performance (dynamic UNIQUE list, up to 16) ─────────
-  hdr(32, 'SOURCE PERFORMANCE');
-  heads(33, ['Source','This Yr #','This Yr $','Last Yr #','Last Yr $','']);
-  sh.getRange(34,2).setFormula(
-    '=IFERROR(ARRAY_CONSTRAIN(SORT(UNIQUE(FILTER('+D+'!E$2:E$500,'+D+'!E$2:E$500<>""))),16,1),"—")');
-  for (var si = 0; si < 16; si++) {
-    var sr = 34 + si;
-    sh.setRowHeight(sr, 19);
-    sh.getRange(sr,3).setFormula('=IF($B'+sr+'="","",COUNTIFS('+D+'!E$2:E$500,$B'+sr+','+D+'!C$2:C$500,YEAR(TODAY())))')
-      .setNumberFormat('0').setHorizontalAlignment('right');
-    sh.getRange(sr,4).setFormula('=IF($B'+sr+'="","",SUMIFS('+D+'!L$2:L$500,'+D+'!E$2:E$500,$B'+sr+','+D+'!C$2:C$500,YEAR(TODAY())))')
-      .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-    sh.getRange(sr,5).setFormula('=IF($B'+sr+'="","",COUNTIFS('+D+'!E$2:E$500,$B'+sr+','+D+'!C$2:C$500,YEAR(TODAY())-1))')
-      .setNumberFormat('0').setHorizontalAlignment('right');
-    sh.getRange(sr,6).setFormula('=IF($B'+sr+'="","",SUMIFS('+D+'!L$2:L$500,'+D+'!E$2:E$500,$B'+sr+','+D+'!C$2:C$500,YEAR(TODAY())-1))')
-      .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-    sh.getRange(sr,2,1,5)
-      .setBorder(null,null,true,null,null,null,'#EEF1F6',SpreadsheetApp.BorderStyle.SOLID);
+  // Generic breakdown table: dynamic UNIQUE list over a Deals column,
+  // this-year/last-year counts and $ per row, TOTAL underneath.
+  function breakdown(hdrRow, title, colLetter, nRows) {
+    hdr(hdrRow, title);
+    heads(hdrRow+1, [title.split(' ')[0].charAt(0)+title.split(' ')[0].slice(1).toLowerCase(),
+      'This Yr #','This Yr $','Last Yr #','Last Yr $','']);
+    var first = hdrRow + 2, last = first + nRows - 1;
+    sh.getRange(first,2).setFormula(
+      '=IFERROR(ARRAY_CONSTRAIN(SORT(UNIQUE(FILTER('+D+'!'+colLetter+'$2:'+colLetter+'$500,'
+      + D+'!'+colLetter+'$2:'+colLetter+'$500<>""))),'+nRows+',1),"—")');
+    for (var i = 0; i < nRows; i++) {
+      var r = first + i;
+      sh.setRowHeight(r, 19);
+      sh.getRange(r,3).setFormula('=IF($B'+r+'="","",COUNTIFS('+D+'!'+colLetter+'$2:'+colLetter+'$500,$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())))')
+        .setNumberFormat('0').setHorizontalAlignment('right');
+      sh.getRange(r,4).setFormula('=IF($B'+r+'="","",SUMIFS('+D+'!L$2:L$500,'+D+'!'+colLetter+'$2:'+colLetter+'$500,$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())))')
+        .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+      sh.getRange(r,5).setFormula('=IF($B'+r+'="","",COUNTIFS('+D+'!'+colLetter+'$2:'+colLetter+'$500,$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())-1))')
+        .setNumberFormat('0').setHorizontalAlignment('right');
+      sh.getRange(r,6).setFormula('=IF($B'+r+'="","",SUMIFS('+D+'!L$2:L$500,'+D+'!'+colLetter+'$2:'+colLetter+'$500,$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())-1))')
+        .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+      sh.getRange(r,2,1,5)
+        .setBorder(null,null,true,null,null,null,'#EEF1F6',SpreadsheetApp.BorderStyle.SOLID);
+    }
+    var tr = last + 1;
+    sh.setRowHeight(tr, 24);
+    sh.getRange(tr,2,1,5).setBackground(TOTBG).setFontWeight('bold')
+      .setBorder(true,null,null,null,null,null,NAVY,SpreadsheetApp.BorderStyle.SOLID);
+    sh.getRange(tr,2).setValue('TOTAL');
+    sh.getRange(tr,3).setFormula('=SUM(C'+first+':C'+last+')').setNumberFormat('0').setHorizontalAlignment('right');
+    sh.getRange(tr,4).setFormula('=SUM(D'+first+':D'+last+')').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+    sh.getRange(tr,5).setFormula('=SUM(E'+first+':E'+last+')').setNumberFormat('0').setHorizontalAlignment('right');
+    sh.getRange(tr,6).setFormula('=SUM(F'+first+':F'+last+')').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+    sh.setRowHeight(tr+1, 14);
   }
-  // Row 50: TOTAL
-  sh.setRowHeight(50, 24);
-  sh.getRange(50,2,1,5).setBackground(TOTBG).setFontWeight('bold')
-    .setBorder(true,null,null,null,null,null,NAVY,SpreadsheetApp.BorderStyle.SOLID);
-  sh.getRange(50,2).setValue('TOTAL');
-  sh.getRange(50,3).setFormula('=SUM(C34:C49)').setNumberFormat('0').setHorizontalAlignment('right');
-  sh.getRange(50,4).setFormula('=SUM(D34:D49)').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-  sh.getRange(50,5).setFormula('=SUM(E34:E49)').setNumberFormat('0').setHorizontalAlignment('right');
-  sh.getRange(50,6).setFormula('=SUM(F34:F49)').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-  sh.setRowHeight(51, 14);
 
-  // ── Rows 52–53: cash flow watch ────────────────────────────────────────────
-  hdr(52, 'CASH FLOW WATCH');
-  sh.setRowHeight(53, 26);
-  sh.getRange(53,2).setValue('Overdue cheques').setFontColor(MUT);
-  sh.getRange(53,3)
+  // ── Rows 35–54: source performance ─────────────────────────────────────────
+  breakdown(35, 'SOURCE PERFORMANCE', 'E', 16);
+
+  // ── Rows 55–74: lender breakdown ───────────────────────────────────────────
+  breakdown(55, 'LENDER BREAKDOWN', 'F', 16);
+
+  // ── Rows 75–76: cash flow watch ────────────────────────────────────────────
+  hdr(75, 'CASH FLOW WATCH');
+  sh.setRowHeight(76, 26);
+  sh.getRange(76,2).setValue('Overdue cheques').setFontColor(MUT);
+  sh.getRange(76,3)
     .setFormula('=COUNTIFS('+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!O$2:O$500,"<"&TODAY(),'+D+'!N$2:N$500,"")')
     .setNumberFormat('0').setFontWeight('bold').setHorizontalAlignment('right');
-  sh.getRange(53,4).setValue('$ overdue').setFontColor(MUT).setHorizontalAlignment('right');
-  sh.getRange(53,5)
+  sh.getRange(76,4).setValue('$ overdue').setFontColor(MUT).setHorizontalAlignment('right');
+  sh.getRange(76,5)
     .setFormula('=SUMIFS('+D+'!L$2:L$500,'+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!O$2:O$500,"<"&TODAY(),'+D+'!N$2:N$500,"")')
     .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
-  sh.getRange(53,6).setValue('Due next 30 days').setFontColor(MUT).setHorizontalAlignment('right');
-  sh.getRange(53,7)
+  sh.getRange(76,6).setValue('Due next 30 days').setFontColor(MUT).setHorizontalAlignment('right');
+  sh.getRange(76,7)
     .setFormula('=SUMIFS('+D+'!L$2:L$500,'+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!O$2:O$500,">="&TODAY(),'+D+'!O$2:O$500,"<="&(TODAY()+30))')
     .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
-  sh.setRowHeight(54, 14);
+  sh.setRowHeight(77, 14);
 
-  // ── Rows 55+: renewal radar ────────────────────────────────────────────────
-  hdr(55, 'RENEWAL RADAR — NEXT ' + RENEWAL_DAYS + ' DAYS');
-  heads(56, ['Borrower','Type','Closing','Maturity','Net Comm','']);
+  // ── Rows 78+: renewal radar ────────────────────────────────────────────────
+  hdr(78, 'RENEWAL RADAR — NEXT ' + RENEWAL_DAYS + ' DAYS');
+  heads(79, ['Borrower','Type','Closing','Maturity','Net Comm','']);
   // Comparisons only (no date subtraction) so "" can never produce #VALUE!
-  sh.getRange(57,2).setFormula(
+  sh.getRange(80,2).setFormula(
     '=IFERROR(SORT(FILTER('
     + 'CHOOSE({1,2,3,4,5},'+D+'!A$2:A$500,'+D+'!D$2:D$500,'+D+'!G$2:G$500,'+D+'!P$2:P$500,'+D+'!L$2:L$500),'
     + 'ISNUMBER('+D+'!P$2:P$500)*('+D+'!P$2:P$500>=TODAY())*('+D+'!P$2:P$500<=(TODAY()+'+RENEWAL_DAYS+'))'
     + '),4,1),"No renewals due within '+RENEWAL_DAYS+' days")');
-  sh.getRange(57,4,25,2).setNumberFormat('yyyy-mm-dd');
-  sh.getRange(57,6,25,1).setNumberFormat('"$"#,##0');
+  sh.getRange(80,4,25,2).setNumberFormat('yyyy-mm-dd');
+  sh.getRange(80,6,25,1).setNumberFormat('"$"#,##0');
 
   // ── Conditional formatting ─────────────────────────────────────────────────
   var rules = [
@@ -740,27 +780,27 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
       .setRanges([sh.getRange(13,2,12,NC)]).build(),
     // YoY deltas: green up, red down
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER(E29),E29>0)')
+      .whenFormulaSatisfied('=AND(ISNUMBER(E32),E32>0)')
       .setFontColor(GRN)
-      .setRanges([sh.getRange(29,5,2,2)]).build(),
+      .setRanges([sh.getRange(32,5,2,2)]).build(),
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER(E29),E29<0)')
+      .whenFormulaSatisfied('=AND(ISNUMBER(E32),E32<0)')
       .setFontColor(RED)
-      .setRanges([sh.getRange(29,5,2,2)]).build(),
+      .setRanges([sh.getRange(32,5,2,2)]).build(),
     // overdue stats turn red when nonzero
     SpreadsheetApp.newConditionalFormatRule()
       .whenNumberGreaterThan(0)
       .setFontColor(RED)
-      .setRanges([sh.getRange(53,3), sh.getRange(53,5)]).build(),
+      .setRanges([sh.getRange(76,3), sh.getRange(76,5)]).build(),
     // renewal urgency: ≤30 days red tint, ≤60 days amber tint
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER($E57),$E57>=TODAY(),$E57<=TODAY()+30)')
+      .whenFormulaSatisfied('=AND(ISNUMBER($E80),$E80>=TODAY(),$E80<=TODAY()+30)')
       .setBackground('#FBE3E0')
-      .setRanges([sh.getRange(57,2,25,5)]).build(),
+      .setRanges([sh.getRange(80,2,25,5)]).build(),
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER($E57),$E57>=TODAY(),$E57<=TODAY()+60)')
+      .whenFormulaSatisfied('=AND(ISNUMBER($E80),$E80>=TODAY(),$E80<=TODAY()+60)')
       .setBackground('#FCF3DC')
-      .setRanges([sh.getRange(57,2,25,5)]).build(),
+      .setRanges([sh.getRange(80,2,25,5)]).build(),
   ];
   sh.setConditionalFormatRules(rules);
 
