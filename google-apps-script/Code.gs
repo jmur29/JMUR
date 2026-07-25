@@ -29,19 +29,46 @@ function onOpen() {
 }
 
 // ─── onEdit ───────────────────────────────────────────────────────────────────
-// Only rule: typing a Pay Date on the Deals tab flips Status → Paid.
+// Typing a Pay Date flips Status → Paid, then the edited row self-heals:
+// missing Year/Status/formulas/formatting are filled in automatically.
 function onEdit(e) {
   if (!e) return;
   var sh = e.range.getSheet();
   if (sh.getName() !== 'Deals') return;
-  var row = e.range.getRow(), col = e.range.getColumn();
-  if (row < 2 || col !== CC.PAYDATE) return;
-  if (e.range.getValue()) sh.getRange(row, CC.STATUS).setValue(S_PAID);
+  var row = e.range.getRow();
+  if (row < 2) return;
+  if (e.range.getColumn() === CC.PAYDATE && e.range.getValue())
+    sh.getRange(row, CC.STATUS).setValue(S_PAID);
+  smartFillRow_(sh, row);
 }
 function onEditHandler(e) { onEdit(e); }
 
+// ─── smartFillRow_ ────────────────────────────────────────────────────────────
+// Fills anything missing on a Deals row without ever clobbering manual values:
+// Year from Closing Date, default Status, Repeat/ExpDate/Maturity/NetComm
+// formulas (only when the cell is empty), and row formatting.
+function smartFillRow_(sh, row) {
+  if (!sh.getRange(row, CC.BORROWER).getValue()) return;
+  var g  = sh.getRange(row, CC.CLOSING).getValue();
+  var yC = sh.getRange(row, CC.YEAR);
+  if (!yC.getValue() && g instanceof Date) yC.setValue(g.getFullYear());
+  var sC = sh.getRange(row, CC.STATUS);
+  if (!sC.getValue()) sC.setValue(S_PEND);
+  if (!sh.getRange(row, CC.REPEAT).getFormula())
+    sh.getRange(row, CC.REPEAT).setFormula(repeatF_(row));
+  var oC = sh.getRange(row, CC.EXPDATE);
+  if (!oC.getValue() && !oC.getFormula()) oC.setFormula(expDateF_(row));
+  var pC = sh.getRange(row, CC.MATURITY);
+  if (!pC.getValue() && !pC.getFormula()) pC.setFormula(maturityF_(row));
+  var lC = sh.getRange(row, CC.NETCOMM);
+  if (!lC.getValue() && !lC.getFormula()) lC.setFormula(netCommF_(row));
+  applyRowFmt_(sh, row);
+}
+
 // ─── dailyStatusFlip ──────────────────────────────────────────────────────────
-// 7 am trigger: Pending → Awaiting when Closing Date has passed.
+// 7 am trigger: Pending → Awaiting when Closing Date has passed, then a
+// self-heal sweep — every row gets missing formulas/formats filled and the
+// stripe banding is fixed after any manual sorting or row moves.
 function dailyStatusFlip() {
   var sh = SpreadsheetApp.getActive().getSheetByName('Deals');
   if (!sh || sh.getLastRow() < 2) return;
@@ -52,7 +79,9 @@ function dailyStatusFlip() {
     var closing = r[CC.CLOSING - 1];
     if (r[CC.STATUS - 1] === S_PEND && closing instanceof Date && closing < today)
       sh.getRange(i + 2, CC.STATUS).setValue(S_AWAIT);
+    smartFillRow_(sh, i + 2);
   });
+  restripe_(sh);
 }
 
 // ─── sendRenewalReminders ─────────────────────────────────────────────────────
@@ -246,15 +275,20 @@ function REPAIR() {
   sh.getRange(2, CC.TYPE, n, 1).setValues(tVals);
 
   ss.toast('Step 2/4: Re-applying row formulas...');
-  var reps = [], exps = [], mats = [];
+  // Static manual values (e.g. a brokerage-confirmed Expected Pay Date) are
+  // kept; only empty or already-formula cells get the standard formula.
+  var oVals = sh.getRange(2, CC.EXPDATE,  n, 1).getValues();
+  var oFors = sh.getRange(2, CC.EXPDATE,  n, 1).getFormulas();
+  var pVals = sh.getRange(2, CC.MATURITY, n, 1).getValues();
+  var pFors = sh.getRange(2, CC.MATURITY, n, 1).getFormulas();
   for (var i = 0; i < n; i++) {
-    reps.push([repeatF_(i+2)]);
-    exps.push([expDateF_(i+2)]);
-    mats.push([maturityF_(i+2)]);
+    var r = i + 2;
+    sh.getRange(r, CC.REPEAT).setFormula(repeatF_(r));
+    if (!(oVals[i][0] && !oFors[i][0])) sh.getRange(r, CC.EXPDATE).setFormula(expDateF_(r));
+    if (!(pVals[i][0] && !pFors[i][0])) sh.getRange(r, CC.MATURITY).setFormula(maturityF_(r));
   }
-  sh.getRange(2, CC.REPEAT,   n, 1).setFormulas(reps);
-  sh.getRange(2, CC.EXPDATE,  n, 1).setFormulas(exps).setNumberFormat('yyyy-mm-dd');
-  sh.getRange(2, CC.MATURITY, n, 1).setFormulas(mats).setNumberFormat('yyyy-mm-dd');
+  sh.getRange(2, CC.EXPDATE,  n, 1).setNumberFormat('yyyy-mm-dd');
+  sh.getRange(2, CC.MATURITY, n, 1).setNumberFormat('yyyy-mm-dd');
 
   ss.toast('Step 3/4: Re-applying overdue highlight...');
   var overdueRule = SpreadsheetApp.newConditionalFormatRule()
@@ -680,6 +714,10 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
       fPY:'=SUMPRODUCT(('+D+'!C$2:C$500=YEAR(TODAY())-1)'+pyWin+'*('+D+'!M$2:M$500="'+S_PAID+'")*IFERROR(N('+D+'!L$2:L$500),0))',
       fCY:'=SUMPRODUCT(('+D+'!C$2:C$500=YEAR(TODAY()))'+cyWin+'*('+D+'!M$2:M$500="'+S_PAID+'")*IFERROR(N('+D+'!L$2:L$500),0))',
       fmt:'"$"#,##0', round:false },
+    { label:'Loan volume funded',
+      fPY:'=SUMPRODUCT(('+D+'!C$2:C$500=YEAR(TODAY())-1)'+pyWin+'*IFERROR(N('+D+'!H$2:H$500),0))',
+      fCY:'=SUMPRODUCT(('+D+'!C$2:C$500=YEAR(TODAY()))'+cyWin+'*IFERROR(N('+D+'!H$2:H$500),0))',
+      fmt:'"$"#,##0', round:false },
   ].forEach(function(m, i) {
     var r = 32 + i;
     sh.setRowHeight(r, 21);
@@ -698,78 +736,80 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
     sh.getRange(r,2,1,NC)
       .setBorder(null,null,true,null,null,null,'#EEF1F6',SpreadsheetApp.BorderStyle.SOLID);
   });
-  sh.setRowHeight(34, 14);
+  sh.setRowHeight(35, 14);
 
-  // Generic breakdown table: dynamic UNIQUE list over a Deals column,
-  // this-year/last-year counts and $ per row, TOTAL underneath.
-  function breakdown(hdrRow, title, colLetter, nRows) {
+  // Generic breakdown table: dynamic UNIQUE list over a Deals column, with
+  // this-year vs last-year deal counts, commission AND loan volume, TOTAL row.
+  function breakdown(hdrRow, title, label, colLetter, nRows) {
     hdr(hdrRow, title);
-    heads(hdrRow+1, [title.split(' ')[0].charAt(0)+title.split(' ')[0].slice(1).toLowerCase(),
-      'This Yr #','This Yr $','Last Yr #','Last Yr $','']);
+    heads(hdrRow+1, [label,'#','Comm YTD','Volume YTD','LY Comm','LY Volume']);
     var first = hdrRow + 2, last = first + nRows - 1;
+    var K = D+'!'+colLetter+'$2:'+colLetter+'$500';
     sh.getRange(first,2).setFormula(
-      '=IFERROR(ARRAY_CONSTRAIN(SORT(UNIQUE(FILTER('+D+'!'+colLetter+'$2:'+colLetter+'$500,'
-      + D+'!'+colLetter+'$2:'+colLetter+'$500<>""))),'+nRows+',1),"—")');
+      '=IFERROR(ARRAY_CONSTRAIN(SORT(UNIQUE(FILTER('+K+','+K+'<>""))),'+nRows+',1),"—")');
     for (var i = 0; i < nRows; i++) {
       var r = first + i;
       sh.setRowHeight(r, 19);
-      sh.getRange(r,3).setFormula('=IF($B'+r+'="","",COUNTIFS('+D+'!'+colLetter+'$2:'+colLetter+'$500,$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())))')
+      sh.getRange(r,3).setFormula('=IF($B'+r+'="","",COUNTIFS('+K+',$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())))')
         .setNumberFormat('0').setHorizontalAlignment('right');
-      sh.getRange(r,4).setFormula('=IF($B'+r+'="","",SUMIFS('+D+'!L$2:L$500,'+D+'!'+colLetter+'$2:'+colLetter+'$500,$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())))')
+      sh.getRange(r,4).setFormula('=IF($B'+r+'="","",SUMIFS('+D+'!L$2:L$500,'+K+',$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())))')
         .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-      sh.getRange(r,5).setFormula('=IF($B'+r+'="","",COUNTIFS('+D+'!'+colLetter+'$2:'+colLetter+'$500,$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())-1))')
-        .setNumberFormat('0').setHorizontalAlignment('right');
-      sh.getRange(r,6).setFormula('=IF($B'+r+'="","",SUMIFS('+D+'!L$2:L$500,'+D+'!'+colLetter+'$2:'+colLetter+'$500,$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())-1))')
+      sh.getRange(r,5).setFormula('=IF($B'+r+'="","",SUMIFS('+D+'!H$2:H$500,'+K+',$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())))')
+        .setNumberFormat('"$"#,##0,"K"').setHorizontalAlignment('right');
+      sh.getRange(r,6).setFormula('=IF($B'+r+'="","",SUMIFS('+D+'!L$2:L$500,'+K+',$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())-1))')
         .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-      sh.getRange(r,2,1,5)
+      sh.getRange(r,7).setFormula('=IF($B'+r+'="","",SUMIFS('+D+'!H$2:H$500,'+K+',$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())-1))')
+        .setNumberFormat('"$"#,##0,"K"').setHorizontalAlignment('right');
+      sh.getRange(r,2,1,NC)
         .setBorder(null,null,true,null,null,null,'#EEF1F6',SpreadsheetApp.BorderStyle.SOLID);
     }
     var tr = last + 1;
     sh.setRowHeight(tr, 24);
-    sh.getRange(tr,2,1,5).setBackground(TOTBG).setFontWeight('bold')
+    sh.getRange(tr,2,1,NC).setBackground(TOTBG).setFontWeight('bold')
       .setBorder(true,null,null,null,null,null,NAVY,SpreadsheetApp.BorderStyle.SOLID);
     sh.getRange(tr,2).setValue('TOTAL');
     sh.getRange(tr,3).setFormula('=SUM(C'+first+':C'+last+')').setNumberFormat('0').setHorizontalAlignment('right');
     sh.getRange(tr,4).setFormula('=SUM(D'+first+':D'+last+')').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-    sh.getRange(tr,5).setFormula('=SUM(E'+first+':E'+last+')').setNumberFormat('0').setHorizontalAlignment('right');
+    sh.getRange(tr,5).setFormula('=SUM(E'+first+':E'+last+')').setNumberFormat('"$"#,##0,"K"').setHorizontalAlignment('right');
     sh.getRange(tr,6).setFormula('=SUM(F'+first+':F'+last+')').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+    sh.getRange(tr,7).setFormula('=SUM(G'+first+':G'+last+')').setNumberFormat('"$"#,##0,"K"').setHorizontalAlignment('right');
     sh.setRowHeight(tr+1, 14);
   }
 
-  // ── Rows 35–54: source performance ─────────────────────────────────────────
-  breakdown(35, 'SOURCE PERFORMANCE', 'E', 16);
+  // ── Rows 36–55: source performance ─────────────────────────────────────────
+  breakdown(36, 'SOURCE PERFORMANCE — DEALS, COMMISSION & VOLUME', 'Source', 'E', 16);
 
-  // ── Rows 55–74: lender breakdown ───────────────────────────────────────────
-  breakdown(55, 'LENDER BREAKDOWN', 'F', 16);
+  // ── Rows 56–75: lender breakdown ───────────────────────────────────────────
+  breakdown(56, 'LENDER BREAKDOWN — WHERE THE VOLUME IS GOING', 'Lender', 'F', 16);
 
-  // ── Rows 75–76: cash flow watch ────────────────────────────────────────────
-  hdr(75, 'CASH FLOW WATCH');
-  sh.setRowHeight(76, 26);
-  sh.getRange(76,2).setValue('Overdue cheques').setFontColor(MUT);
-  sh.getRange(76,3)
+  // ── Rows 76–77: cash flow watch ────────────────────────────────────────────
+  hdr(76, 'CASH FLOW WATCH');
+  sh.setRowHeight(77, 26);
+  sh.getRange(77,2).setValue('Overdue cheques').setFontColor(MUT);
+  sh.getRange(77,3)
     .setFormula('=COUNTIFS('+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!O$2:O$500,"<"&TODAY(),'+D+'!N$2:N$500,"")')
     .setNumberFormat('0').setFontWeight('bold').setHorizontalAlignment('right');
-  sh.getRange(76,4).setValue('$ overdue').setFontColor(MUT).setHorizontalAlignment('right');
-  sh.getRange(76,5)
+  sh.getRange(77,4).setValue('$ overdue').setFontColor(MUT).setHorizontalAlignment('right');
+  sh.getRange(77,5)
     .setFormula('=SUMIFS('+D+'!L$2:L$500,'+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!O$2:O$500,"<"&TODAY(),'+D+'!N$2:N$500,"")')
     .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
-  sh.getRange(76,6).setValue('Due next 30 days').setFontColor(MUT).setHorizontalAlignment('right');
-  sh.getRange(76,7)
+  sh.getRange(77,6).setValue('Due next 30 days').setFontColor(MUT).setHorizontalAlignment('right');
+  sh.getRange(77,7)
     .setFormula('=SUMIFS('+D+'!L$2:L$500,'+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!O$2:O$500,">="&TODAY(),'+D+'!O$2:O$500,"<="&(TODAY()+30))')
     .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
-  sh.setRowHeight(77, 14);
+  sh.setRowHeight(78, 14);
 
-  // ── Rows 78+: renewal radar ────────────────────────────────────────────────
-  hdr(78, 'RENEWAL RADAR — NEXT ' + RENEWAL_DAYS + ' DAYS');
-  heads(79, ['Borrower','Type','Closing','Maturity','Net Comm','']);
+  // ── Rows 79+: renewal radar ────────────────────────────────────────────────
+  hdr(79, 'RENEWAL RADAR — NEXT ' + RENEWAL_DAYS + ' DAYS');
+  heads(80, ['Borrower','Type','Closing','Maturity','Net Comm','']);
   // Comparisons only (no date subtraction) so "" can never produce #VALUE!
-  sh.getRange(80,2).setFormula(
+  sh.getRange(81,2).setFormula(
     '=IFERROR(SORT(FILTER('
     + 'CHOOSE({1,2,3,4,5},'+D+'!A$2:A$500,'+D+'!D$2:D$500,'+D+'!G$2:G$500,'+D+'!P$2:P$500,'+D+'!L$2:L$500),'
     + 'ISNUMBER('+D+'!P$2:P$500)*('+D+'!P$2:P$500>=TODAY())*('+D+'!P$2:P$500<=(TODAY()+'+RENEWAL_DAYS+'))'
     + '),4,1),"No renewals due within '+RENEWAL_DAYS+' days")');
-  sh.getRange(80,4,25,2).setNumberFormat('yyyy-mm-dd');
-  sh.getRange(80,6,25,1).setNumberFormat('"$"#,##0');
+  sh.getRange(81,4,25,2).setNumberFormat('yyyy-mm-dd');
+  sh.getRange(81,6,25,1).setNumberFormat('"$"#,##0');
 
   // ── Conditional formatting ─────────────────────────────────────────────────
   var rules = [
@@ -782,25 +822,25 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
     SpreadsheetApp.newConditionalFormatRule()
       .whenFormulaSatisfied('=AND(ISNUMBER(E32),E32>0)')
       .setFontColor(GRN)
-      .setRanges([sh.getRange(32,5,2,2)]).build(),
+      .setRanges([sh.getRange(32,5,3,2)]).build(),
     SpreadsheetApp.newConditionalFormatRule()
       .whenFormulaSatisfied('=AND(ISNUMBER(E32),E32<0)')
       .setFontColor(RED)
-      .setRanges([sh.getRange(32,5,2,2)]).build(),
+      .setRanges([sh.getRange(32,5,3,2)]).build(),
     // overdue stats turn red when nonzero
     SpreadsheetApp.newConditionalFormatRule()
       .whenNumberGreaterThan(0)
       .setFontColor(RED)
-      .setRanges([sh.getRange(76,3), sh.getRange(76,5)]).build(),
+      .setRanges([sh.getRange(77,3), sh.getRange(77,5)]).build(),
     // renewal urgency: ≤30 days red tint, ≤60 days amber tint
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER($E80),$E80>=TODAY(),$E80<=TODAY()+30)')
+      .whenFormulaSatisfied('=AND(ISNUMBER($E81),$E81>=TODAY(),$E81<=TODAY()+30)')
       .setBackground('#FBE3E0')
-      .setRanges([sh.getRange(80,2,25,5)]).build(),
+      .setRanges([sh.getRange(81,2,25,5)]).build(),
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER($E80),$E80>=TODAY(),$E80<=TODAY()+60)')
+      .whenFormulaSatisfied('=AND(ISNUMBER($E81),$E81>=TODAY(),$E81<=TODAY()+60)')
       .setBackground('#FCF3DC')
-      .setRanges([sh.getRange(80,2,25,5)]).build(),
+      .setRanges([sh.getRange(81,2,25,5)]).build(),
   ];
   sh.setConditionalFormatRules(rules);
 
