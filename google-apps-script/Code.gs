@@ -755,11 +755,11 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
       sh.getRange(r,4).setFormula('=IF($B'+r+'="","",SUMIFS('+D+'!L$2:L$500,'+K+',$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())))')
         .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
       sh.getRange(r,5).setFormula('=IF($B'+r+'="","",SUMIFS('+D+'!H$2:H$500,'+K+',$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())))')
-        .setNumberFormat('"$"#,##0,"K"').setHorizontalAlignment('right');
+        .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
       sh.getRange(r,6).setFormula('=IF($B'+r+'="","",SUMIFS('+D+'!L$2:L$500,'+K+',$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())-1))')
         .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
       sh.getRange(r,7).setFormula('=IF($B'+r+'="","",SUMIFS('+D+'!H$2:H$500,'+K+',$B'+r+','+D+'!C$2:C$500,YEAR(TODAY())-1))')
-        .setNumberFormat('"$"#,##0,"K"').setHorizontalAlignment('right');
+        .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
       sh.getRange(r,2,1,NC)
         .setBorder(null,null,true,null,null,null,'#EEF1F6',SpreadsheetApp.BorderStyle.SOLID);
     }
@@ -770,9 +770,9 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
     sh.getRange(tr,2).setValue('TOTAL');
     sh.getRange(tr,3).setFormula('=SUM(C'+first+':C'+last+')').setNumberFormat('0').setHorizontalAlignment('right');
     sh.getRange(tr,4).setFormula('=SUM(D'+first+':D'+last+')').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-    sh.getRange(tr,5).setFormula('=SUM(E'+first+':E'+last+')').setNumberFormat('"$"#,##0,"K"').setHorizontalAlignment('right');
+    sh.getRange(tr,5).setFormula('=SUM(E'+first+':E'+last+')').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
     sh.getRange(tr,6).setFormula('=SUM(F'+first+':F'+last+')').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-    sh.getRange(tr,7).setFormula('=SUM(G'+first+':G'+last+')').setNumberFormat('"$"#,##0,"K"').setHorizontalAlignment('right');
+    sh.getRange(tr,7).setFormula('=SUM(G'+first+':G'+last+')').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
     sh.setRowHeight(tr+1, 14);
   }
 
