@@ -1073,3 +1073,23 @@ function MOVE_CHEQUE_TO_JUL30() {
     + '\n\nAwaiting commission expected Jul 30: $' + total.toFixed(2)
     + '\nExpected: $12,685.94');
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ONE-TIME (2026-08-05) — remove the two static legacy tabs that survived the
+// 5-tab consolidation because their full names didn't match the delete list.
+// Both are preserved in the archive copy. Run DELETE_LEGACY_TABS from the
+// dropdown to remove them.
+// ═══════════════════════════════════════════════════════════════════════════════
+function DELETE_LEGACY_TABS() {
+  var ss = SpreadsheetApp.getActive();
+  var gone = [], notFound = [];
+  ['💎 Client Lifetime Value', '🤝 Referral Partner ROI'].forEach(function(name) {
+    var s = ss.getSheetByName(name);
+    if (s) { ss.deleteSheet(s); gone.push(name); }
+    else   { notFound.push(name); }
+  });
+  say_('LEGACY TAB CLEANUP ✅\n\n'
+    + (gone.length ? 'Deleted: ' + gone.join(', ') : 'Nothing deleted.')
+    + (notFound.length ? '\nNot found (already gone?): ' + notFound.join(', ') : '')
+    + '\n\nBoth remain available in the archive copy\n(JM Tracker — ARCHIVE pre-simplification).');
+}
