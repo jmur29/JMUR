@@ -532,12 +532,13 @@ function buildDealsTab_(ss, deals, NAVY, GOLD) {
 }
 
 // ─── buildDashboardTab_ ───────────────────────────────────────────────────────
-// Layout (cols B–G, col A/H are gutters, chart docked at col I):
-//   1 title band · 3–5 primary KPI cards · 7–9 secondary KPI cards
-//   11–25 monthly table · 27–30 year-over-year · 32–50 source performance
-//   52–53 cash flow watch · 55+ renewal radar
-// All year references are dynamic (YEAR(TODAY())) so the report rolls over
-// automatically every January with zero edits.
+// Layout (cols B–G, col A/H gutters, chart docked at col I):
+//   1 title · 3–5 status cards · 7–9 outlook cards
+//   11–26 monthly revenue (LY vs TY, growth, pipeline, cumulative + TOTAL/AVG)
+//   28–32 year-over-year · 34–52 source · 54–72 lender
+//   74–75 cash flow watch · 77+ renewal radar
+// One table per fact — no number appears in two sections. All year references
+// are dynamic (YEAR(TODAY())) so the report rolls over every January untouched.
 function buildDashboardTab_(ss, NAVY, GOLD) {
   var sh = ss.getSheetByName('📊 Income Report') || ss.insertSheet('📊 Income Report');
   sh.clear();
@@ -553,9 +554,9 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
   var CARD2 = '#F4F6FA', BAND = '#F1F3F6', TOTBG = '#EDF1F7';
 
   [24,150,105,105,105,105,115,24].forEach(function(w,i){ sh.setColumnWidth(i+1,w); });
-  sh.getRange(1,1,130,10).setBackground('#FFFFFF').setFontFamily(FONT).setFontSize(9).setFontColor(INK);
+  sh.getRange(1,1,110,10).setBackground('#FFFFFF').setFontFamily(FONT).setFontSize(9).setFontColor(INK);
 
-  // Section header: left-aligned navy text over a thin rule (no color bands)
+  // Section header: left-aligned navy text over a thin rule
   function hdr(row, txt) {
     sh.getRange(row,2,1,NC).merge().setValue(txt)
       .setFontColor(NAVY).setFontWeight('bold').setFontSize(11)
@@ -600,8 +601,8 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
   sh.setRowHeight(1, 46);
   sh.setRowHeight(2, 12);
 
-  // ── Rows 3–5: primary KPI cards ────────────────────────────────────────────
-  // Deals cols: C=Year, G=Closing, L=NetComm, M=Status, O=ExpPayDate
+  // ── Rows 3–5: status cards (this year's money by state) ────────────────────
+  // Deals cols: C=Year, G=Closing, H=Amount, L=NetComm, M=Status, O=ExpPayDate
   var Y = 'YEAR(TODAY())';
   sh.setRowHeight(3,18); sh.setRowHeight(4,36); sh.setRowHeight(5,18);
   card(3,2,'PAID YTD',
@@ -618,7 +619,7 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
     BLU,'#FFFFFF','#CDD9EA','"$"#,##0');
   sh.setRowHeight(6, 8);
 
-  // ── Rows 7–9: secondary KPI cards ──────────────────────────────────────────
+  // ── Rows 7–9: outlook cards ────────────────────────────────────────────────
   sh.setRowHeight(7,18); sh.setRowHeight(8,36); sh.setRowHeight(9,18);
   var awaitCnt = 'COUNTIFS('+D+'!M:M,"'+S_AWAIT+'",'+D+'!O:O,">"&TODAY())';
   var nextDate = 'MINIFS('+D+'!O:O,'+D+'!M:M,"'+S_AWAIT+'",'+D+'!O:O,">"&TODAY())';
@@ -633,7 +634,7 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
     CARD2,NAVY,MUT,null);
   card(7,4,'PROJECTED YEAR-END',
     '=B4*365/((TODAY()-DATE(YEAR(TODAY()),1,1))+1)',
-    '="goal: "&TEXT(Settings!B4,"$#,##0")',
+    '=IFERROR("goal: "&TEXT(Settings!B4,"$#,##0"),"goal not set")',
     CARD2,NAVY,MUT,'"$"#,##0');
   card(7,6,'GOAL PROGRESS',
     '=IFERROR(D8/Settings!B4,0)',
@@ -641,12 +642,12 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
     CARD2,NAVY,MUT,'0%');
   sh.setRowHeight(10, 14);
 
-  // ── Rows 11–25: monthly commission ─────────────────────────────────────────
-  hdr(11, 'MONTHLY COMMISSION');
+  // ── Rows 11–26: monthly revenue — the single monthly table ─────────────────
+  // LY paid · TY paid · growth % · TY pipeline (awaiting+pending) · cumulative
+  hdr(11, 'MONTHLY REVENUE — THIS YEAR VS LAST');
   heads(12, ['Month',
     '=(YEAR(TODAY())-1)&" Paid"', '=YEAR(TODAY())&" Paid"',
-    '=YEAR(TODAY())&" Awaiting"', '=YEAR(TODAY())&" Pending"',
-    '=YEAR(TODAY())&" Total"']);
+    '% Growth', '=YEAR(TODAY())&" Pipeline"', '=YEAR(TODAY())&" Cumulative"']);
 
   ['January','February','March','April','May','June',
    'July','August','September','October','November','December'].forEach(function(mon, mi) {
@@ -654,92 +655,47 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
     sh.setRowHeight(r, 21);
     sh.getRange(r,2).setValue(mon);
     // ISNUMBER + IFERROR(MONTH(...)) so one bad date can't error the whole sum
-    var mkF = function(yrExpr, st) {
-      var stPart = st ? '*('+D+'!M$2:M$500="'+st+'")' : '';
+    var mkF = function(yrExpr, stPart) {
       return '=SUMPRODUCT(('+D+'!C$2:C$500='+yrExpr+')*ISNUMBER('+D+'!G$2:G$500)'
            + '*(IFERROR(MONTH('+D+'!G$2:G$500),0)='+m+')'+stPart+'*IFERROR(N('+D+'!L$2:L$500),0))';
     };
-    sh.getRange(r,3).setFormula(mkF('(YEAR(TODAY())-1)', S_PAID));
-    sh.getRange(r,4).setFormula(mkF('YEAR(TODAY())',     S_PAID));
-    sh.getRange(r,5).setFormula(mkF('YEAR(TODAY())',     S_AWAIT));
-    sh.getRange(r,6).setFormula(mkF('YEAR(TODAY())',     S_PEND));
-    sh.getRange(r,7).setFormula('=SUM(D'+r+':F'+r+')').setFontWeight('bold');
-    sh.getRange(r,3,1,5).setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+    var paid = '*('+D+'!M$2:M$500="'+S_PAID+'")';
+    var pipe = '*(('+D+'!M$2:M$500="'+S_AWAIT+'")+('+D+'!M$2:M$500="'+S_PEND+'"))';
+    sh.getRange(r,3).setFormula(mkF('(YEAR(TODAY())-1)', paid))
+      .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+    sh.getRange(r,4).setFormula(mkF('YEAR(TODAY())', paid))
+      .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+    sh.getRange(r,5).setFormula('=IF(C'+r+'=0,"—",(D'+r+'-C'+r+')/C'+r+')')
+      .setNumberFormat('+0.0%;-0.0%;"—"').setFontWeight('bold').setHorizontalAlignment('right');
+    sh.getRange(r,6).setFormula(mkF('YEAR(TODAY())', pipe))
+      .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+    sh.getRange(r,7).setFormula('=SUM(D$13:D'+r+')')
+      .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
     sh.getRange(r,2,1,NC)
       .setBorder(null,null,true,null,null,null,'#EEF1F6',SpreadsheetApp.BorderStyle.SOLID);
   });
-  // Row 25: TOTAL
+  // Row 25: TOTAL · Row 26: AVG / MONTH
   sh.setRowHeight(25, 24);
   sh.getRange(25,2,1,NC).setBackground(TOTBG).setFontWeight('bold')
     .setBorder(true,null,null,null,null,null,NAVY,SpreadsheetApp.BorderStyle.SOLID);
   sh.getRange(25,2).setValue('TOTAL');
-  ['C','D','E','F','G'].forEach(function(col) {
-    sh.getRange(25, col.charCodeAt(0)-64).setFormula('=SUM('+col+'13:'+col+'24)')
-      .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-  });
-  sh.setRowHeight(26, 14);
-
-  // ── Rows 27–28: monthly averages ───────────────────────────────────────────
-  hdr(27, 'MONTHLY AVERAGES');
-  sh.setRowHeight(28, 26);
-  sh.getRange(28,2).setValue('Avg / month (actual YTD)').setFontColor(MUT);
-  sh.getRange(28,3).setFormula('=IFERROR(B4/MONTH(TODAY()),0)')
-    .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
-  sh.getRange(28,4).setValue('Avg / month (annual pace)').setFontColor(MUT).setHorizontalAlignment('right');
-  sh.getRange(28,5).setFormula('=IFERROR((B4*365/((TODAY()-DATE(YEAR(TODAY()),1,1))+1))/12,0)')
-    .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
-  sh.getRange(28,6).setFormula('="Avg / month ("&(YEAR(TODAY())-1)&" full yr)"')
-    .setFontColor(MUT).setHorizontalAlignment('right');
-  sh.getRange(28,7).setFormula('=SUMIFS('+D+'!L:L,'+D+'!C:C,YEAR(TODAY())-1,'+D+'!M:M,"'+S_PAID+'")/12')
-    .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
-  sh.setRowHeight(29, 14);
-
-  // ── Rows 30–46: monthly revenue tracker vs last year ───────────────────────
-  // References the monthly table (C13:D24) so there is one source of truth.
-  hdr(30, 'MONTHLY REVENUE TRACKER — VS LAST YEAR');
-  heads(31, ['Month',
-    '=(YEAR(TODAY())-1)&" Paid"', '=YEAR(TODAY())&" Paid"',
-    'Δ','% Growth','=YEAR(TODAY())&" Cumulative"']);
-  for (var mi2 = 0; mi2 < 12; mi2++) {
-    var r2 = 32 + mi2;
-    sh.setRowHeight(r2, 21);
-    sh.getRange(r2,2).setFormula('=B'+(13+mi2));
-    sh.getRange(r2,3).setFormula('=C'+(13+mi2)).setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-    sh.getRange(r2,4).setFormula('=D'+(13+mi2)).setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-    sh.getRange(r2,5).setFormula('=IF(AND(C'+r2+'=0,D'+r2+'=0),"—",D'+r2+'-C'+r2+')')
-      .setNumberFormat('+"$"#,##0;-"$"#,##0;"—"').setHorizontalAlignment('right');
-    sh.getRange(r2,6).setFormula('=IF(C'+r2+'=0,"—",(D'+r2+'-C'+r2+')/C'+r2+')')
-      .setNumberFormat('+0.0%;-0.0%;"—"').setFontWeight('bold').setHorizontalAlignment('right');
-    sh.getRange(r2,7).setFormula('=SUM(D$32:D'+r2+')')
-      .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
-    sh.getRange(r2,2,1,NC)
-      .setBorder(null,null,true,null,null,null,'#EEF1F6',SpreadsheetApp.BorderStyle.SOLID);
-  }
-  // Row 44: TOTAL · Row 45: AVG / MONTH
-  sh.setRowHeight(44, 24);
-  sh.getRange(44,2,1,NC).setBackground(TOTBG).setFontWeight('bold')
-    .setBorder(true,null,null,null,null,null,NAVY,SpreadsheetApp.BorderStyle.SOLID);
-  sh.getRange(44,2).setValue('TOTAL');
-  sh.getRange(44,3).setFormula('=SUM(C32:C43)').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-  sh.getRange(44,4).setFormula('=SUM(D32:D43)').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-  sh.getRange(44,5).setFormula('=IF(AND(C44=0,D44=0),"—",D44-C44)')
-    .setNumberFormat('+"$"#,##0;-"$"#,##0;"—"').setHorizontalAlignment('right');
-  sh.getRange(44,6).setFormula('=IF(C44=0,"—",(D44-C44)/C44)')
+  sh.getRange(25,3).setFormula('=SUM(C13:C24)').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+  sh.getRange(25,4).setFormula('=SUM(D13:D24)').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+  sh.getRange(25,5).setFormula('=IF(C25=0,"—",(D25-C25)/C25)')
     .setNumberFormat('+0.0%;-0.0%;"—"').setHorizontalAlignment('right');
-  sh.setRowHeight(45, 24);
-  sh.getRange(45,2,1,NC).setBackground(TOTBG).setFontWeight('bold');
-  sh.getRange(45,2).setValue('AVG / MONTH');
-  sh.getRange(45,3).setFormula('=C44/12').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-  sh.getRange(45,4).setFormula('=IFERROR(D44/MONTH(TODAY()),0)').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
-  sh.getRange(45,5).setFormula('=IF(AND(C45=0,D45=0),"—",D45-C45)')
-    .setNumberFormat('+"$"#,##0;-"$"#,##0;"—"').setHorizontalAlignment('right');
-  sh.getRange(45,6).setFormula('=IF(C45=0,"—",(D45-C45)/C45)')
+  sh.getRange(25,6).setFormula('=SUM(F13:F24)').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+  sh.setRowHeight(26, 24);
+  sh.getRange(26,2,1,NC).setBackground(TOTBG).setFontWeight('bold');
+  sh.getRange(26,2).setValue('AVG / MONTH');
+  sh.getRange(26,3).setFormula('=C25/12').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+  sh.getRange(26,4).setFormula('=IFERROR(D25/MONTH(TODAY()),0)').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+  sh.getRange(26,5).setFormula('=IF(C26=0,"—",(D26-C26)/C26)')
     .setNumberFormat('+0.0%;-0.0%;"—"').setHorizontalAlignment('right');
-  sh.setRowHeight(46, 14);
+  sh.setRowHeight(27, 14);
 
-  // ── Rows 47–51: year over year (same calendar window both years) ───────────
-  hdr(47, 'YEAR OVER YEAR — SAME PERIOD (JAN 1 → TODAY)');
-  heads(48, ['Metric',
+  // ── Rows 28–32: year over year (same calendar window both years) ───────────
+  hdr(28, 'YEAR OVER YEAR — SAME PERIOD (JAN 1 → TODAY)');
+  heads(29, ['Metric',
     '=(YEAR(TODAY())-1)&" (thru today)"', '=YEAR(TODAY())&" (thru today)"',
     'Δ','% Change','=YEAR(TODAY())&" On-Pace"']);
 
@@ -762,7 +718,7 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
       fCY:'=SUMPRODUCT(('+D+'!C$2:C$500=YEAR(TODAY()))'+cyWin+'*IFERROR(N('+D+'!H$2:H$500),0))',
       fmt:'"$"#,##0', round:false },
   ].forEach(function(m, i) {
-    var r = 49 + i;
+    var r = 30 + i;
     sh.setRowHeight(r, 21);
     sh.getRange(r,2).setValue(m.label);
     sh.getRange(r,3).setFormula(m.fPY).setNumberFormat(m.fmt).setHorizontalAlignment('right');
@@ -779,7 +735,7 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
     sh.getRange(r,2,1,NC)
       .setBorder(null,null,true,null,null,null,'#EEF1F6',SpreadsheetApp.BorderStyle.SOLID);
   });
-  sh.setRowHeight(52, 14);
+  sh.setRowHeight(33, 14);
 
   // Generic breakdown table: dynamic UNIQUE list over a Deals column, with
   // this-year vs last-year deal counts, commission AND loan volume, TOTAL row.
@@ -819,84 +775,80 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
     sh.setRowHeight(tr+1, 14);
   }
 
-  // ── Rows 53–72: source performance ─────────────────────────────────────────
-  breakdown(53, 'SOURCE PERFORMANCE — DEALS, COMMISSION & VOLUME', 'Source', 'E', 16);
+  // ── Rows 34–53: source performance ─────────────────────────────────────────
+  breakdown(34, 'SOURCE PERFORMANCE — DEALS, COMMISSION & VOLUME', 'Source', 'E', 16);
 
-  // ── Rows 73–92: lender breakdown ───────────────────────────────────────────
-  breakdown(73, 'LENDER BREAKDOWN — WHERE THE VOLUME IS GOING', 'Lender', 'F', 16);
+  // ── Rows 54–73: lender breakdown ───────────────────────────────────────────
+  breakdown(54, 'LENDER BREAKDOWN — WHERE THE VOLUME IS GOING', 'Lender', 'F', 16);
 
-  // ── Rows 93–94: cash flow watch ────────────────────────────────────────────
-  hdr(93, 'CASH FLOW WATCH');
-  sh.setRowHeight(94, 26);
-  sh.getRange(94,2).setValue('Overdue cheques').setFontColor(MUT);
-  sh.getRange(94,3)
+  // ── Rows 74–75: cash flow watch ────────────────────────────────────────────
+  hdr(74, 'CASH FLOW WATCH');
+  sh.setRowHeight(75, 26);
+  sh.getRange(75,2).setValue('Overdue cheques').setFontColor(MUT);
+  sh.getRange(75,3)
     .setFormula('=COUNTIFS('+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!O$2:O$500,"<"&TODAY(),'+D+'!N$2:N$500,"")')
     .setNumberFormat('0').setFontWeight('bold').setHorizontalAlignment('right');
-  sh.getRange(94,4).setValue('$ overdue').setFontColor(MUT).setHorizontalAlignment('right');
-  sh.getRange(94,5)
+  sh.getRange(75,4).setValue('$ overdue').setFontColor(MUT).setHorizontalAlignment('right');
+  sh.getRange(75,5)
     .setFormula('=SUMIFS('+D+'!L$2:L$500,'+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!O$2:O$500,"<"&TODAY(),'+D+'!N$2:N$500,"")')
     .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
-  sh.getRange(94,6).setValue('Due next 30 days').setFontColor(MUT).setHorizontalAlignment('right');
-  sh.getRange(94,7)
+  sh.getRange(75,6).setValue('Due next 30 days').setFontColor(MUT).setHorizontalAlignment('right');
+  sh.getRange(75,7)
     .setFormula('=SUMIFS('+D+'!L$2:L$500,'+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!O$2:O$500,">="&TODAY(),'+D+'!O$2:O$500,"<="&(TODAY()+30))')
     .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
-  sh.setRowHeight(95, 14);
+  sh.setRowHeight(76, 14);
 
-  // ── Rows 96+: renewal radar ────────────────────────────────────────────────
-  hdr(96, 'RENEWAL RADAR — NEXT ' + RENEWAL_DAYS + ' DAYS');
-  heads(97, ['Borrower','Type','Closing','Maturity','Net Comm','']);
+  // ── Rows 77+: renewal radar ────────────────────────────────────────────────
+  hdr(77, 'RENEWAL RADAR — NEXT ' + RENEWAL_DAYS + ' DAYS');
+  heads(78, ['Borrower','Type','Closing','Maturity','Net Comm','']);
   // Comparisons only (no date subtraction) so "" can never produce #VALUE!
-  sh.getRange(98,2).setFormula(
+  sh.getRange(79,2).setFormula(
     '=IFERROR(SORT(FILTER('
     + 'CHOOSE({1,2,3,4,5},'+D+'!A$2:A$500,'+D+'!D$2:D$500,'+D+'!G$2:G$500,'+D+'!P$2:P$500,'+D+'!L$2:L$500),'
     + 'ISNUMBER('+D+'!P$2:P$500)*('+D+'!P$2:P$500>=TODAY())*('+D+'!P$2:P$500<=(TODAY()+'+RENEWAL_DAYS+'))'
     + '),4,1),"No renewals due within '+RENEWAL_DAYS+' days")');
-  sh.getRange(98,4,25,2).setNumberFormat('yyyy-mm-dd');
-  sh.getRange(98,6,25,1).setNumberFormat('"$"#,##0');
+  sh.getRange(79,4,25,2).setNumberFormat('yyyy-mm-dd');
+  sh.getRange(79,6,25,1).setNumberFormat('"$"#,##0');
 
   // ── Conditional formatting ─────────────────────────────────────────────────
   var rules = [
-    // highlight the current month row in both monthly tables
+    // highlight the current month row
     SpreadsheetApp.newConditionalFormatRule()
       .whenFormulaSatisfied('=$B13=TEXT(TODAY(),"mmmm")')
       .setBackground('#EAF1FB')
       .setRanges([sh.getRange(13,2,12,NC)]).build(),
+    // growth column: green up, red down (months + TOTAL + AVG rows)
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=$B32=TEXT(TODAY(),"mmmm")')
-      .setBackground('#EAF1FB')
-      .setRanges([sh.getRange(32,2,12,NC)]).build(),
-    // revenue tracker Δ / % growth: green up, red down (months + TOTAL + AVG)
-    SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER(E32),E32>0)')
+      .whenFormulaSatisfied('=AND(ISNUMBER(E13),E13>0)')
       .setFontColor(GRN)
-      .setRanges([sh.getRange(32,5,14,2)]).build(),
+      .setRanges([sh.getRange(13,5,14,1)]).build(),
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER(E32),E32<0)')
+      .whenFormulaSatisfied('=AND(ISNUMBER(E13),E13<0)')
       .setFontColor(RED)
-      .setRanges([sh.getRange(32,5,14,2)]).build(),
+      .setRanges([sh.getRange(13,5,14,1)]).build(),
     // YoY deltas: green up, red down
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER(E49),E49>0)')
+      .whenFormulaSatisfied('=AND(ISNUMBER(E30),E30>0)')
       .setFontColor(GRN)
-      .setRanges([sh.getRange(49,5,3,2)]).build(),
+      .setRanges([sh.getRange(30,5,3,2)]).build(),
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER(E49),E49<0)')
+      .whenFormulaSatisfied('=AND(ISNUMBER(E30),E30<0)')
       .setFontColor(RED)
-      .setRanges([sh.getRange(49,5,3,2)]).build(),
+      .setRanges([sh.getRange(30,5,3,2)]).build(),
     // overdue stats turn red when nonzero
     SpreadsheetApp.newConditionalFormatRule()
       .whenNumberGreaterThan(0)
       .setFontColor(RED)
-      .setRanges([sh.getRange(94,3), sh.getRange(94,5)]).build(),
+      .setRanges([sh.getRange(75,3), sh.getRange(75,5)]).build(),
     // renewal urgency: ≤30 days red tint, ≤60 days amber tint
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER($E98),$E98>=TODAY(),$E98<=TODAY()+30)')
+      .whenFormulaSatisfied('=AND(ISNUMBER($E79),$E79>=TODAY(),$E79<=TODAY()+30)')
       .setBackground('#FBE3E0')
-      .setRanges([sh.getRange(98,2,25,5)]).build(),
+      .setRanges([sh.getRange(79,2,25,5)]).build(),
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER($E98),$E98>=TODAY(),$E98<=TODAY()+60)')
+      .whenFormulaSatisfied('=AND(ISNUMBER($E79),$E79>=TODAY(),$E79<=TODAY()+60)')
       .setBackground('#FCF3DC')
-      .setRanges([sh.getRange(98,2,25,5)]).build(),
+      .setRanges([sh.getRange(79,2,25,5)]).build(),
   ];
   sh.setConditionalFormatRules(rules);
 
