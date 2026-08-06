@@ -672,7 +672,7 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
     sh.getRange(r,4).setFormula(mkF('YEAR(TODAY())', paid))
       .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
     // Growth only for months that have started — never a fake -100% for the future
-    sh.getRange(r,5).setFormula('=IF('+m+'>MONTH(TODAY()),"—",IF(C'+r+'=0,"—",(D'+r+'-C'+r+')/C'+r+'))')
+    sh.getRange(r,5).setFormula('=IF('+m+'>=MONTH(TODAY()),"—",IF(C'+r+'=0,"—",(D'+r+'-C'+r+')/C'+r+'))')
       .setNumberFormat('+0.0%;-0.0%;"—"').setFontWeight('bold').setHorizontalAlignment('right');
     sh.getRange(r,6).setFormula(mkF('YEAR(TODAY())', await_))
       .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
@@ -809,7 +809,7 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
   heads(76, ['Expected','Borrower','Lender','Net Comm','','']);
   sh.getRange(77,2).setFormula(
     '=IFERROR(SORT(FILTER('
-    + 'CHOOSE({1,2,3,4},'+D+'!O$2:O$500,'+D+'!A$2:A$500,'+D+'!F$2:F$500,'+D+'!L$2:L$500),'
+    + '{'+D+'!O$2:O$500,'+D+'!A$2:A$500,'+D+'!F$2:F$500,'+D+'!L$2:L$500},'
     + D+'!M$2:M$500="'+S_AWAIT+'"'
     + '),1,1),"No cheques awaiting")');
   sh.getRange(77,2,15,1).setNumberFormat('yyyy-mm-dd');
@@ -822,7 +822,7 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
   // Comparisons only (no date subtraction) so "" can never produce #VALUE!
   sh.getRange(95,2).setFormula(
     '=IFERROR(SORT(FILTER('
-    + 'CHOOSE({1,2,3,4,5},'+D+'!A$2:A$500,'+D+'!D$2:D$500,'+D+'!G$2:G$500,'+D+'!P$2:P$500,'+D+'!L$2:L$500),'
+    + '{'+D+'!A$2:A$500,'+D+'!D$2:D$500,'+D+'!G$2:G$500,'+D+'!P$2:P$500,'+D+'!L$2:L$500},'
     + 'ISNUMBER('+D+'!P$2:P$500)*('+D+'!P$2:P$500>=TODAY())*('+D+'!P$2:P$500<=(TODAY()+'+RENEWAL_DAYS+'))'
     + '),4,1),"No renewals due within '+RENEWAL_DAYS+' days")');
   sh.getRange(95,4,25,2).setNumberFormat('yyyy-mm-dd');
