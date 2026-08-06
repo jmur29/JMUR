@@ -21,11 +21,16 @@ var NCOLS = 17;
 
 // ─── onOpen ───────────────────────────────────────────────────────────────────
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu('🏦 JM Tracker')
-    .addItem('➕ Process Inbox',       'addDealFromInbox')
-    .addItem('🔔 Send Renewal Emails', 'sendRenewalReminders')
-    .addItem('🔧 Repair Data & Report','REPAIR')
-    .addToUi();
+  try {
+    SpreadsheetApp.getUi().createMenu('🏦 JM Tracker')
+      .addItem('➕ Process Inbox',       'addDealFromInbox')
+      .addItem('🔔 Send Renewal Emails', 'sendRenewalReminders')
+      .addItem('🔧 Repair Data & Report','REPAIR')
+      .addToUi();
+  } catch (e) {
+    // No UI in this context (e.g. run from the editor) — menu is added
+    // automatically whenever the spreadsheet is opened in a browser.
+  }
 }
 
 // ─── onEdit ───────────────────────────────────────────────────────────────────
