@@ -977,138 +977,7 @@ function buildArchiveInfoTab_(ss) {
   SpreadsheetApp.flush();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ONE-TIME COMMISSION UPDATE (2026-07-11) — brokerage-verified actuals.
-// Select "UPDATE_COMMISSIONS" from the dropdown and click Run. Matches rows by
-// borrower name, writes static verified values (replacing formulas where noted),
-// then refreshes the Income Report and shows a verification alert.
-// ═══════════════════════════════════════════════════════════════════════════════
-function UPDATE_COMMISSIONS() {
-  var ss = SpreadsheetApp.getActive();
-  var sh = ss.getSheetByName('Deals');
-  if (!sh || sh.getLastRow() < 2) { ss.toast('⚠️ Deals sheet not found or empty.'); return; }
-  var n = sh.getLastRow() - 1;
-  var names = sh.getRange(2, CC.BORROWER, n, 1).getValues();
 
-  function ymd(s) { var p = s.split('-'); return new Date(+p[0], +p[1]-1, +p[2]); }
-
-  // key = unique lowercase fragment of the borrower cell
-  var updates = [
-    // ── mark Paid ──
-    { key:'spencer roberts', net:8212.43, pay:'2026-07-09', status:S_PAID },
-    { key:'kartik manohar',  net:1431.33, split:0.40, pay:'2026-06-18', status:S_PAID },
-    { key:'kassandra',       net:1667.75, pay:'2026-05-26', status:S_PAID },
-    { key:'myrtille',        net:4725.00, pay:'2026-05-21', status:S_PAID },
-    { key:'scott mckinley',  net:2409.75, pay:'2026-05-12', status:S_PAID },
-    { key:'sylvia murray',   net:3020.50, pay:'2026-05-05', status:S_PAID },
-    { key:'greg mason',      net:1789.73, closing:'2026-04-21', pay:'2026-04-28', status:S_PAID },
-    { key:'megan mlynczak',  pay:'2026-04-08', status:S_PAID },
-    { key:'doug oldenburg',  pay:'2026-04-01', status:S_PAID },
-    { key:'phillip wolfe',   pay:'2026-03-30', status:S_PAID },
-    { key:'irina marchenkova', pay:'2026-03-25', status:S_PAID },
-    // ── keep Awaiting, update Net Comm + Expected Pay Date ──
-    { key:'derek duffield',  net:1492.57, exp:'2026-07-14', status:S_AWAIT },
-    { key:'eric cole',       net:1756.10, exp:'2026-07-15', status:S_AWAIT },
-    { key:'van zutphen',     net:2650.27, exp:'2026-07-15', status:S_AWAIT },
-    { key:'szemberg',        net:2366.72, exp:'2026-07-15', status:S_AWAIT },
-    { key:'joe palma',       net:2268.75, exp:'2026-07-15', status:S_AWAIT },
-    { key:'owen burrows',    net:2151.53, exp:'2026-07-15', status:S_AWAIT },
-  ];
-
-  var applied = [], missing = [];
-  updates.forEach(function(u) {
-    var row = -1;
-    for (var i = 0; i < n; i++) {
-      if (String(names[i][0]).toLowerCase().indexOf(u.key) > -1) { row = i + 2; break; }
-    }
-    if (row === -1) { missing.push(u.key); return; }
-    if (u.net   !== undefined) sh.getRange(row, CC.NETCOMM).setValue(u.net);  // static — replaces formula
-    if (u.split !== undefined) sh.getRange(row, CC.SPLIT).setValue(u.split);
-    if (u.closing) sh.getRange(row, CC.CLOSING).setValue(ymd(u.closing));
-    if (u.pay)     sh.getRange(row, CC.PAYDATE).setValue(ymd(u.pay));
-    if (u.exp)     sh.getRange(row, CC.EXPDATE).setValue(ymd(u.exp));         // static — replaces formula
-    if (u.status)  sh.getRange(row, CC.STATUS).setValue(u.status);
-    applied.push(u.key);
-  });
-
-  // Refresh the Income Report (also applies the new Next-Cheque-Run card)
-  buildDashboardTab_(ss, '#1B3A6B', '#C9A84C');
-  SpreadsheetApp.flush();
-
-  // Verify totals straight from the sheet
-  var data  = sh.getRange(2, 1, n, NCOLS).getValues();
-  var today = new Date(); today.setHours(0, 0, 0, 0);
-  var yr = today.getFullYear();
-  var paidYTD = 0, nextDt = null;
-  data.forEach(function(r) {
-    if (r[CC.YEAR-1] === yr && r[CC.STATUS-1] === S_PAID)
-      paidYTD += parseFloat(r[CC.NETCOMM-1]) || 0;
-    if (r[CC.STATUS-1] === S_AWAIT && r[CC.EXPDATE-1] instanceof Date && r[CC.EXPDATE-1] > today
-        && (!nextDt || r[CC.EXPDATE-1] < nextDt))
-      nextDt = r[CC.EXPDATE-1];
-  });
-  var run = 0;
-  if (nextDt) {
-    var runEnd = new Date(nextDt.getTime() + 6 * 86400000);
-    data.forEach(function(r) {
-      if (r[CC.STATUS-1] === S_AWAIT && r[CC.EXPDATE-1] instanceof Date
-          && r[CC.EXPDATE-1] > today && r[CC.EXPDATE-1] <= runEnd)
-        run += parseFloat(r[CC.NETCOMM-1]) || 0;
-    });
-  }
-  var msg = 'COMMISSION UPDATE COMPLETE ✅\n\n'
-    + 'Rows updated: ' + applied.length + ' / ' + updates.length
-    + (missing.length ? '\n⚠️ NOT FOUND: ' + missing.join(', ') : '')
-    + '\n\nPaid YTD (' + yr + '): $' + paidYTD.toFixed(2)
-    + '\nNext cheque run: ' + (nextDt
-        ? Utilities.formatDate(nextDt, Session.getScriptTimeZone(), 'MMM d')
-          + ' → $' + run.toFixed(2)
-        : '—')
-    + '\n\nExpected: next cheque run $12,685.94 (Jul 14–15, 6 deals)';
-  Logger.log(msg);
-  say_(msg);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// ONE-TIME (2026-07-16) — next cheque run pushed to Jul 30.
-// Select "MOVE_CHEQUE_TO_JUL30" from the dropdown and click Run.
-// Moves Expected Pay Date to 2026-07-30 for the six Awaiting deals.
-// ═══════════════════════════════════════════════════════════════════════════════
-function MOVE_CHEQUE_TO_JUL30() {
-  var ss = SpreadsheetApp.getActive();
-  var sh = ss.getSheetByName('Deals');
-  if (!sh || sh.getLastRow() < 2) { ss.toast('⚠️ Deals sheet not found or empty.'); return; }
-  var n = sh.getLastRow() - 1;
-  var names = sh.getRange(2, CC.BORROWER, n, 1).getValues();
-  var newDate = new Date(2026, 6, 30);  // 2026-07-30
-
-  var keys = ['derek duffield','eric cole','van zutphen','szemberg','joe palma','owen burrows'];
-  var applied = [], missing = [];
-  keys.forEach(function(key) {
-    var row = -1;
-    for (var i = 0; i < n; i++) {
-      if (String(names[i][0]).toLowerCase().indexOf(key) > -1) { row = i + 2; break; }
-    }
-    if (row === -1) { missing.push(key); return; }
-    sh.getRange(row, CC.EXPDATE).setValue(newDate);
-    applied.push(key);
-  });
-  SpreadsheetApp.flush();
-
-  // Verify: total awaiting commission now expected on Jul 30
-  var data = sh.getRange(2, 1, n, NCOLS).getValues();
-  var total = 0;
-  data.forEach(function(r) {
-    if (r[CC.STATUS-1] === S_AWAIT && r[CC.EXPDATE-1] instanceof Date
-        && r[CC.EXPDATE-1].getTime() === newDate.getTime())
-      total += parseFloat(r[CC.NETCOMM-1]) || 0;
-  });
-  say_('CHEQUE DATE MOVED ✅\n\n'
-    + 'Updated: ' + applied.length + ' / ' + keys.length + ' deals → 2026-07-30'
-    + (missing.length ? '\n⚠️ NOT FOUND: ' + missing.join(', ') : '')
-    + '\n\nAwaiting commission expected Jul 30: $' + total.toFixed(2)
-    + '\nExpected: $12,685.94');
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ONE-TIME (2026-08-05) — remove the two static legacy tabs that survived the
@@ -1201,6 +1070,61 @@ function UPDATE_AUG28() {
     + '\nVariance: ' + (diff === 0 ? '✅ EXACT MATCH'
         : (diff > 0 ? '+' : '') + '$' + diff.toFixed(2)
           + ' — see Execution log for the full paid-deal list to reconcile');
+  Logger.log(msg + '\n\nPaid ' + yr + ' deals:\n' + lines.join('\n'));
+  say_(msg);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ONE-TIME (2026-08-28) — restore the six July-30-run deals that an accidental
+// re-run of an old update function flipped back to Awaiting.
+// Select "FIX_JUL30_PAID" from the dropdown and click Run.
+// ═══════════════════════════════════════════════════════════════════════════════
+function FIX_JUL30_PAID() {
+  var HOMEWISE_YTD = 86492.96;
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName('Deals');
+  if (!sh || sh.getLastRow() < 2) { ss.toast('⚠️ Deals sheet not found or empty.'); return; }
+  var n = sh.getLastRow() - 1;
+  var names = sh.getRange(2, CC.BORROWER, n, 1).getValues();
+  var payDate = new Date(2026, 6, 30);  // 2026-07-30
+
+  var keys = ['owen burrows','joe palma','szemberg','van zutphen','derek duffield','eric cole'];
+  var applied = [], missing = [];
+  keys.forEach(function(key) {
+    var row = -1;
+    for (var i = 0; i < n; i++) {
+      if (String(names[i][0]).toLowerCase().indexOf(key) > -1) { row = i + 2; break; }
+    }
+    if (row === -1) { missing.push(key); return; }
+    sh.getRange(row, CC.STATUS).setValue(S_PAID);
+    sh.getRange(row, CC.PAYDATE).setValue(payDate);
+    sh.getRange(row, CC.EXPDATE).setValue(payDate);
+    applied.push(key);
+  });
+
+  buildDashboardTab_(ss, '#1B3A6B', '#C9A84C');
+  SpreadsheetApp.flush();
+
+  // Reconcile Paid YTD against the Homewise pay-stub figure
+  var data = sh.getRange(2, 1, n, NCOLS).getValues();
+  var yr = new Date().getFullYear();
+  var paidYTD = 0, paidCnt = 0, lines = [];
+  data.forEach(function(r) {
+    if (r[CC.YEAR-1] === yr && r[CC.STATUS-1] === S_PAID) {
+      var v = parseFloat(r[CC.NETCOMM-1]) || 0;
+      paidYTD += v; paidCnt++;
+      lines.push('  ' + r[CC.BORROWER-1] + ' — $' + v.toFixed(2));
+    }
+  });
+  var diff = Math.round((paidYTD - HOMEWISE_YTD) * 100) / 100;
+  var msg = 'JULY 30 DEALS RESTORED ✅\n\n'
+    + 'Re-marked Paid (2026-07-30): ' + applied.length + ' / ' + keys.length
+    + (missing.length ? '\n⚠️ NOT FOUND: ' + missing.join(', ') : '')
+    + '\n\nPaid YTD (' + yr + '): $' + paidYTD.toFixed(2) + '  (' + paidCnt + ' deals)'
+    + '\nHomewise official YTD: $' + HOMEWISE_YTD.toFixed(2)
+    + '\nVariance: ' + (diff === 0 ? '✅ EXACT MATCH'
+        : (diff > 0 ? '+' : '') + '$' + diff.toFixed(2)
+          + ' — full paid-deal list in the Execution log');
   Logger.log(msg + '\n\nPaid ' + yr + ' deals:\n' + lines.join('\n'));
   say_(msg);
 }
