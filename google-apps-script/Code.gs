@@ -1129,3 +1129,78 @@ function DELETE_LEGACY_TABS() {
     + (notFound.length ? '\nNot found (already gone?): ' + notFound.join(', ') : '')
     + '\n\nBoth remain available in the archive copy\n(JM Tracker — ARCHIVE pre-simplification).');
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ONE-TIME (2026-08-28) — Aug 28 pay run + verified figures from pay stub.
+// Select "UPDATE_AUG28" from the dropdown and click Run. Applies the updates,
+// rebuilds the report, then reconciles Paid YTD against Homewise's official
+// $86,492.96 and logs every paid 2026 deal for line-by-line comparison.
+// ═══════════════════════════════════════════════════════════════════════════════
+function UPDATE_AUG28() {
+  var HOMEWISE_YTD = 86492.96;
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName('Deals');
+  if (!sh || sh.getLastRow() < 2) { ss.toast('⚠️ Deals sheet not found or empty.'); return; }
+  var n = sh.getLastRow() - 1;
+  var names = sh.getRange(2, CC.BORROWER, n, 1).getValues();
+
+  function ymd(s) { var p = s.split('-'); return new Date(+p[0], +p[1]-1, +p[2]); }
+
+  var updates = [
+    // ── Aug 28 cheque: mark Paid ──
+    { key:'traceyann',        net:3603.60, pay:'2026-08-28', status:S_PAID },
+    { key:'richard ozolins',  net:2047.50, pay:'2026-08-28', status:S_PAID },
+    { key:'ted ghanime',      net:1785.00, pay:'2026-08-28', status:S_PAID },
+    { key:'sheila white',     net:1779.75, pay:'2026-08-28', status:S_PAID },
+    { key:'michelle gagnon',  net:1193.82, pay:'2026-08-28', status:S_PAID },
+    { key:'zareh',            net:1031.26, pay:'2026-08-28', status:S_PAID },
+    // ── keep Awaiting ──
+    { key:'tina boras',       net:2332.80, exp:'2026-09-15', status:S_AWAIT },
+    { key:'kathleen jinkerson', net:1916.00, split:0.40, type:'Renewal', exp:'2026-09-15', status:S_AWAIT },
+    { key:'erin somers',      net:1715.00, type:'Renewal', exp:'2026-09-15', status:S_AWAIT },
+    { key:'wasylik',          net:846.30, split:0.35, exp:'2026-09-15', status:S_AWAIT },
+    { key:'steven curran',    net:2168.25, exp:'2026-09-15', status:S_AWAIT },
+  ];
+
+  var applied = [], missing = [];
+  updates.forEach(function(u) {
+    var row = -1;
+    for (var i = 0; i < n; i++) {
+      if (String(names[i][0]).toLowerCase().indexOf(u.key) > -1) { row = i + 2; break; }
+    }
+    if (row === -1) { missing.push(u.key); return; }
+    if (u.net   !== undefined) sh.getRange(row, CC.NETCOMM).setValue(u.net);  // static — replaces formula
+    if (u.split !== undefined) sh.getRange(row, CC.SPLIT).setValue(u.split);
+    if (u.type)    sh.getRange(row, CC.TYPE).setValue(u.type);
+    if (u.pay)     sh.getRange(row, CC.PAYDATE).setValue(ymd(u.pay));
+    if (u.exp)     sh.getRange(row, CC.EXPDATE).setValue(ymd(u.exp));         // static — replaces formula
+    if (u.status)  sh.getRange(row, CC.STATUS).setValue(u.status);
+    applied.push(u.key);
+  });
+
+  buildDashboardTab_(ss, '#1B3A6B', '#C9A84C');
+  SpreadsheetApp.flush();
+
+  // ── Reconcile Paid YTD against the Homewise pay-stub figure ──────────────
+  var data = sh.getRange(2, 1, n, NCOLS).getValues();
+  var yr = new Date().getFullYear();
+  var paidYTD = 0, paidCnt = 0, lines = [];
+  data.forEach(function(r) {
+    if (r[CC.YEAR-1] === yr && r[CC.STATUS-1] === S_PAID) {
+      var v = parseFloat(r[CC.NETCOMM-1]) || 0;
+      paidYTD += v; paidCnt++;
+      lines.push('  ' + r[CC.BORROWER-1] + ' — $' + v.toFixed(2));
+    }
+  });
+  var diff = Math.round((paidYTD - HOMEWISE_YTD) * 100) / 100;
+  var msg = 'AUG 28 UPDATE COMPLETE ✅\n\n'
+    + 'Rows updated: ' + applied.length + ' / ' + updates.length
+    + (missing.length ? '\n⚠️ NOT FOUND: ' + missing.join(', ') : '')
+    + '\n\nPaid YTD (' + yr + '): $' + paidYTD.toFixed(2) + '  (' + paidCnt + ' deals)'
+    + '\nHomewise official YTD: $' + HOMEWISE_YTD.toFixed(2)
+    + '\nVariance: ' + (diff === 0 ? '✅ EXACT MATCH'
+        : (diff > 0 ? '+' : '') + '$' + diff.toFixed(2)
+          + ' — see Execution log for the full paid-deal list to reconcile');
+  Logger.log(msg + '\n\nPaid ' + yr + ' deals:\n' + lines.join('\n'));
+  say_(msg);
+}
