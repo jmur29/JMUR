@@ -34,17 +34,26 @@ function onOpen() {
 }
 
 // ─── onEdit ───────────────────────────────────────────────────────────────────
-// Typing a Pay Date flips Status → Paid, then the edited row self-heals:
-// missing Year/Status/formulas/formatting are filled in automatically.
+// Typing a Pay Date flips Status → Paid. Editing Amount, BPS, or Split
+// re-installs the live Net Comm formula on that row so the commission
+// recalculates immediately (a brokerage-verified static value stays put
+// until you touch one of its inputs). Then the row self-heals: missing
+// Year/Status/formulas/formatting are filled in automatically.
 function onEdit(e) {
   if (!e) return;
   var sh = e.range.getSheet();
   if (sh.getName() !== 'Deals') return;
-  var row = e.range.getRow();
-  if (row < 2) return;
-  if (e.range.getColumn() === CC.PAYDATE && e.range.getValue())
-    sh.getRange(row, CC.STATUS).setValue(S_PAID);
-  smartFillRow_(sh, row);
+  var r1 = e.range.getRow(), c1 = e.range.getColumn();
+  var nR = Math.min(e.range.getNumRows(), 200), nC = e.range.getNumColumns();
+  var c2 = c1 + nC - 1;
+  function touches(col) { return col >= c1 && col <= c2; }
+  for (var r = Math.max(2, r1); r <= r1 + nR - 1; r++) {
+    if (touches(CC.PAYDATE) && sh.getRange(r, CC.PAYDATE).getValue())
+      sh.getRange(r, CC.STATUS).setValue(S_PAID);
+    if (touches(CC.AMOUNT) || touches(CC.BPS) || touches(CC.SPLIT))
+      sh.getRange(r, CC.NETCOMM).setFormula(netCommF_(r));
+    smartFillRow_(sh, r);
+  }
 }
 function onEditHandler(e) { onEdit(e); }
 
