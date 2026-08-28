@@ -916,9 +916,11 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
       .whenFormulaSatisfied('=AND(ISNUMBER($B85),$B85<TODAY())')
       .setBackground('#FBE3E0')
       .setRanges([sh.getRange(85,2,15,4)]).build(),
+    // CF formulas may not reference another sheet directly — INDIRECT required
     SpreadsheetApp.newConditionalFormatRule()
       .whenFormulaSatisfied('=AND(ISNUMBER($B85),$B85>=TODAY(),$B85<='
-        + 'MINIFS('+D+'!O$2:O$500,'+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!O$2:O$500,">"&TODAY())+6)')
+        + 'MINIFS(INDIRECT("'+D+'!O2:O500"),INDIRECT("'+D+'!M2:M500"),"'+S_AWAIT+'",'
+        + 'INDIRECT("'+D+'!O2:O500"),">"&TODAY())+6)')
       .setBackground('#E3F2E5')
       .setRanges([sh.getRange(85,2,15,4)]).build(),
     // renewal urgency: ≤30 days red tint, ≤60 days amber tint
