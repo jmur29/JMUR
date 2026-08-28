@@ -171,12 +171,17 @@ function addDealFromInbox() {
 
 // ─── Formula helpers ──────────────────────────────────────────────────────────
 // After Repeat col insert: Closing=G, Term=I, Amount=H, BPS=J, Split=K
+// Expected pay date from closing day: 1st–10th → 30th same month;
+// 11th–20th → 15th next month; 21st+ → 30th next month.
+// Pine pays one month later than everyone else, so Pine deals get the
+// same rule shifted forward a month (EDATE clamps month-ends safely).
 function expDateF_(r) {
   var f = String(r);
-  return '=IF(NOT(ISNUMBER(G'+f+')),"",IF(DAY(G'+f+')<=10,DATE(YEAR(G'+f+'),MONTH(G'+f+'),30),'
+  var base = 'IF(DAY(G'+f+')<=10,DATE(YEAR(G'+f+'),MONTH(G'+f+'),30),'
     + 'IF(DAY(G'+f+')<=20,'
     + 'DATE(YEAR(G'+f+')+IF(MONTH(G'+f+')=12,1,0),IF(MONTH(G'+f+')=12,1,MONTH(G'+f+')+1),15),'
-    + 'DATE(YEAR(G'+f+')+IF(MONTH(G'+f+')=12,1,0),IF(MONTH(G'+f+')=12,1,MONTH(G'+f+')+1),30))))';
+    + 'DATE(YEAR(G'+f+')+IF(MONTH(G'+f+')=12,1,0),IF(MONTH(G'+f+')=12,1,MONTH(G'+f+')+1),30)))';
+  return '=IF(NOT(ISNUMBER(G'+f+')),"",IF(LEFT(F'+f+',4)="Pine",EDATE('+base+',1),'+base+'))';
 }
 function maturityF_(r) {
   var f = String(r);
