@@ -573,7 +573,7 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
   var CARD2 = '#F4F6FA', BAND = '#F1F3F6', TOTBG = '#EDF1F7';
 
   [24,150,105,105,105,105,115,24].forEach(function(w,i){ sh.setColumnWidth(i+1,w); });
-  sh.getRange(1,1,135,10).setBackground('#FFFFFF').setFontFamily(FONT).setFontSize(9).setFontColor(INK);
+  sh.getRange(1,1,150,10).setBackground('#FFFFFF').setFontFamily(FONT).setFontSize(9).setFontColor(INK);
 
   // Section header: left-aligned navy text over a thin rule
   function hdr(row, txt) {
@@ -842,10 +842,10 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
   // ── Rows 62–81: lender breakdown ───────────────────────────────────────────
   breakdown(62, 'LENDER BREAKDOWN — WHERE THE VOLUME IS GOING', 'Lender', 'F', 16);
 
-  // ── Rows 82–99: cash flow — upcoming cheques ───────────────────────────────
-  // Stats strip, then every Awaiting deal sorted by expected pay date so you
-  // can see exactly who is paying when.
-  hdr(82, 'CASH FLOW — UPCOMING CHEQUES');
+  // ── Rows 82–95: cash flow — pay day forecast ───────────────────────────────
+  // Groups every open deal (Awaiting + Pending) by Expected Pay Date, which
+  // already encodes lender timing (Pine +1 month; FN/Strive standard).
+  hdr(82, 'CASH FLOW — PAY DAY FORECAST');
   sh.setRowHeight(83, 26);
   sh.getRange(83,2).setValue('Overdue cheques').setFontColor(MUT);
   sh.getRange(83,3)
@@ -859,27 +859,63 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
   sh.getRange(83,7)
     .setFormula('=SUMIFS('+D+'!L$2:L$500,'+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!O$2:O$500,">="&TODAY(),'+D+'!O$2:O$500,"<="&(TODAY()+30))')
     .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
-  heads(84, ['Expected','Borrower','Lender','Net Comm','','']);
-  sh.getRange(85,2).setFormula(
-    '=IFERROR(SORT(FILTER('
-    + '{'+D+'!O$2:O$500,'+D+'!A$2:A$500,'+D+'!F$2:F$500,'+D+'!L$2:L$500},'
-    + D+'!M$2:M$500="'+S_AWAIT+'"'
-    + '),1,1),"No cheques awaiting")');
-  sh.getRange(85,2,15,1).setNumberFormat('yyyy-mm-dd');
-  sh.getRange(85,5,15,1).setNumberFormat('"$"#,##0');
-  sh.setRowHeight(100, 14);
 
-  // ── Rows 101+: renewal radar ────────────────────────────────────────────────
-  hdr(101, 'RENEWAL RADAR — NEXT ' + RENEWAL_DAYS + ' DAYS');
-  heads(102, ['Borrower','Type','Closing','Maturity','Net Comm','']);
+  heads(84, ['Pay Date','Cheques','Awaiting','Pending','Total','Running Total']);
+  var payMask = '(('+D+'!M$2:M$500="'+S_AWAIT+'")+('+D+'!M$2:M$500="'+S_PEND+'"))';
+  sh.getRange(85,2).setFormula(
+    '=IFERROR(ARRAY_CONSTRAIN(SORT(UNIQUE(FILTER('+D+'!O$2:O$500,'
+    + 'ISNUMBER('+D+'!O$2:O$500)*('+D+'!O$2:O$500>=TODAY())*'+payMask+'))),10,1),"—")');
+  for (var pi = 0; pi < 10; pi++) {
+    var pr = 85 + pi;
+    sh.setRowHeight(pr, 20);
+    sh.getRange(pr,2).setNumberFormat('yyyy-mm-dd');
+    sh.getRange(pr,3).setFormula('=IF($B'+pr+'="","",COUNTIFS('+D+'!O$2:O$500,$B'+pr+','+D+'!M$2:M$500,"'+S_AWAIT+'")'
+      + '+COUNTIFS('+D+'!O$2:O$500,$B'+pr+','+D+'!M$2:M$500,"'+S_PEND+'"))')
+      .setNumberFormat('0').setHorizontalAlignment('right');
+    sh.getRange(pr,4).setFormula('=IF($B'+pr+'="","",SUMIFS('+D+'!L$2:L$500,'+D+'!O$2:O$500,$B'+pr+','+D+'!M$2:M$500,"'+S_AWAIT+'"))')
+      .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+    sh.getRange(pr,5).setFormula('=IF($B'+pr+'="","",SUMIFS('+D+'!L$2:L$500,'+D+'!O$2:O$500,$B'+pr+','+D+'!M$2:M$500,"'+S_PEND+'"))')
+      .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+    sh.getRange(pr,6).setFormula('=IF($B'+pr+'="","",D'+pr+'+E'+pr+')')
+      .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
+    sh.getRange(pr,7).setFormula('=IF($B'+pr+'="","",SUM(F$85:F'+pr+'))')
+      .setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+    sh.getRange(pr,2,1,NC)
+      .setBorder(null,null,true,null,null,null,'#EEF1F6',SpreadsheetApp.BorderStyle.SOLID);
+  }
+  // Row 95: TOTAL
+  sh.setRowHeight(95, 24);
+  sh.getRange(95,2,1,NC).setBackground(TOTBG).setFontWeight('bold')
+    .setBorder(true,null,null,null,null,null,NAVY,SpreadsheetApp.BorderStyle.SOLID);
+  sh.getRange(95,2).setValue('TOTAL');
+  sh.getRange(95,3).setFormula('=SUM(C85:C94)').setNumberFormat('0').setHorizontalAlignment('right');
+  sh.getRange(95,4).setFormula('=SUM(D85:D94)').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+  sh.getRange(95,5).setFormula('=SUM(E85:E94)').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+  sh.getRange(95,6).setFormula('=SUM(F85:F94)').setNumberFormat('"$"#,##0').setHorizontalAlignment('right');
+  sh.setRowHeight(96, 14);
+
+  // ── Rows 97–112: who's paying — every open deal by expected date ───────────
+  heads(97, ['Expected','Borrower','Lender','Status','Net Comm','']);
+  sh.getRange(98,2).setFormula(
+    '=IFERROR(SORT(FILTER('
+    + '{'+D+'!O$2:O$500,'+D+'!A$2:A$500,'+D+'!F$2:F$500,'+D+'!M$2:M$500,'+D+'!L$2:L$500},'
+    + 'ISNUMBER('+D+'!O$2:O$500)*'+payMask
+    + '),1,1),"No open deals")');
+  sh.getRange(98,2,15,1).setNumberFormat('yyyy-mm-dd');
+  sh.getRange(98,6,15,1).setNumberFormat('"$"#,##0');
+  sh.setRowHeight(113, 14);
+
+  // ── Rows 114+: renewal radar ───────────────────────────────────────────────
+  hdr(114, 'RENEWAL RADAR — NEXT ' + RENEWAL_DAYS + ' DAYS');
+  heads(115, ['Borrower','Type','Closing','Maturity','Net Comm','']);
   // Comparisons only (no date subtraction) so "" can never produce #VALUE!
-  sh.getRange(103,2).setFormula(
+  sh.getRange(116,2).setFormula(
     '=IFERROR(SORT(FILTER('
     + '{'+D+'!A$2:A$500,'+D+'!D$2:D$500,'+D+'!G$2:G$500,'+D+'!P$2:P$500,'+D+'!L$2:L$500},'
     + 'ISNUMBER('+D+'!P$2:P$500)*('+D+'!P$2:P$500>=TODAY())*('+D+'!P$2:P$500<=(TODAY()+'+RENEWAL_DAYS+'))'
     + '),4,1),"No renewals due within '+RENEWAL_DAYS+' days")');
-  sh.getRange(103,4,25,2).setNumberFormat('yyyy-mm-dd');
-  sh.getRange(103,6,25,1).setNumberFormat('"$"#,##0');
+  sh.getRange(116,4,25,2).setNumberFormat('yyyy-mm-dd');
+  sh.getRange(116,6,25,1).setNumberFormat('"$"#,##0');
 
   // ── Conditional formatting ─────────────────────────────────────────────────
   var rules = [
@@ -922,25 +958,25 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
       .setRanges([sh.getRange(83,3), sh.getRange(83,5)]).build(),
     // cheque schedule: overdue rows red tint, next cheque run green tint
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER($B85),$B85<TODAY())')
+      .whenFormulaSatisfied('=AND(ISNUMBER($B98),$B98<TODAY())')
       .setBackground('#FBE3E0')
-      .setRanges([sh.getRange(85,2,15,4)]).build(),
+      .setRanges([sh.getRange(98,2,15,5)]).build(),
     // CF formulas may not reference another sheet directly — INDIRECT required
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER($B85),$B85>=TODAY(),$B85<='
+      .whenFormulaSatisfied('=AND(ISNUMBER($B98),$B98>=TODAY(),$B98<='
         + 'MINIFS(INDIRECT("'+D+'!O2:O500"),INDIRECT("'+D+'!M2:M500"),"'+S_AWAIT+'",'
         + 'INDIRECT("'+D+'!O2:O500"),">"&TODAY())+6)')
       .setBackground('#E3F2E5')
-      .setRanges([sh.getRange(85,2,15,4)]).build(),
+      .setRanges([sh.getRange(98,2,15,5)]).build(),
     // renewal urgency: ≤30 days red tint, ≤60 days amber tint
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER($E103),$E103>=TODAY(),$E103<=TODAY()+30)')
+      .whenFormulaSatisfied('=AND(ISNUMBER($E116),$E116>=TODAY(),$E116<=TODAY()+30)')
       .setBackground('#FBE3E0')
-      .setRanges([sh.getRange(103,2,25,5)]).build(),
+      .setRanges([sh.getRange(116,2,25,5)]).build(),
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=AND(ISNUMBER($E103),$E103>=TODAY(),$E103<=TODAY()+60)')
+      .whenFormulaSatisfied('=AND(ISNUMBER($E116),$E116>=TODAY(),$E116<=TODAY()+60)')
       .setBackground('#FCF3DC')
-      .setRanges([sh.getRange(103,2,25,5)]).build(),
+      .setRanges([sh.getRange(116,2,25,5)]).build(),
   ];
   sh.setConditionalFormatRules(rules);
 
