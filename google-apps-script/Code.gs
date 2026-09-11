@@ -204,6 +204,11 @@ function repeatF_(r) {
   var f = String(r);
   return '=IF(A'+f+'="","",IF(COUNTIFS($A$2:$A$500,A'+f+')>1,"🔁",""))';
 }
+// Cheques always land on the 15th or 30th regardless of the date Homewise
+// lists on its report — snap any listed date to the real payout day.
+function snapPayday_(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() <= 15 ? 15 : 30);
+}
 // Alert if a UI is available, otherwise toast + log (getUi() throws in some
 // run contexts, e.g. when the sheet isn't open in a browser tab).
 function say_(msg) {
@@ -1259,7 +1264,7 @@ function UPDATE_SEP11() {
     if (row === -1) { missing.push(u.key); return; }
     if (u.net !== undefined) sh.getRange(row, CC.NETCOMM).setValue(u.net);  // static — replaces formula
     if (u.type)   sh.getRange(row, CC.TYPE).setValue(u.type);
-    if (u.pay)    sh.getRange(row, CC.PAYDATE).setValue(ymd(u.pay));
+    if (u.pay)    sh.getRange(row, CC.PAYDATE).setValue(snapPayday_(ymd(u.pay)));
     if (u.status) sh.getRange(row, CC.STATUS).setValue(u.status);
     applied.push(u.key);
   });
@@ -1273,7 +1278,7 @@ function UPDATE_SEP11() {
       'Jennifer Campitelli', '',
       2026, 'Purchase', 'Self-sourced', 'TD',
       new Date(2026, 7, 31), '', '', '', 0.9,
-      2329.50, S_PAID, new Date(2026, 8, 2), '', '',
+      2329.50, S_PAID, snapPayday_(new Date(2026, 8, 2)), '', '',
       'Added from Homewise commission report — SELF_SOURCED 90%'
     ]);
     var nr = sh.getLastRow();
@@ -1302,8 +1307,9 @@ function UPDATE_SEP11() {
     + 'Rows updated: ' + applied.length + ' / ' + (updates.length + (haveJC ? 0 : 1))
     + (missing.length ? '\n⚠️ NOT FOUND: ' + missing.join(', ') : '')
     + '\n\nPaid YTD (' + yr + '): $' + paidYTD.toFixed(2) + '  (' + paidCnt + ' deals)'
-    + '\n\nNote: Wasylik, Jinkerson, Somers (Sep 22) and Bao Khanh Le (Sep 16)\n'
-    + 'have pay dates after today — marked Paid per the Homewise report.';
+    + '\n\nPay dates snapped to the real 15th/30th payout days.\n'
+    + 'Sep 15: Campitelli, Curran. Sep 30: Bao Khanh Le, Wasylik,\n'
+    + 'Jinkerson, Somers — marked Paid per the report, cash lands then.';
   Logger.log(msg + '\n\nPaid ' + yr + ' deals:\n' + lines.join('\n'));
   say_(msg);
 }
