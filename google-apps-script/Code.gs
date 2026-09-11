@@ -1247,7 +1247,7 @@ function UPDATE_SEP11() {
     { key:'derek duffield',   net:1492.57, pay:'2026-07-14', status:S_PAID },
     { key:'spencer roberts',  net:8212.43, pay:'2026-07-09', status:S_PAID },
     // Previously Awaiting/Pending — now paid per the report
-    { key:'tina boras',       net:2332.80, payExact:'2026-09-25', status:S_PAID },
+    { key:'tina boras',       net:2332.80, pay:'2026-09-15', status:S_PAID },
     { key:'steven curran',    net:2338.82, pay:'2026-09-07', status:S_PAID },
     { key:'wasylik',          net:1132.22, pay:'2026-09-22', status:S_PAID },
     { key:'kathleen jinkerson', net:1982.71, pay:'2026-09-22', status:S_PAID, type:'Renewal' },
@@ -1309,9 +1309,9 @@ function UPDATE_SEP11() {
     + (missing.length ? '\n⚠️ NOT FOUND: ' + missing.join(', ') : '')
     + '\n\nPaid YTD (' + yr + '): $' + paidYTD.toFixed(2) + '  (' + paidCnt + ' deals)'
     + '\n\nPay dates snapped to the real 15th/30th payout days.\n'
-    + 'Sep 15: Campitelli, Curran. Sep 25: Boras (confirmed exact).\n'
-    + 'Sep 30: Bao Khanh Le, Wasylik, Jinkerson, Somers — marked Paid\n'
-    + 'per the report, cash lands on those dates.';
+    + 'Sep 15: Campitelli, Curran, Boras. Sep 30: Bao Khanh Le,\n'
+    + 'Wasylik, Jinkerson, Somers — marked Paid per the report,\n'
+    + 'cash lands on those dates.';
   Logger.log(msg + '\n\nPaid ' + yr + ' deals:\n' + lines.join('\n'));
   say_(msg);
 }
