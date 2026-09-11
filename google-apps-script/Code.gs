@@ -1215,3 +1215,95 @@ function FIX_JUL30_PAID() {
   Logger.log(msg + '\n\nPaid ' + yr + ' deals:\n' + lines.join('\n'));
   say_(msg);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ONE-TIME (2026-09-11) — sync with Homewise commission report (all paid).
+// Select "UPDATE_SEP11" from the dropdown and click Run. Matches rows by
+// borrower name, corrects pay dates/amounts per the report, adds the missing
+// Jennifer Campitelli deal, then rebuilds the report and shows new Paid YTD.
+// ═══════════════════════════════════════════════════════════════════════════════
+function UPDATE_SEP11() {
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName('Deals');
+  if (!sh || sh.getLastRow() < 2) { ss.toast('⚠️ Deals sheet not found or empty.'); return; }
+  var n = sh.getLastRow() - 1;
+  var names = sh.getRange(2, CC.BORROWER, n, 1).getValues();
+
+  function ymd(s) { var p = s.split('-'); return new Date(+p[0], +p[1]-1, +p[2]); }
+
+  var updates = [
+    // Aug 28 batch — pay dates corrected to Homewise's actual dates
+    { key:'richard ozolins',  net:2047.50, pay:'2026-07-29', status:S_PAID },
+    { key:'sheila white',     net:1779.75, pay:'2026-07-29', status:S_PAID },
+    { key:'ted ghanime',      net:1785.00, pay:'2026-08-05', status:S_PAID },
+    { key:'traceyann',        net:3603.60, pay:'2026-08-12', status:S_PAID },
+    { key:'zareh',            net:1031.26, pay:'2026-08-12', status:S_PAID },
+    { key:'michelle gagnon',  net:1193.82, pay:'2026-08-12', status:S_PAID },
+    { key:'derek duffield',   net:1492.57, pay:'2026-07-14', status:S_PAID },
+    { key:'spencer roberts',  net:8212.43, pay:'2026-07-09', status:S_PAID },
+    // Previously Awaiting/Pending — now paid per the report
+    { key:'tina boras',       net:2332.80, pay:'2026-08-24', status:S_PAID },
+    { key:'steven curran',    net:2338.82, pay:'2026-09-07', status:S_PAID },
+    { key:'wasylik',          net:1132.22, pay:'2026-09-22', status:S_PAID },
+    { key:'kathleen jinkerson', net:1982.71, pay:'2026-09-22', status:S_PAID, type:'Renewal' },
+    { key:'erin somers',      net:1019.57, pay:'2026-09-22', status:S_PAID, type:'Renewal' },
+    { key:'bao khanh',        net:1456.88, pay:'2026-09-16', status:S_PAID, type:'Renewal' },
+  ];
+
+  var applied = [], missing = [];
+  updates.forEach(function(u) {
+    var row = -1;
+    for (var i = 0; i < n; i++) {
+      if (String(names[i][0]).toLowerCase().indexOf(u.key) > -1) { row = i + 2; break; }
+    }
+    if (row === -1) { missing.push(u.key); return; }
+    if (u.net !== undefined) sh.getRange(row, CC.NETCOMM).setValue(u.net);  // static — replaces formula
+    if (u.type)   sh.getRange(row, CC.TYPE).setValue(u.type);
+    if (u.pay)    sh.getRange(row, CC.PAYDATE).setValue(ymd(u.pay));
+    if (u.status) sh.getRange(row, CC.STATUS).setValue(u.status);
+    applied.push(u.key);
+  });
+
+  // Jennifer Campitelli — in the Homewise report but not in the sheet
+  var haveJC = false;
+  for (var i = 0; i < n; i++)
+    if (String(names[i][0]).toLowerCase().indexOf('campitelli') > -1) { haveJC = true; break; }
+  if (!haveJC) {
+    sh.appendRow([
+      'Jennifer Campitelli', '',
+      2026, 'Purchase', 'Self-sourced', 'TD',
+      new Date(2026, 7, 31), '', '', '', 0.9,
+      2329.50, S_PAID, new Date(2026, 8, 2), '', '',
+      'Added from Homewise commission report — SELF_SOURCED 90%'
+    ]);
+    var nr = sh.getLastRow();
+    smartFillRow_(sh, nr);
+    sh.getRange(2, 1, nr - 1, NCOLS).sort({ column: CC.CLOSING, ascending: true });
+    restripe_(sh);
+    applied.push('jennifer campitelli (ADDED)');
+  }
+
+  buildDashboardTab_(ss, '#1B3A6B', '#C9A84C');
+  SpreadsheetApp.flush();
+
+  // Report new Paid YTD
+  var n2 = sh.getLastRow() - 1;
+  var data = sh.getRange(2, 1, n2, NCOLS).getValues();
+  var yr = new Date().getFullYear();
+  var paidYTD = 0, paidCnt = 0, lines = [];
+  data.forEach(function(r) {
+    if (r[CC.YEAR-1] === yr && r[CC.STATUS-1] === S_PAID) {
+      var v = parseFloat(r[CC.NETCOMM-1]) || 0;
+      paidYTD += v; paidCnt++;
+      lines.push('  ' + r[CC.BORROWER-1] + ' — $' + v.toFixed(2));
+    }
+  });
+  var msg = 'HOMEWISE SYNC COMPLETE ✅\n\n'
+    + 'Rows updated: ' + applied.length + ' / ' + (updates.length + (haveJC ? 0 : 1))
+    + (missing.length ? '\n⚠️ NOT FOUND: ' + missing.join(', ') : '')
+    + '\n\nPaid YTD (' + yr + '): $' + paidYTD.toFixed(2) + '  (' + paidCnt + ' deals)'
+    + '\n\nNote: Wasylik, Jinkerson, Somers (Sep 22) and Bao Khanh Le (Sep 16)\n'
+    + 'have pay dates after today — marked Paid per the Homewise report.';
+  Logger.log(msg + '\n\nPaid ' + yr + ' deals:\n' + lines.join('\n'));
+  say_(msg);
+}
