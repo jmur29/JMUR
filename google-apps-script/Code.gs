@@ -3,7 +3,7 @@
 // Deals columns:
 //   A Borrower | B 🔁Repeat | C Year | D Type | E Source | F Lender
 //   G Closing Date | H Amount | I Term | J BPS | K Split | L Net Comm
-//   M Status | N Pay Date | O Expected Pay Date | P Maturity | Q Notes
+//   M Status | N Pay Date | O Tax Yr Paid | P Expected Pay Date | Q Maturity | R Notes
 
 var S_PAID  = '✅ Paid';
 var S_AWAIT = '🔄 Awaiting';
@@ -15,9 +15,9 @@ var RENEWAL_DAYS = 120;
 var CC = {
   BORROWER:1, REPEAT:2, YEAR:3, TYPE:4, SOURCE:5, LENDER:6, CLOSING:7,
   AMOUNT:8, TERM:9, BPS:10, SPLIT:11, NETCOMM:12, STATUS:13,
-  PAYDATE:14, EXPDATE:15, MATURITY:16, NOTES:17
+  PAYDATE:14, TAXYR:15, EXPDATE:16, MATURITY:17, NOTES:18
 };
-var NCOLS = 17;
+var NCOLS = 18;
 
 // ─── onOpen ───────────────────────────────────────────────────────────────────
 function onOpen() {
@@ -76,6 +76,8 @@ function smartFillRow_(sh, row) {
   if (!pC.getValue() && !pC.getFormula()) pC.setFormula(maturityF_(row));
   var lC = sh.getRange(row, CC.NETCOMM);
   if (!lC.getValue() && !lC.getFormula()) lC.setFormula(netCommF_(row));
+  var tC = sh.getRange(row, CC.TAXYR);
+  if (!tC.getValue() && !tC.getFormula()) tC.setFormula(taxYrF_(row));
   applyRowFmt_(sh, row);
 }
 
@@ -159,10 +161,11 @@ function addDealFromInbox() {
       borrower, '',
       r[1] || 2026, r[2] || '', r[3] || '', r[4] || '',
       r[5] || '', amt, parseInt(r[7]) || '', bps, split,
-      net, S_PEND, '', '', '', String(r[11] || '')
+      net, S_PEND, '', '', '', '', String(r[11] || '')
     ]);
     var nr = dst.getLastRow();
     dst.getRange(nr, CC.REPEAT).setFormula(repeatF_(nr));
+    dst.getRange(nr, CC.TAXYR).setFormula(taxYrF_(nr));
     dst.getRange(nr, CC.EXPDATE).setFormula(expDateF_(nr));
     dst.getRange(nr, CC.MATURITY).setFormula(maturityF_(nr));
     applyRowFmt_(dst, nr);
@@ -204,6 +207,25 @@ function repeatF_(r) {
   var f = String(r);
   return '=IF(A'+f+'="","",IF(COUNTIFS($A$2:$A$500,A'+f+')>1,"🔁",""))';
 }
+// Tax year a cheque was received in — drives the tax-view income line.
+function taxYrF_(r) { return '=IF(N'+r+'="","",YEAR(N'+r+'))'; }
+// One-time structural: insert the Tax Yr Paid column after Pay Date if the
+// sheet doesn't have it yet. Idempotent — safe to call from any entry point.
+function ensureTaxCol_(sh) {
+  if (String(sh.getRange(1, 15).getValue()) === 'Tax Yr Paid') return false;
+  sh.insertColumnAfter(14);
+  sh.setColumnWidth(15, 70);
+  sh.getRange(1, 15).setValue('Tax Yr Paid')
+    .setBackground('#1B3A6B').setFontColor('#FFFFFF').setFontWeight('bold')
+    .setFontFamily('Arial').setFontSize(10).setVerticalAlignment('middle');
+  var n = sh.getLastRow() - 1;
+  if (n > 0) {
+    var f = [];
+    for (var i = 0; i < n; i++) f.push([taxYrF_(i + 2)]);
+    sh.getRange(2, 15, n, 1).setFormulas(f).setNumberFormat('0').setHorizontalAlignment('center');
+  }
+  return true;
+}
 // Cheques always land on the 15th or 30th regardless of the date Homewise
 // lists on its report — snap any listed date to the real payout day.
 function snapPayday_(d) {
@@ -230,6 +252,7 @@ function applyRowFmt_(sh, row) {
   sh.getRange(row, CC.PAYDATE).setNumberFormat('yyyy-mm-dd');
   sh.getRange(row, CC.EXPDATE).setNumberFormat('yyyy-mm-dd');
   sh.getRange(row, CC.MATURITY).setNumberFormat('yyyy-mm-dd');
+  sh.getRange(row, CC.TAXYR).setNumberFormat('0').setHorizontalAlignment('center');
   sh.getRange(row, CC.STATUS).setHorizontalAlignment('center');
   sh.getRange(row, CC.REPEAT).setHorizontalAlignment('center');
   sh.getRange(row, CC.YEAR).setNumberFormat('0').setHorizontalAlignment('center');
@@ -250,6 +273,7 @@ function REPAIR() {
   if (!sh || sh.getLastRow() < 2) { ss.toast('⚠️ Deals sheet not found or empty.'); return; }
   var n = sh.getLastRow() - 1;
 
+  ensureTaxCol_(sh);
   ss.toast('Step 1/4: Fixing closing dates & text...');
   // Text closing dates (e.g. "Fri Jul 17 2026 00:00:00 GMT-0400 (...)") → real dates
   var gVals = sh.getRange(2, CC.CLOSING, n, 1).getValues();
@@ -316,7 +340,7 @@ function REPAIR() {
 
   ss.toast('Step 3/4: Re-applying overdue highlight...');
   var overdueRule = SpreadsheetApp.newConditionalFormatRule()
-    .whenFormulaSatisfied('=AND($M2="'+S_AWAIT+'",ISNUMBER($O2),$O2<TODAY(),$N2="")')
+    .whenFormulaSatisfied('=AND($M2="'+S_AWAIT+'",ISNUMBER($P2),$P2<TODAY(),$N2="")')
     .setBackground('#FFCCCC')
     .setRanges([sh.getRange(2, 1, 499, NCOLS)])
     .build();
@@ -481,13 +505,13 @@ function buildDealsTab_(ss, deals, NAVY, GOLD) {
   sh.clearConditionalFormatRules();
 
   // A=200 B=60 C=55 D=120 E=110 F=100 G=120 H=80 I=55 J=65 K=60 L=110 M=120 N=105 O=130 P=110 Q=200
-  [200,60,55,120,110,100,120,80,55,65,60,110,120,105,130,110,200]
+  [200,60,55,120,110,100,120,80,55,65,60,110,120,105,70,130,110,200]
     .forEach(function(w, i) { sh.setColumnWidth(i + 1, w); });
 
   sh.getRange(1, 1, 1, NCOLS).setValues([[
     'Borrower','🔁','Year','Type','Source','Lender','Closing Date',
     'Amount','Term','BPS','Split','Net Comm','Status',
-    'Pay Date','Expected Pay Date','Maturity','Notes'
+    'Pay Date','Tax Yr Paid','Expected Pay Date','Maturity','Notes'
   ]]).setBackground(NAVY).setFontColor('#FFFFFF').setFontWeight('bold')
     .setFontFamily('Arial').setFontSize(10).setVerticalAlignment('middle');
   sh.setRowHeight(1, 30);
@@ -503,7 +527,7 @@ function buildDealsTab_(ss, deals, NAVY, GOLD) {
         d.year, d.type, d.source, d.lender, d.closing,
         d.amount, d.term, d.bps, d.split,
         d.hasFormula ? '' : (d.net || ''),
-        d.status, d.payDate, '', '', d.notes || ''
+        d.status, d.payDate, '', '', '', d.notes || ''
       ];
     });
     sh.getRange(2, 1, n, NCOLS).setValues(vals);
@@ -512,6 +536,7 @@ function buildDealsTab_(ss, deals, NAVY, GOLD) {
     sh.getRange(2, CC.REPEAT,   n, 1).setFormulas(deals.map(function(d, i) { return [repeatF_(i+2)];  }));
     sh.getRange(2, CC.EXPDATE,  n, 1).setFormulas(deals.map(function(d, i) { return [expDateF_(i+2)]; }));
     sh.getRange(2, CC.MATURITY, n, 1).setFormulas(deals.map(function(d, i) { return [maturityF_(i+2)]; }));
+    sh.getRange(2, CC.TAXYR,    n, 1).setFormulas(deals.map(function(d, i) { return [taxYrF_(i+2)];   }));
     // Net comm: only rows where all three inputs exist
     deals.forEach(function(d, i) {
       if (d.hasFormula) sh.getRange(i+2, CC.NETCOMM).setFormula(netCommF_(i+2));
@@ -546,7 +571,7 @@ function buildDealsTab_(ss, deals, NAVY, GOLD) {
   // Feature 3: Overdue CF — Status=Awaiting + ExpPayDate past + no PayDate yet → salmon
   // M=Status(13), N=PayDate(14), O=ExpDate(15)
   var overdueRule = SpreadsheetApp.newConditionalFormatRule()
-    .whenFormulaSatisfied('=AND($M2="'+S_AWAIT+'",ISNUMBER($O2),$O2<TODAY(),$N2="")')
+    .whenFormulaSatisfied('=AND($M2="'+S_AWAIT+'",ISNUMBER($P2),$P2<TODAY(),$N2="")')
     .setBackground('#FFCCCC')
     .setRanges([sh.getRange(2, 1, 499, NCOLS)])
     .build();
@@ -645,14 +670,14 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
 
   // ── Rows 7–9: outlook cards ────────────────────────────────────────────────
   sh.setRowHeight(7,18); sh.setRowHeight(8,36); sh.setRowHeight(9,18);
-  var awaitCnt = 'COUNTIFS('+D+'!M:M,"'+S_AWAIT+'",'+D+'!O:O,">"&TODAY())';
-  var nextDate = 'MINIFS('+D+'!O:O,'+D+'!M:M,"'+S_AWAIT+'",'+D+'!O:O,">"&TODAY())';
+  var awaitCnt = 'COUNTIFS('+D+'!M:M,"'+S_AWAIT+'",'+D+'!P:P,">"&TODAY())';
+  var nextDate = 'MINIFS('+D+'!P:P,'+D+'!M:M,"'+S_AWAIT+'",'+D+'!P:P,">"&TODAY())';
   // "Cheque run" = everything expected within 6 days of the earliest upcoming
   // date, since the brokerage pays same-run deals together.
   var runEnd   = '('+nextDate+'+6)';
-  var runMax   = 'MAXIFS('+D+'!O:O,'+D+'!M:M,"'+S_AWAIT+'",'+D+'!O:O,">"&TODAY(),'+D+'!O:O,"<="&'+runEnd+')';
+  var runMax   = 'MAXIFS('+D+'!P:P,'+D+'!M:M,"'+S_AWAIT+'",'+D+'!P:P,">"&TODAY(),'+D+'!P:P,"<="&'+runEnd+')';
   card(7,2,'NEXT CHEQUE RUN',
-    '=IF('+awaitCnt+'=0,"—",TEXT(SUMIFS('+D+'!L:L,'+D+'!M:M,"'+S_AWAIT+'",'+D+'!O:O,">"&TODAY(),'+D+'!O:O,"<="&'+runEnd+'),"$#,##0"))',
+    '=IF('+awaitCnt+'=0,"—",TEXT(SUMIFS('+D+'!L:L,'+D+'!M:M,"'+S_AWAIT+'",'+D+'!P:P,">"&TODAY(),'+D+'!P:P,"<="&'+runEnd+'),"$#,##0"))',
     '=IF('+awaitCnt+'=0,"no cheques scheduled","expected "&TEXT('+nextDate+',"mmm d")'
       + '&IF('+runMax+'>'+nextDate+',"–"&TEXT('+runMax+',"mmm d"),""))',
     CARD2,NAVY,MUT,null);
@@ -852,25 +877,31 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
   sh.setRowHeight(83, 26);
   sh.getRange(83,2).setValue('Overdue cheques').setFontColor(MUT);
   sh.getRange(83,3)
-    .setFormula('=COUNTIFS('+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!O$2:O$500,"<"&TODAY(),'+D+'!N$2:N$500,"")')
+    .setFormula('=COUNTIFS('+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!P$2:P$500,"<"&TODAY(),'+D+'!N$2:N$500,"")')
     .setNumberFormat('0').setFontWeight('bold').setHorizontalAlignment('right');
   sh.getRange(83,4).setValue('$ overdue').setFontColor(MUT).setHorizontalAlignment('right');
   sh.getRange(83,5)
-    .setFormula('=SUMIFS('+D+'!L$2:L$500,'+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!O$2:O$500,"<"&TODAY(),'+D+'!N$2:N$500,"")')
+    .setFormula('=SUMIFS('+D+'!L$2:L$500,'+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!P$2:P$500,"<"&TODAY(),'+D+'!N$2:N$500,"")')
     .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
   sh.getRange(83,6).setValue('Due next 30 days').setFontColor(MUT).setHorizontalAlignment('right');
   sh.getRange(83,7)
-    .setFormula('=SUMIFS('+D+'!L$2:L$500,'+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!O$2:O$500,">="&TODAY(),'+D+'!O$2:O$500,"<="&(TODAY()+30))')
+    .setFormula('=SUMIFS('+D+'!L$2:L$500,'+D+'!M$2:M$500,"'+S_AWAIT+'",'+D+'!P$2:P$500,">="&TODAY(),'+D+'!P$2:P$500,"<="&(TODAY()+30))')
     .setNumberFormat('"$"#,##0').setFontWeight('bold').setHorizontalAlignment('right');
-  sh.setRowHeight(84, 14);
+  sh.setRowHeight(84, 22);
+  sh.getRange(84,2,1,3).merge()
+    .setFormula('="Cash received in "&YEAR(TODAY())&" (tax view — by pay date)"')
+    .setFontColor(MUT);
+  sh.getRange(84,5)
+    .setFormula('=SUMIFS('+D+'!L$2:L$500,'+D+'!O$2:O$500,YEAR(TODAY()))')
+    .setNumberFormat('"$"#,##0.00').setFontWeight('bold').setHorizontalAlignment('right');
 
   // ── Rows 85+: renewal radar ────────────────────────────────────────────────
   hdr(85, 'RENEWAL RADAR — NEXT ' + RENEWAL_DAYS + ' DAYS');
   heads(86, ['Borrower','Type','Closing','Maturity','Net Comm','']);
   sh.getRange(87,2).setFormula(
     '=IFERROR(SORT(FILTER('
-    + '{'+D+'!A$2:A$500,'+D+'!D$2:D$500,'+D+'!G$2:G$500,'+D+'!P$2:P$500,'+D+'!L$2:L$500},'
-    + 'ISNUMBER('+D+'!P$2:P$500)*('+D+'!P$2:P$500>=TODAY())*('+D+'!P$2:P$500<=(TODAY()+'+RENEWAL_DAYS+'))'
+    + '{'+D+'!A$2:A$500,'+D+'!D$2:D$500,'+D+'!G$2:G$500,'+D+'!Q$2:Q$500,'+D+'!L$2:L$500},'
+    + 'ISNUMBER('+D+'!Q$2:Q$500)*('+D+'!Q$2:Q$500>=TODAY())*('+D+'!Q$2:Q$500<=(TODAY()+'+RENEWAL_DAYS+'))'
     + '),4,1),"No renewals due within '+RENEWAL_DAYS+' days")');
   sh.getRange(87,4,25,2).setNumberFormat('yyyy-mm-dd');
   sh.getRange(87,6,25,1).setNumberFormat('"$"#,##0');
@@ -892,16 +923,16 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
     + '&TEXT(SUMIFS('+D+'!L$2:L$500,'+D+'!N$2:N$500,'+lastPay+','+D+'!M$2:M$500,"'+S_PAID+'"),"$#,##0.00")'
     + '&"  ✓ received"),"")')
     .setFontColor(GRN).setFontWeight('bold').setFontSize(10);
-  var dateList = 'SORT(UNIQUE(FILTER('+D+'!O$2:O$500,'
-    + 'ISNUMBER('+D+'!O$2:O$500)*('+D+'!O$2:O$500>=TODAY())*'+payMask+')))';
+  var dateList = 'SORT(UNIQUE(FILTER('+D+'!P$2:P$500,'
+    + 'ISNUMBER('+D+'!P$2:P$500)*('+D+'!P$2:P$500>=TODAY())*'+payMask+')))';
   for (var s = 0; s < 8; s++) {
     var hr = 24 + s * 6;
     var Hc = '$H$' + hr;
     sh.getRange(hr,8).setFormula('=IFERROR(INDEX('+dateList+','+(s+1)+'),"")')
       .setFontColor('#FFFFFF');
-    var tot = 'SUMPRODUCT(('+D+'!O$2:O$500='+Hc+')*'+payMask+'*IFERROR(N('+D+'!L$2:L$500),0))';
-    var pineCnt = 'COUNTIFS('+D+'!O$2:O$500,'+Hc+','+D+'!F$2:F$500,"Pine")';
-    var allCnt  = 'COUNTIFS('+D+'!O$2:O$500,'+Hc+')';
+    var tot = 'SUMPRODUCT(('+D+'!P$2:P$500='+Hc+')*'+payMask+'*IFERROR(N('+D+'!L$2:L$500),0))';
+    var pineCnt = 'COUNTIFS('+D+'!P$2:P$500,'+Hc+','+D+'!F$2:F$500,"Pine")';
+    var allCnt  = 'COUNTIFS('+D+'!P$2:P$500,'+Hc+')';
     sh.getRange(hr,9,1,3).merge().setFormula(
       '=IF('+Hc+'="","","💰 "&UPPER(TEXT('+Hc+',"mmm d"))&" — "&TEXT('+tot+',"$#,##0.00")'
       + '&IF(AND('+pineCnt+'>0,'+pineCnt+'='+allCnt+')," (Pine — paid 1 mo later)",'
@@ -911,7 +942,7 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
       .setBorder(null,null,true,null,null,null,'#D8DEE9',SpreadsheetApp.BorderStyle.SOLID);
     for (var j = 1; j <= 4; j++) {
       var dr = hr + j;
-      var dm = 'ISNUMBER('+D+'!O$2:O$500)*('+D+'!O$2:O$500='+Hc+')*'+payMask;
+      var dm = 'ISNUMBER('+D+'!P$2:P$500)*('+D+'!P$2:P$500='+Hc+')*'+payMask;
       sh.getRange(dr,9).setFormula('=IFERROR(INDEX(FILTER('+D+'!A$2:A$500,'+dm+'),'+j+'),"")')
         .setFontSize(9);
       sh.getRange(dr,10).setFormula('=IFERROR(INDEX(FILTER('+D+'!F$2:F$500,'+dm+'),'+j+'),"")')
@@ -1091,227 +1122,143 @@ function DELETE_LEGACY_TABS() {
     + '\n\nBoth remain available in the archive copy\n(JM Tracker — ARCHIVE pre-simplification).');
 }
 
+
+
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// ONE-TIME (2026-08-28) — Aug 28 pay run + verified figures from pay stub.
-// Select "UPDATE_AUG28" from the dropdown and click Run. Applies the updates,
-// rebuilds the report, then reconciles Paid YTD against Homewise's official
-// $86,492.96 and logs every paid 2026 deal for line-by-line comparison.
+// ONE-TIME (2026-09-15) — portal/pay-stub reconciliation + Tax Yr Paid column.
+// Select "UPDATE_SEP15" from the dropdown and click Run. Inserts the Tax Yr
+// Paid column, applies all verified figures, adds two missing deals, tags the
+// Jan-2026-paid 2025 deals, backfills missing pay dates on paid 2026 deals,
+// rebuilds the report, and reconciles the tax view against Wagepoint.
 // ═══════════════════════════════════════════════════════════════════════════════
-function UPDATE_AUG28() {
-  var HOMEWISE_YTD = 86492.96;
+function UPDATE_SEP15() {
+  var WAGEPOINT_YTD = 96202.96;
   var ss = SpreadsheetApp.getActive();
   var sh = ss.getSheetByName('Deals');
   if (!sh || sh.getLastRow() < 2) { ss.toast('⚠️ Deals sheet not found or empty.'); return; }
-  var n = sh.getLastRow() - 1;
-  var names = sh.getRange(2, CC.BORROWER, n, 1).getValues();
+
+  ss.toast('Step 1/5: Ensuring Tax Yr Paid column...');
+  var addedCol = ensureTaxCol_(sh);
 
   function ymd(s) { var p = s.split('-'); return new Date(+p[0], +p[1]-1, +p[2]); }
+  function findRow(key) {
+    var n = sh.getLastRow() - 1;
+    var names = sh.getRange(2, CC.BORROWER, n, 1).getValues();
+    for (var i = 0; i < n; i++)
+      if (String(names[i][0]).toLowerCase().indexOf(key) > -1) return i + 2;
+    return -1;
+  }
 
+  ss.toast('Step 2/5: Adding missing deals...');
+  var added = [];
+  if (findRow('campitelli') === -1) {
+    sh.appendRow(['Jennifer Campitelli','',2026,'Purchase','Self-sourced','TD',
+      new Date(2026,7,31),'','','',0.9,2329.50,S_PAID,new Date(2026,8,15),'','','',
+      'Added from Homewise commission report — SELF_SOURCED 90%']);
+    smartFillRow_(sh, sh.getLastRow());
+    added.push('Jennifer Campitelli');
+  }
+  if (findRow('andrea campbell') === -1) {
+    sh.appendRow(['Andrea Campbell, Charlie Willis','',2026,'Refinance','Self-sourced','BMO',
+      new Date(2026,0,15),532000,5,52,0.90,2515.14,S_PAID,new Date(2026,1,25),'','','',
+      'SELF_SOURCED 90% — 2695 S Grimsby Road 18']);
+    smartFillRow_(sh, sh.getLastRow());
+    added.push('Andrea Campbell, Charlie Willis');
+  }
+  if (added.length) {
+    sh.getRange(2, 1, sh.getLastRow() - 1, NCOLS).sort({ column: CC.CLOSING, ascending: true });
+    restripe_(sh);
+  }
+
+  ss.toast('Step 3/5: Applying verified figures...');
+  var TAXNOTE = 'Paid Jan 2026 — counts as 2026 income for tax';
   var updates = [
-    // ── Aug 28 cheque: mark Paid ──
-    { key:'traceyann',        net:3603.60, pay:'2026-08-28', status:S_PAID },
-    { key:'richard ozolins',  net:2047.50, pay:'2026-08-28', status:S_PAID },
-    { key:'ted ghanime',      net:1785.00, pay:'2026-08-28', status:S_PAID },
-    { key:'sheila white',     net:1779.75, pay:'2026-08-28', status:S_PAID },
-    { key:'michelle gagnon',  net:1193.82, pay:'2026-08-28', status:S_PAID },
-    { key:'zareh',            net:1031.26, pay:'2026-08-28', status:S_PAID },
-    // ── keep Awaiting ──
-    { key:'tina boras',       net:2332.80, exp:'2026-09-15', status:S_AWAIT },
-    { key:'kathleen jinkerson', net:1916.00, split:0.40, type:'Renewal', exp:'2026-09-15', status:S_AWAIT },
-    { key:'erin somers',      net:1715.00, type:'Renewal', exp:'2026-09-15', status:S_AWAIT },
-    { key:'wasylik',          net:846.30, split:0.35, exp:'2026-09-15', status:S_AWAIT },
-    { key:'steven curran',    net:2168.25, exp:'2026-09-15', status:S_AWAIT },
+    // 1 — Paid Sep 15
+    { key:'tina boras',       net:2332.80, pay:'2026-09-15', status:S_PAID },
+    { key:'campitelli',       net:2329.50, pay:'2026-09-15', status:S_PAID },
+    { key:'steven curran',    net:2338.82, type:'Switch/Transfer', pay:'2026-09-15', status:S_PAID },
+    { key:'bao khanh',        net:1456.88, type:'Renewal', split:0.35, pay:'2026-09-15', status:S_PAID },
+    { key:'wasylik',          net:1132.22, type:'Switch/Transfer', split:0.35, pay:'2026-09-15', status:S_PAID },
+    // 2 — keep Awaiting, expected Sep 30
+    { key:'kathleen jinkerson', net:1982.71, type:'Renewal', split:0.40, exp:'2026-09-30', status:S_AWAIT, clearPay:true },
+    { key:'erin somers',      net:1019.57, type:'Renewal', split:0.35, exp:'2026-09-30', status:S_AWAIT, clearPay:true },
+    // 3 — corrections to already-paid rows
+    { key:'kevin palma',      net:1588.37 },
+    { key:'mcguigan',         net:1209.55 },
+    // 5 — 2025 closings paid in Jan 2026
+    { key:'mitchell',         pay:'2026-01-15', noteAdd:TAXNOTE },
+    { key:'addante',          pay:'2026-01-15', noteAdd:TAXNOTE },
+    { key:'satish kumar',     pay:'2026-01-15', noteAdd:TAXNOTE },
+    { key:'cassandra loranger', pay:'2026-01-15', noteAdd:TAXNOTE },
   ];
-
   var applied = [], missing = [];
   updates.forEach(function(u) {
-    var row = -1;
-    for (var i = 0; i < n; i++) {
-      if (String(names[i][0]).toLowerCase().indexOf(u.key) > -1) { row = i + 2; break; }
-    }
+    var row = findRow(u.key);
     if (row === -1) { missing.push(u.key); return; }
     if (u.net   !== undefined) sh.getRange(row, CC.NETCOMM).setValue(u.net);  // static — replaces formula
     if (u.split !== undefined) sh.getRange(row, CC.SPLIT).setValue(u.split);
-    if (u.type)    sh.getRange(row, CC.TYPE).setValue(u.type);
-    if (u.pay)     sh.getRange(row, CC.PAYDATE).setValue(ymd(u.pay));
-    if (u.exp)     sh.getRange(row, CC.EXPDATE).setValue(ymd(u.exp));         // static — replaces formula
-    if (u.status)  sh.getRange(row, CC.STATUS).setValue(u.status);
+    if (u.type)     sh.getRange(row, CC.TYPE).setValue(u.type);
+    if (u.clearPay) sh.getRange(row, CC.PAYDATE).setValue('');
+    if (u.pay)      sh.getRange(row, CC.PAYDATE).setValue(ymd(u.pay));
+    if (u.exp)      sh.getRange(row, CC.EXPDATE).setValue(ymd(u.exp));
+    if (u.status)   sh.getRange(row, CC.STATUS).setValue(u.status);
+    if (u.noteAdd) {
+      var nc = sh.getRange(row, CC.NOTES);
+      var cur = String(nc.getValue() || '');
+      if (cur.indexOf(u.noteAdd) === -1)
+        nc.setValue(cur ? cur + ' | ' + u.noteAdd : u.noteAdd);
+    }
+    // Keep the tax-year formula alive on every touched row
+    var tC = sh.getRange(row, CC.TAXYR);
+    if (!tC.getFormula()) tC.setFormula(taxYrF_(row));
     applied.push(u.key);
   });
 
+  ss.toast('Step 4/5: Backfilling pay dates on paid 2026 deals...');
+  // Paid 2026-closing deals with no Pay Date would drop out of the tax view;
+  // use their Expected Pay Date as the best-known cheque date.
+  var n = sh.getLastRow() - 1;
+  var data = sh.getRange(2, 1, n, NCOLS).getValues();
+  var backfilled = [];
+  data.forEach(function(r, i) {
+    if (r[CC.YEAR-1] === 2026 && r[CC.STATUS-1] === S_PAID
+        && !(r[CC.PAYDATE-1] instanceof Date) && (r[CC.EXPDATE-1] instanceof Date)) {
+      sh.getRange(i + 2, CC.PAYDATE).setValue(r[CC.EXPDATE-1]);
+      backfilled.push(r[CC.BORROWER-1]);
+    }
+  });
+
+  ss.toast('Step 5/5: Rebuilding report & reconciling...');
   buildDashboardTab_(ss, '#1B3A6B', '#C9A84C');
   SpreadsheetApp.flush();
 
-  // ── Reconcile Paid YTD against the Homewise pay-stub figure ──────────────
-  var data = sh.getRange(2, 1, n, NCOLS).getValues();
-  var yr = new Date().getFullYear();
-  var paidYTD = 0, paidCnt = 0, lines = [];
+  // ── Verification ──────────────────────────────────────────────────────────
+  n = sh.getLastRow() - 1;
+  data = sh.getRange(2, 1, n, NCOLS).getValues();
+  var paid26 = 0, paid26Cnt = 0, awaitTot = 0, awaitCnt = 0, tax26 = 0, tax26Cnt = 0;
   data.forEach(function(r) {
-    if (r[CC.YEAR-1] === yr && r[CC.STATUS-1] === S_PAID) {
-      var v = parseFloat(r[CC.NETCOMM-1]) || 0;
-      paidYTD += v; paidCnt++;
-      lines.push('  ' + r[CC.BORROWER-1] + ' — $' + v.toFixed(2));
-    }
+    if (!r[CC.BORROWER-1]) return;
+    var v = parseFloat(r[CC.NETCOMM-1]) || 0;
+    if (r[CC.YEAR-1] === 2026 && r[CC.STATUS-1] === S_PAID) { paid26 += v; paid26Cnt++; }
+    if (r[CC.STATUS-1] === S_AWAIT) { awaitTot += v; awaitCnt++; }
+    if (r[CC.STATUS-1] === S_PAID && r[CC.PAYDATE-1] instanceof Date
+        && r[CC.PAYDATE-1].getFullYear() === 2026) { tax26 += v; tax26Cnt++; }
   });
-  var diff = Math.round((paidYTD - HOMEWISE_YTD) * 100) / 100;
-  var msg = 'AUG 28 UPDATE COMPLETE ✅\n\n'
+  var diff = Math.round((tax26 - WAGEPOINT_YTD) * 100) / 100;
+  var msg = 'SEP 15 RECONCILIATION COMPLETE ✅\n\n'
     + 'Rows updated: ' + applied.length + ' / ' + updates.length
+    + (added.length ? '\nDeals added: ' + added.join(', ') : '')
+    + (addedCol ? '\nTax Yr Paid column inserted (col O).' : '')
+    + (backfilled.length ? '\nPay dates backfilled from expected: ' + backfilled.length + ' deals' : '')
     + (missing.length ? '\n⚠️ NOT FOUND: ' + missing.join(', ') : '')
-    + '\n\nPaid YTD (' + yr + '): $' + paidYTD.toFixed(2) + '  (' + paidCnt + ' deals)'
-    + '\nHomewise official YTD: $' + HOMEWISE_YTD.toFixed(2)
-    + '\nVariance: ' + (diff === 0 ? '✅ EXACT MATCH'
-        : (diff > 0 ? '+' : '') + '$' + diff.toFixed(2)
-          + ' — see Execution log for the full paid-deal list to reconcile');
-  Logger.log(msg + '\n\nPaid ' + yr + ' deals:\n' + lines.join('\n'));
-  say_(msg);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// ONE-TIME (2026-08-28) — restore the six July-30-run deals that an accidental
-// re-run of an old update function flipped back to Awaiting.
-// Select "FIX_JUL30_PAID" from the dropdown and click Run.
-// ═══════════════════════════════════════════════════════════════════════════════
-function FIX_JUL30_PAID() {
-  var HOMEWISE_YTD = 86492.96;
-  var ss = SpreadsheetApp.getActive();
-  var sh = ss.getSheetByName('Deals');
-  if (!sh || sh.getLastRow() < 2) { ss.toast('⚠️ Deals sheet not found or empty.'); return; }
-  var n = sh.getLastRow() - 1;
-  var names = sh.getRange(2, CC.BORROWER, n, 1).getValues();
-  var payDate = new Date(2026, 6, 30);  // 2026-07-30
-
-  var keys = ['owen burrows','joe palma','szemberg','van zutphen','derek duffield','eric cole'];
-  var applied = [], missing = [];
-  keys.forEach(function(key) {
-    var row = -1;
-    for (var i = 0; i < n; i++) {
-      if (String(names[i][0]).toLowerCase().indexOf(key) > -1) { row = i + 2; break; }
-    }
-    if (row === -1) { missing.push(key); return; }
-    sh.getRange(row, CC.STATUS).setValue(S_PAID);
-    sh.getRange(row, CC.PAYDATE).setValue(payDate);
-    sh.getRange(row, CC.EXPDATE).setValue(payDate);
-    applied.push(key);
-  });
-
-  buildDashboardTab_(ss, '#1B3A6B', '#C9A84C');
-  SpreadsheetApp.flush();
-
-  // Reconcile Paid YTD against the Homewise pay-stub figure
-  var data = sh.getRange(2, 1, n, NCOLS).getValues();
-  var yr = new Date().getFullYear();
-  var paidYTD = 0, paidCnt = 0, lines = [];
-  data.forEach(function(r) {
-    if (r[CC.YEAR-1] === yr && r[CC.STATUS-1] === S_PAID) {
-      var v = parseFloat(r[CC.NETCOMM-1]) || 0;
-      paidYTD += v; paidCnt++;
-      lines.push('  ' + r[CC.BORROWER-1] + ' — $' + v.toFixed(2));
-    }
-  });
-  var diff = Math.round((paidYTD - HOMEWISE_YTD) * 100) / 100;
-  var msg = 'JULY 30 DEALS RESTORED ✅\n\n'
-    + 'Re-marked Paid (2026-07-30): ' + applied.length + ' / ' + keys.length
-    + (missing.length ? '\n⚠️ NOT FOUND: ' + missing.join(', ') : '')
-    + '\n\nPaid YTD (' + yr + '): $' + paidYTD.toFixed(2) + '  (' + paidCnt + ' deals)'
-    + '\nHomewise official YTD: $' + HOMEWISE_YTD.toFixed(2)
-    + '\nVariance: ' + (diff === 0 ? '✅ EXACT MATCH'
-        : (diff > 0 ? '+' : '') + '$' + diff.toFixed(2)
-          + ' — full paid-deal list in the Execution log');
-  Logger.log(msg + '\n\nPaid ' + yr + ' deals:\n' + lines.join('\n'));
-  say_(msg);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// ONE-TIME (2026-09-11) — sync with Homewise commission report (all paid).
-// Select "UPDATE_SEP11" from the dropdown and click Run. Matches rows by
-// borrower name, corrects pay dates/amounts per the report, adds the missing
-// Jennifer Campitelli deal, then rebuilds the report and shows new Paid YTD.
-// ═══════════════════════════════════════════════════════════════════════════════
-function UPDATE_SEP11() {
-  var ss = SpreadsheetApp.getActive();
-  var sh = ss.getSheetByName('Deals');
-  if (!sh || sh.getLastRow() < 2) { ss.toast('⚠️ Deals sheet not found or empty.'); return; }
-  var n = sh.getLastRow() - 1;
-  var names = sh.getRange(2, CC.BORROWER, n, 1).getValues();
-
-  function ymd(s) { var p = s.split('-'); return new Date(+p[0], +p[1]-1, +p[2]); }
-
-  var updates = [
-    // Aug 28 batch — pay dates corrected to Homewise's actual dates
-    { key:'richard ozolins',  net:2047.50, pay:'2026-07-29', status:S_PAID },
-    { key:'sheila white',     net:1779.75, pay:'2026-07-29', status:S_PAID },
-    { key:'ted ghanime',      net:1785.00, pay:'2026-08-05', status:S_PAID },
-    { key:'traceyann',        net:3603.60, pay:'2026-08-12', status:S_PAID },
-    { key:'zareh',            net:1031.26, pay:'2026-08-12', status:S_PAID },
-    { key:'michelle gagnon',  net:1193.82, pay:'2026-08-12', status:S_PAID },
-    { key:'derek duffield',   net:1492.57, pay:'2026-07-14', status:S_PAID },
-    { key:'spencer roberts',  net:8212.43, pay:'2026-07-09', status:S_PAID },
-    // Previously Awaiting/Pending — now paid per the report
-    { key:'tina boras',       net:2332.80, pay:'2026-09-15', status:S_PAID },
-    { key:'steven curran',    net:2338.82, pay:'2026-09-07', status:S_PAID },
-    { key:'wasylik',          net:1132.22, pay:'2026-09-22', status:S_PAID },
-    { key:'kathleen jinkerson', net:1982.71, pay:'2026-09-22', status:S_PAID, type:'Renewal' },
-    { key:'erin somers',      net:1019.57, pay:'2026-09-22', status:S_PAID, type:'Renewal' },
-    { key:'bao khanh',        net:1456.88, pay:'2026-09-16', status:S_PAID, type:'Renewal' },
-  ];
-
-  var applied = [], missing = [];
-  updates.forEach(function(u) {
-    var row = -1;
-    for (var i = 0; i < n; i++) {
-      if (String(names[i][0]).toLowerCase().indexOf(u.key) > -1) { row = i + 2; break; }
-    }
-    if (row === -1) { missing.push(u.key); return; }
-    if (u.net !== undefined) sh.getRange(row, CC.NETCOMM).setValue(u.net);  // static — replaces formula
-    if (u.type)   sh.getRange(row, CC.TYPE).setValue(u.type);
-    if (u.payExact) sh.getRange(row, CC.PAYDATE).setValue(ymd(u.payExact));
-    else if (u.pay) sh.getRange(row, CC.PAYDATE).setValue(snapPayday_(ymd(u.pay)));
-    if (u.status) sh.getRange(row, CC.STATUS).setValue(u.status);
-    applied.push(u.key);
-  });
-
-  // Jennifer Campitelli — in the Homewise report but not in the sheet
-  var haveJC = false;
-  for (var i = 0; i < n; i++)
-    if (String(names[i][0]).toLowerCase().indexOf('campitelli') > -1) { haveJC = true; break; }
-  if (!haveJC) {
-    sh.appendRow([
-      'Jennifer Campitelli', '',
-      2026, 'Purchase', 'Self-sourced', 'TD',
-      new Date(2026, 7, 31), '', '', '', 0.9,
-      2329.50, S_PAID, snapPayday_(new Date(2026, 8, 2)), '', '',
-      'Added from Homewise commission report — SELF_SOURCED 90%'
-    ]);
-    var nr = sh.getLastRow();
-    smartFillRow_(sh, nr);
-    sh.getRange(2, 1, nr - 1, NCOLS).sort({ column: CC.CLOSING, ascending: true });
-    restripe_(sh);
-    applied.push('jennifer campitelli (ADDED)');
-  }
-
-  buildDashboardTab_(ss, '#1B3A6B', '#C9A84C');
-  SpreadsheetApp.flush();
-
-  // Report new Paid YTD
-  var n2 = sh.getLastRow() - 1;
-  var data = sh.getRange(2, 1, n2, NCOLS).getValues();
-  var yr = new Date().getFullYear();
-  var paidYTD = 0, paidCnt = 0, lines = [];
-  data.forEach(function(r) {
-    if (r[CC.YEAR-1] === yr && r[CC.STATUS-1] === S_PAID) {
-      var v = parseFloat(r[CC.NETCOMM-1]) || 0;
-      paidYTD += v; paidCnt++;
-      lines.push('  ' + r[CC.BORROWER-1] + ' — $' + v.toFixed(2));
-    }
-  });
-  var msg = 'HOMEWISE SYNC COMPLETE ✅\n\n'
-    + 'Rows updated: ' + applied.length + ' / ' + (updates.length + (haveJC ? 0 : 1))
-    + (missing.length ? '\n⚠️ NOT FOUND: ' + missing.join(', ') : '')
-    + '\n\nPaid YTD (' + yr + '): $' + paidYTD.toFixed(2) + '  (' + paidCnt + ' deals)'
-    + '\n\nPay dates snapped to the real 15th/30th payout days.\n'
-    + 'Sep 15: Campitelli, Curran, Boras. Sep 30: Bao Khanh Le,\n'
-    + 'Wasylik, Jinkerson, Somers — marked Paid per the report,\n'
-    + 'cash lands on those dates.';
-  Logger.log(msg + '\n\nPaid ' + yr + ' deals:\n' + lines.join('\n'));
+    + '\n\nPaid, 2026-closing deals: $' + paid26.toFixed(2) + '  (' + paid26Cnt + ')  [target ~$81,569]'
+    + '\nAwaiting: $' + awaitTot.toFixed(2) + '  (' + awaitCnt + ')  [target $3,002.28]'
+    + '\nTax-view 2026 cash received: $' + tax26.toFixed(2) + '  (' + tax26Cnt + ' cheques)'
+    + '\nWagepoint YTD: $' + WAGEPOINT_YTD.toFixed(2)
+    + '\nVariance: ' + (diff === 0 ? '✅ EXACT MATCH' : (diff > 0 ? '+' : '') + '$' + diff.toFixed(2))
+    + '\n\nBackfilled deals used Expected Pay Date as the cheque date —\n'
+    + 'correct any individually if the stub says otherwise.';
+  Logger.log(msg + (backfilled.length ? '\n\nBackfilled: ' + backfilled.join(', ') : ''));
   say_(msg);
 }
