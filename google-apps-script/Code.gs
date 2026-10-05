@@ -27,6 +27,7 @@ function onOpen() {
       .addItem('➕ Process Inbox',       'addDealFromInbox')
       .addItem('🔔 Send Renewal Emails', 'sendRenewalReminders')
       .addItem('🔧 Repair Data & Report','REPAIR')
+      .addItem('💵 Apply Oct 5 Update',  'UPDATE_OCT05')
       .addToUi();
   } catch (e) {
     // No UI in this context (e.g. run from the editor) — menu is added
