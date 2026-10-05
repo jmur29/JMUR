@@ -1,4 +1,5 @@
-// JM Mortgage Tracker v3.1 — 5-feature update 2026-07-09
+// JM Mortgage Tracker v4.2 (2026-10-05) — if the dropdown has no UPDATE_OCT05, this file is NOT loaded
+// Runnable: REPAIR · UPDATE_OCT05 · installTriggers · DELETE_LEGACY_TABS
 // Sheet: 1sx0Xi1y9pmUJ-udGQXPbviGayEAcTW9T_VnWREdCsS8
 // Deals columns:
 //   A Borrower | B 🔁Repeat | C Year | D Type | E Source | F Lender
