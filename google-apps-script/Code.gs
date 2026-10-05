@@ -1125,21 +1125,17 @@ function DELETE_LEGACY_TABS() {
 
 
 
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// ONE-TIME (2026-09-15) — portal/pay-stub reconciliation + Tax Yr Paid column.
-// Select "UPDATE_SEP15" from the dropdown and click Run. Inserts the Tax Yr
-// Paid column, applies all verified figures, adds two missing deals, tags the
-// Jan-2026-paid 2025 deals, backfills missing pay dates on paid 2026 deals,
-// rebuilds the report, and reconciles the tax view against Wagepoint.
+// ONE-TIME (2026-10-05) — Oct 2 cheque + lender-remittance status sync.
+// Select "UPDATE_OCT05" from the dropdown and click Run.
 // ═══════════════════════════════════════════════════════════════════════════════
-function UPDATE_SEP15() {
-  var WAGEPOINT_YTD = 96202.96;
+function UPDATE_OCT05() {
+  var WAGEPOINT_YTD = 99741.64;
   var ss = SpreadsheetApp.getActive();
   var sh = ss.getSheetByName('Deals');
   if (!sh || sh.getLastRow() < 2) { ss.toast('⚠️ Deals sheet not found or empty.'); return; }
-
-  ss.toast('Step 1/5: Ensuring Tax Yr Paid column...');
-  var addedCol = ensureTaxCol_(sh);
+  ensureTaxCol_(sh);
 
   function ymd(s) { var p = s.split('-'); return new Date(+p[0], +p[1]-1, +p[2]); }
   function findRow(key) {
@@ -1150,115 +1146,91 @@ function UPDATE_SEP15() {
     return -1;
   }
 
-  ss.toast('Step 2/5: Adding missing deals...');
+  ss.toast('Step 1/4: Adding missing deals...');
   var added = [];
-  if (findRow('campitelli') === -1) {
-    sh.appendRow(['Jennifer Campitelli','',2026,'Purchase','Self-sourced','TD',
-      new Date(2026,7,31),'','','',0.9,2329.50,S_PAID,new Date(2026,8,15),'','','',
-      'Added from Homewise commission report — SELF_SOURCED 90%']);
+  if (findRow('susan rivest') === -1) {
+    // In the portal but not in the sheet — minimal record; fill deal details later
+    sh.appendRow(['Susan Rivest','',2026,'','','','','','','','',
+      1892.70, S_AWAIT, '', '', '—', '',
+      'Closed, lender remittance pending — added from portal; fill closing/lender details']);
     smartFillRow_(sh, sh.getLastRow());
-    added.push('Jennifer Campitelli');
-  }
-  if (findRow('andrea campbell') === -1) {
-    sh.appendRow(['Andrea Campbell, Charlie Willis','',2026,'Refinance','Self-sourced','BMO',
-      new Date(2026,0,15),532000,5,52,0.90,2515.14,S_PAID,new Date(2026,1,25),'','','',
-      'SELF_SOURCED 90% — 2695 S Grimsby Road 18']);
-    smartFillRow_(sh, sh.getLastRow());
-    added.push('Andrea Campbell, Charlie Willis');
-  }
-  if (added.length) {
-    sh.getRange(2, 1, sh.getLastRow() - 1, NCOLS).sort({ column: CC.CLOSING, ascending: true });
-    restripe_(sh);
+    added.push('Susan Rivest');
   }
 
-  ss.toast('Step 3/5: Applying verified figures...');
-  var TAXNOTE = 'Paid Jan 2026 — counts as 2026 income for tax';
+  ss.toast('Step 2/4: Applying verified figures...');
+  var REMIT = 'Closed, lender remittance pending';
   var updates = [
-    // 1 — Paid Sep 15
-    { key:'tina boras',       net:2332.80, pay:'2026-09-15', status:S_PAID },
-    { key:'campitelli',       net:2329.50, pay:'2026-09-15', status:S_PAID },
-    { key:'steven curran',    net:2338.82, type:'Switch/Transfer', pay:'2026-09-15', status:S_PAID },
-    { key:'bao khanh',        net:1456.88, type:'Renewal', split:0.35, pay:'2026-09-15', status:S_PAID },
-    { key:'wasylik',          net:1132.22, type:'Switch/Transfer', split:0.35, pay:'2026-09-15', status:S_PAID },
-    // 2 — keep Awaiting, expected Sep 30
-    { key:'kathleen jinkerson', net:1982.71, type:'Renewal', split:0.40, exp:'2026-09-30', status:S_AWAIT, clearPay:true },
-    { key:'erin somers',      net:1019.57, type:'Renewal', split:0.35, exp:'2026-09-30', status:S_AWAIT, clearPay:true },
-    // 3 — corrections to already-paid rows
-    { key:'kevin palma',      net:1588.37 },
-    { key:'mcguigan',         net:1209.55 },
-    // 5 — 2025 closings paid in Jan 2026
-    { key:'mitchell',         pay:'2026-01-15', noteAdd:TAXNOTE },
-    { key:'addante',          pay:'2026-01-15', noteAdd:TAXNOTE },
-    { key:'satish kumar',     pay:'2026-01-15', noteAdd:TAXNOTE },
-    { key:'cassandra loranger', pay:'2026-01-15', noteAdd:TAXNOTE },
+    // Paid Oct 2
+    { key:'kathleen jinkerson', net:1982.71, pay:'2026-10-02', status:S_PAID },
+    { key:'erin somers',        net:1019.57, pay:'2026-10-02', status:S_PAID },
+    // Awaiting, remittance pending — no expected date ("—" keeps the slot stable)
+    { key:'susan rivest',       net:1892.70, status:S_AWAIT, expDash:true, noteAdd:REMIT },
+    { key:'colleen mccubbin',   net:1209.08, status:S_AWAIT, expDash:true, noteAdd:REMIT },
+    { key:'myles zagar',        net:2226.00, status:S_AWAIT, expDash:true, noteAdd:REMIT },
+    { key:'brandon cabot',      net:3330.00, status:S_AWAIT, expDash:true, noteAdd:REMIT },
+    // Confirm/fix the already-paid batches
+    { key:'tina boras',         net:2332.80, pay:'2026-09-15', status:S_PAID },
+    { key:'campitelli',         net:2329.50, pay:'2026-09-15', status:S_PAID },
+    { key:'steven curran',      net:2338.82, pay:'2026-09-15', status:S_PAID },
+    { key:'bao khanh',          net:1456.88, pay:'2026-09-15', status:S_PAID },
+    { key:'wasylik',            net:1132.22, pay:'2026-09-15', status:S_PAID },
+    { key:'dattadeen',          net:3603.60, pay:'2026-08-28', status:S_PAID },
+    { key:'ozolins',            net:2047.50, pay:'2026-08-28', status:S_PAID },
+    { key:'ghanime',            net:1785.00, pay:'2026-08-28', status:S_PAID },
+    { key:'sheila white',       net:1779.75, pay:'2026-08-28', status:S_PAID },
+    { key:'gagnon',             net:1193.82, pay:'2026-08-28', status:S_PAID },
+    { key:'zetlian',            net:1031.26, pay:'2026-08-28', status:S_PAID },
   ];
   var applied = [], missing = [];
   updates.forEach(function(u) {
     var row = findRow(u.key);
     if (row === -1) { missing.push(u.key); return; }
-    if (u.net   !== undefined) sh.getRange(row, CC.NETCOMM).setValue(u.net);  // static — replaces formula
-    if (u.split !== undefined) sh.getRange(row, CC.SPLIT).setValue(u.split);
-    if (u.type)     sh.getRange(row, CC.TYPE).setValue(u.type);
-    if (u.clearPay) sh.getRange(row, CC.PAYDATE).setValue('');
-    if (u.pay)      sh.getRange(row, CC.PAYDATE).setValue(ymd(u.pay));
-    if (u.exp)      sh.getRange(row, CC.EXPDATE).setValue(ymd(u.exp));
-    if (u.status)   sh.getRange(row, CC.STATUS).setValue(u.status);
+    if (u.net !== undefined) sh.getRange(row, CC.NETCOMM).setValue(u.net);  // static — replaces formula
+    if (u.pay)     sh.getRange(row, CC.PAYDATE).setValue(ymd(u.pay));
+    if (u.expDash) { sh.getRange(row, CC.EXPDATE).setValue('—'); sh.getRange(row, CC.PAYDATE).setValue(''); }
+    if (u.status)  sh.getRange(row, CC.STATUS).setValue(u.status);
     if (u.noteAdd) {
       var nc = sh.getRange(row, CC.NOTES);
       var cur = String(nc.getValue() || '');
       if (cur.indexOf(u.noteAdd) === -1)
         nc.setValue(cur ? cur + ' | ' + u.noteAdd : u.noteAdd);
     }
-    // Keep the tax-year formula alive on every touched row
     var tC = sh.getRange(row, CC.TAXYR);
     if (!tC.getFormula()) tC.setFormula(taxYrF_(row));
     applied.push(u.key);
   });
 
-  ss.toast('Step 4/5: Backfilling pay dates on paid 2026 deals...');
-  // Paid 2026-closing deals with no Pay Date would drop out of the tax view;
-  // use their Expected Pay Date as the best-known cheque date.
-  var n = sh.getLastRow() - 1;
-  var data = sh.getRange(2, 1, n, NCOLS).getValues();
-  var backfilled = [];
-  data.forEach(function(r, i) {
-    if (r[CC.YEAR-1] === 2026 && r[CC.STATUS-1] === S_PAID
-        && !(r[CC.PAYDATE-1] instanceof Date) && (r[CC.EXPDATE-1] instanceof Date)) {
-      sh.getRange(i + 2, CC.PAYDATE).setValue(r[CC.EXPDATE-1]);
-      backfilled.push(r[CC.BORROWER-1]);
-    }
-  });
-
-  ss.toast('Step 5/5: Rebuilding report & reconciling...');
+  ss.toast('Step 3/4: Rebuilding report...');
   buildDashboardTab_(ss, '#1B3A6B', '#C9A84C');
   SpreadsheetApp.flush();
 
-  // ── Verification ──────────────────────────────────────────────────────────
-  n = sh.getLastRow() - 1;
-  data = sh.getRange(2, 1, n, NCOLS).getValues();
-  var paid26 = 0, paid26Cnt = 0, awaitTot = 0, awaitCnt = 0, tax26 = 0, tax26Cnt = 0;
+  ss.toast('Step 4/4: Verifying...');
+  var n = sh.getLastRow() - 1;
+  var data = sh.getRange(2, 1, n, NCOLS).getValues();
+  var paid26 = 0, paid26Cnt = 0, awaitTot = 0, awaitCnt = 0, tax26 = 0, pendCnt = 0;
+  var awaitNames = [];
   data.forEach(function(r) {
     if (!r[CC.BORROWER-1]) return;
     var v = parseFloat(r[CC.NETCOMM-1]) || 0;
     if (r[CC.YEAR-1] === 2026 && r[CC.STATUS-1] === S_PAID) { paid26 += v; paid26Cnt++; }
-    if (r[CC.STATUS-1] === S_AWAIT) { awaitTot += v; awaitCnt++; }
+    if (r[CC.STATUS-1] === S_AWAIT) { awaitTot += v; awaitCnt++; awaitNames.push(r[CC.BORROWER-1]); }
+    if (r[CC.STATUS-1] === S_PEND) pendCnt++;
     if (r[CC.STATUS-1] === S_PAID && r[CC.PAYDATE-1] instanceof Date
-        && r[CC.PAYDATE-1].getFullYear() === 2026) { tax26 += v; tax26Cnt++; }
+        && r[CC.PAYDATE-1].getFullYear() === 2026) tax26 += v;
   });
   var diff = Math.round((tax26 - WAGEPOINT_YTD) * 100) / 100;
-  var msg = 'SEP 15 RECONCILIATION COMPLETE ✅\n\n'
+  var msg = 'OCT 5 SYNC COMPLETE ✅\n\n'
     + 'Rows updated: ' + applied.length + ' / ' + updates.length
     + (added.length ? '\nDeals added: ' + added.join(', ') : '')
-    + (addedCol ? '\nTax Yr Paid column inserted (col O).' : '')
-    + (backfilled.length ? '\nPay dates backfilled from expected: ' + backfilled.length + ' deals' : '')
     + (missing.length ? '\n⚠️ NOT FOUND: ' + missing.join(', ') : '')
-    + '\n\nPaid, 2026-closing deals: $' + paid26.toFixed(2) + '  (' + paid26Cnt + ')  [target ~$81,569]'
-    + '\nAwaiting: $' + awaitTot.toFixed(2) + '  (' + awaitCnt + ')  [target $3,002.28]'
-    + '\nTax-view 2026 cash received: $' + tax26.toFixed(2) + '  (' + tax26Cnt + ' cheques)'
+    + '\n\nAwaiting: $' + awaitTot.toFixed(2) + ' (' + awaitCnt + ')  [target $8,657.78]'
+    + '\nPaid, 2026-closing: $' + paid26.toFixed(2) + ' (' + paid26Cnt + ')  [target $84,571.33]'
+    + '\nTax-view 2026 cash: $' + tax26.toFixed(2) + '  [expect ≈$99,246]'
     + '\nWagepoint YTD: $' + WAGEPOINT_YTD.toFixed(2)
-    + '\nVariance: ' + (diff === 0 ? '✅ EXACT MATCH' : (diff > 0 ? '+' : '') + '$' + diff.toFixed(2))
-    + '\n\nBackfilled deals used Expected Pay Date as the cheque date —\n'
-    + 'correct any individually if the stub says otherwise.';
-  Logger.log(msg + (backfilled.length ? '\n\nBackfilled: ' + backfilled.join(', ') : ''));
+    + '\nVariance: ' + (diff > 0 ? '+' : '') + '$' + diff.toFixed(2)
+    + ' — treated as payroll true-up, NOT force-balanced.'
+    + '\n\nStill Pending Close: ' + pendCnt + ' deals.'
+    + '\nAwaiting: ' + awaitNames.join(', ');
+  Logger.log(msg);
   say_(msg);
 }
