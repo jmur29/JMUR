@@ -1,5 +1,5 @@
-// JM Mortgage Tracker v4.2 (2026-10-05) — if the dropdown has no UPDATE_OCT05, this file is NOT loaded
-// Runnable: REPAIR · UPDATE_OCT05 · installTriggers · DELETE_LEGACY_TABS
+// JM Mortgage Tracker v4.3 (2026-10-06) — if the dropdown has no UPDATE_OCT06, this file is NOT loaded
+// Runnable: REPAIR · UPDATE_OCT05 · UPDATE_OCT06 · installTriggers · DELETE_LEGACY_TABS
 // Sheet: 1sx0Xi1y9pmUJ-udGQXPbviGayEAcTW9T_VnWREdCsS8
 // Deals columns:
 //   A Borrower | B 🔁Repeat | C Year | D Type | E Source | F Lender
@@ -28,6 +28,7 @@ function onOpen() {
       .addItem('🔔 Send Renewal Emails', 'sendRenewalReminders')
       .addItem('🔧 Repair Data & Report','REPAIR')
       .addItem('💵 Apply Oct 5 Update',  'UPDATE_OCT05')
+      .addItem('🗒 Apply Oct 6 Update',  'UPDATE_OCT06')
       .addToUi();
   } catch (e) {
     // No UI in this context (e.g. run from the editor) — menu is added
@@ -933,12 +934,8 @@ function buildDashboardTab_(ss, NAVY, GOLD) {
     sh.getRange(hr,8).setFormula('=IFERROR(INDEX('+dateList+','+(s+1)+'),"")')
       .setFontColor('#FFFFFF');
     var tot = 'SUMPRODUCT(('+D+'!P$2:P$500='+Hc+')*'+payMask+'*IFERROR(N('+D+'!L$2:L$500),0))';
-    var pineCnt = 'COUNTIFS('+D+'!P$2:P$500,'+Hc+','+D+'!F$2:F$500,"Pine")';
-    var allCnt  = 'COUNTIFS('+D+'!P$2:P$500,'+Hc+')';
     sh.getRange(hr,9,1,3).merge().setFormula(
-      '=IF('+Hc+'="","","💰 "&UPPER(TEXT('+Hc+',"mmm d"))&" — "&TEXT('+tot+',"$#,##0.00")'
-      + '&IF(AND('+pineCnt+'>0,'+pineCnt+'='+allCnt+')," (Pine — paid 1 mo later)",'
-      + 'IF('+pineCnt+'>0," (incl. Pine)","")))')
+      '=IF('+Hc+'="","","💰 "&UPPER(TEXT('+Hc+',"mmm d"))&" — "&TEXT('+tot+',"$#,##0.00"))')
       .setFontColor(INK).setFontWeight('bold').setFontSize(10).setVerticalAlignment('middle');
     sh.getRange(hr,9,1,3)
       .setBorder(null,null,true,null,null,null,'#D8DEE9',SpreadsheetApp.BorderStyle.SOLID);
@@ -1063,7 +1060,7 @@ function buildInboxTab_(ss, NAVY, GOLD) {
 function buildSettingsTab_(ss, NAVY, GOLD) {
   var sh = ss.getSheetByName('Settings') || ss.insertSheet('Settings');
   sh.clear();
-  [20,200,120].forEach(function(w,i) { sh.setColumnWidth(i+1, w); });
+  [200,420].forEach(function(w,i) { sh.setColumnWidth(i+1, w); });
   sh.getRange(1,1,1,2).merge().setValue('⚙️  Settings')
     .setBackground(NAVY).setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(13).setFontFamily('Arial');
   sh.setRowHeight(1, 32);
@@ -1077,6 +1074,12 @@ function buildSettingsTab_(ss, NAVY, GOLD) {
     ['Self-Sourced',0.9],
     ['HW Pre-Approval',0.4],
     ['HW Switch/Refi',0.35],
+    [''],
+    ['Lender Remittance Notes',''],
+    ['Pine','Remits bi-weekly as of Oct 2026. Previously ~1 month lag. Expect standard 15th/30th run after remittance.'],
+    ['First National','Fast, typically within days of funding.'],
+    ['Strive','Fast, typically within days of funding.'],
+    ['All others','Standard. Homewise pays on the 15th and 30th only.'],
   ];
   rows.forEach(function(r, i) {
     if (r[0]) sh.getRange(i+2,1).setValue(r[0]).setFontWeight('bold');
@@ -1235,4 +1238,74 @@ function UPDATE_OCT05() {
     + '\nAwaiting: ' + awaitNames.join(', ');
   Logger.log(msg);
   say_(msg);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ONE-TIME (2026-10-06) — Pine now remits bi-weekly: remittance notes table on
+// Settings, scrub Pine-lag phrases from Deals notes, uniform forecast labels.
+// Run from the 🏦 menu ("🗒 Apply Oct 6 Update") or the dropdown.
+// Expected Pay Dates and statuses are NOT touched.
+// ═══════════════════════════════════════════════════════════════════════════════
+function UPDATE_OCT06() {
+  var ss = SpreadsheetApp.getActive();
+
+  // 1 — Settings: Lender Remittance Notes table (idempotent)
+  var st = ss.getSheetByName('Settings');
+  if (st) {
+    var have = false;
+    var lastR = st.getLastRow();
+    for (var r = 1; r <= lastR; r++)
+      if (String(st.getRange(r, 1).getValue()) === 'Lender Remittance Notes') { have = true; break; }
+    if (!have) {
+      var at = lastR + 2;
+      st.getRange(at, 1).setValue('Lender Remittance Notes').setFontWeight('bold');
+      var rows = [
+        ['Pine','Remits bi-weekly as of Oct 2026. Previously ~1 month lag. Expect standard 15th/30th run after remittance.'],
+        ['First National','Fast, typically within days of funding.'],
+        ['Strive','Fast, typically within days of funding.'],
+        ['All others','Standard. Homewise pays on the 15th and 30th only.'],
+      ];
+      st.getRange(at + 1, 1, rows.length, 2).setValues(rows);
+      st.getRange(at + 1, 1, rows.length, 1).setFontWeight('bold');
+      st.setColumnWidth(2, 420);
+    }
+  }
+
+  // 2 — Deals: strip Pine-lag phrasing from Notes, keep the rest intact
+  var sh = ss.getSheetByName('Deals');
+  var edited = [];
+  if (sh && sh.getLastRow() > 1) {
+    var n = sh.getLastRow() - 1;
+    var names = sh.getRange(2, CC.BORROWER, n, 1).getValues();
+    var notes = sh.getRange(2, CC.NOTES, n, 1).getValues();
+    var pats = [
+      /\s*\((?:incl\.\s*)?pine[^)]*(?:lag|delay|1 mo later|delayed)[^)]*\)/gi,
+      /\s*pine[\s—-]*(?:lag|delay(?:ed)?)[^|.;]*/gi,
+      /\s*\(?paid 1 mo(?:nth)? later\)?/gi
+    ];
+    for (var i = 0; i < n; i++) {
+      var cur = String(notes[i][0] || '');
+      if (!cur) continue;
+      var out = cur;
+      pats.forEach(function(p) { out = out.replace(p, ''); });
+      out = out.replace(/\s*\|\s*\|/g, ' |').replace(/\s*\|\s*$/, '')
+               .replace(/^\s*\|\s*/, '').replace(/\s{2,}/g, ' ').trim();
+      if (out !== cur) {
+        sh.getRange(i + 2, CC.NOTES).setValue(out);
+        edited.push(names[i][0]);
+      }
+    }
+  }
+
+  // 3 — Rebuild report with uniform forecast labels (no Pine annotations)
+  buildDashboardTab_(ss, '#1B3A6B', '#C9A84C');
+  SpreadsheetApp.flush();
+
+  say_('OCT 6 UPDATE COMPLETE ✅\n\n'
+    + 'Settings: Lender Remittance Notes table '
+    + (st ? 'in place.' : 'SKIPPED (Settings tab not found).')
+    + '\n\nDeals notes edited (' + edited.length + '):\n'
+    + (edited.length ? '  ' + edited.join('\n  ') : '  none — no Pine-lag phrases found')
+    + '\n\nForecast labels now uniform across lenders.'
+    + '\nExpected Pay Dates and statuses untouched.');
 }
